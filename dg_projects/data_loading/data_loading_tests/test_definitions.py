@@ -153,6 +153,7 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_units",
         "ol_warehouse_raw_data/raw__ocw__s3__course_content",
         "ol_warehouse_raw_data/raw__edxorg__s3__program_learner_report",
         "ol_warehouse_raw_data/raw__xpro__openedx__tracking_log_events",

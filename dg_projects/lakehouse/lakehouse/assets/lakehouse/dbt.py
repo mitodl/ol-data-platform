@@ -120,8 +120,7 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
 
     A check the run selected is never excluded, so this only works for a job
     whose selection leaves out the checks on unselected assets (see
-    ``learn_integrations_qa_target``). A bare ``build_dbt_asset_selection``
-    selects them.
+    ``dbt_job_target``). A bare ``build_dbt_asset_selection`` selects them.
     """
     if not context.is_subset:
         return []

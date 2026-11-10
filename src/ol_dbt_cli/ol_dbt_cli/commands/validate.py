@@ -55,6 +55,7 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_yaml_models,
     get_repo_root,
 )
+from ol_dbt_cli.lib.glossary_registry import DEFAULT_GLOSSARY_DIR, GLOSSARY_TERMS_CHECK, check_glossary_terms
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
 from ol_dbt_cli.lib.metric_registry import (
@@ -1030,7 +1031,7 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "cohort_policy, raw_json_calls, exposure_contract."
+                "cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
             ),
         ),
     ] = None,
@@ -1042,7 +1043,8 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls, exposure_contract. "
+                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls, exposure_contract, "
+                "glossary_terms. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1139,6 +1141,16 @@ def validate(
             ),
         ),
     ] = None,
+    glossary_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--glossary-dir"],
+            help=(
+                "OpenMetadata glossary directory for the glossary_terms check. "
+                "Defaults to <repo>/glossary, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     update_baseline: Annotated[
         bool,
         Parameter(
@@ -1164,7 +1176,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs thirteen checks:
+    Runs seventeen checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1201,6 +1213,8 @@ def validate(
     16. exposure_contract    — exposures/<name>.json of every application exposure matches the
                                columns, cohort declarations and api_descriptions of the models
                                it depends on; regenerate with `ol-dbt exposures export` (ERROR)
+    17. glossary_terms       — every config.meta.openmetadata.glossary FQN in the project names a
+                               term declared in <repo>/glossary/ (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1273,6 +1287,7 @@ def validate(
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
+        GLOSSARY_TERMS_CHECK,
     }
     # Run once over the whole project whatever --model / --changed-only selects.
     global_checks = {
@@ -1285,6 +1300,7 @@ def validate(
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
+        GLOSSARY_TERMS_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1631,6 +1647,14 @@ def validate(
             Path(exposures_dir_path).resolve() if exposures_dir_path else dbt_dir.parents[1] / DEFAULT_EXPOSURES_DIR
         )
         check_exposure_contracts(dbt_dir, exposures_dir, report)
+
+    # Global because the term FQNs live in YAML, which --changed-only does not
+    # select, and a glossary edit changes no model.
+    if GLOSSARY_TERMS_CHECK not in skipped:
+        glossary_dir = (
+            Path(glossary_dir_path).resolve() if glossary_dir_path else dbt_dir.parents[1] / DEFAULT_GLOSSARY_DIR
+        )
+        check_glossary_terms(dbt_dir, glossary_dir, report)
 
     # Output
     if output_format == "json":

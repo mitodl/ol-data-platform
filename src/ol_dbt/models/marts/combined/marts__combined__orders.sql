@@ -68,6 +68,8 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.product_id
         , mitxonline__ecommerce_order.product_type
         , mitxonline__ecommerce_order.product_price
+        , mitxonline__ecommerce_order.line_price
+        , mitxonline__ecommerce_order.discount_amount
         , mitxonline__ecommerce_order.user_email
         , mitxonline__ecommerce_order.user_id
         , mitxonline__ecommerce_order.discount_code
@@ -158,6 +160,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.product_id
         , mitxpro__ecommerce_allorders.product_type
         , mitxpro__lines.product_price
+        , mitxpro__lines.product_price - mitxpro__ecommerce_order.order_total_price_paid as discount_amount
         , mitxpro__ecommerce_allorders.user_email
         , mitxpro__ecommerce_allorders.courserun_id
         , mitxpro__ecommerce_allorders.courserun_readable_id
@@ -246,7 +249,7 @@ with bootcamps__ecommerce_order as (
         , product_id
         , coalesce(courserun_readable_id, program_readable_id) as product_readable_id
         , product_type
-        , product_price as unit_price
+        , line_price as unit_price
         , user_email
         , user_id
         , discount_code as coupon_code
@@ -296,6 +299,7 @@ with bootcamps__ecommerce_order as (
                 )
             else discount_amount_text
         end as discount
+        , discount_amount
     from mitxonline_orders
 
     union all
@@ -350,6 +354,7 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid_plus_tax
         , order_total_price_paid
         , discount
+        , discount_amount
     from mitxpro_orders
 
     union all
@@ -404,6 +409,7 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , null as discount
+        , null as discount_amount
     from bootcamps_orders
 
     union all
@@ -467,8 +473,11 @@ with bootcamps__ecommerce_order as (
                 )
             else coupon_discount_amount_text
         end as discount
+        , null as discount_amount
     from micromasters_orders
-    where courserun_platform = '{{ var("edxorg") }}'
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and not order_is_migrated_to_mitxonline
 
 )
 
@@ -488,6 +497,7 @@ select
     , courserun_id
     , courserun_readable_id
     , discount
+    , discount_amount
     , order_created_on
     , order_reference_number
     , order_state

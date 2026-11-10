@@ -9,11 +9,13 @@ from typing import Any, Self
 import polars as pl
 import pyarrow as pa
 import pytest
-from ml.lib import redact
+from dagster import AssetKey, materialize, mem_io_manager
+from ml.lib import redact, warehouse
+from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions.visitors import bind
 from pyiceberg.io.pyarrow import expression_to_pyarrow
 from pyiceberg.schema import Schema
-from pyiceberg.types import NestedField, StringType
+from pyiceberg.types import LongType, NestedField, StringType
 
 
 class _Result:
@@ -65,7 +67,7 @@ def fake_analyzer(monkeypatch: pytest.MonkeyPatch) -> _FakeAnalyzer:
 
 
 @pytest.mark.usefixtures("fake_analyzer")
-def test_redact_titles_and_text_masks_pii_and_keeps_the_join_key() -> None:
+def test_redact_columns_masks_pii_and_keeps_the_join_key() -> None:
     """PII is masked, and source_slug/source_record_ref survive for the left-join."""
     df = pl.DataFrame(
         {
@@ -76,7 +78,7 @@ def test_redact_titles_and_text_masks_pii_and_keeps_the_join_key() -> None:
         }
     )
 
-    result = redact.redact_titles_and_text(df)
+    result = redact.redact_columns(df)
 
     row = result.row(0, named=True)
     assert row["source_slug"] == "zendesk"
@@ -361,7 +363,7 @@ def test_redact_and_checkpoint_writes_each_batch_with_the_current_version(
     monkeypatch.setattr(
         redact,
         "checkpoint_redacted_chunk",
-        lambda _catalog, _table, chunk_df: written.append(chunk_df),
+        lambda _catalog, _table, chunk_df, _key_cols: written.append(chunk_df),
     )
     df = pl.DataFrame(
         {
@@ -516,10 +518,140 @@ def test_checkpoint_redacted_chunk_skips_an_empty_chunk() -> None:
 
 def test_checkpoint_redacted_chunk_rejects_duplicate_keys() -> None:
     """Overwrite would keep both copies, so a duplicate key must fail first."""
-    table = _FakeTable(list(redact.REDACTED_SCHEMA))
+    table = _FakeTable(_redacted_chunk([]).columns)
 
     with pytest.raises(ValueError, match="Duplicate"):
         redact.checkpoint_redacted_chunk(
             _FakeCatalog(table), "db.feedback_redacted", _redacted_chunk(["1", "1"])
         )
     assert table.overwrites == []
+
+
+def _materialize_comment_asset(
+    monkeypatch: pytest.MonkeyPatch,
+    tables: dict[tuple[str, str], pl.LazyFrame],
+    source_filter: pl.Expr | None = None,
+    run_config: dict[str, Any] | None = None,
+) -> list[tuple[pl.DataFrame, list[str]]]:
+    def read(database_name: str, table_name: str) -> pl.LazyFrame:
+        key = (database_name.rsplit("_", 1)[-1], table_name)
+        if key not in tables:
+            raise NoSuchTableError(table_name)
+        return tables[key]
+
+    monkeypatch.setattr(redact, "get_dbt_model_as_dataframe", read)
+    monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
+    monkeypatch.setattr(redact, "get_glue_catalog", lambda: None)
+    monkeypatch.setattr(
+        redact, "_redact_text", lambda value: value.replace("PII", "<PERSON>")
+    )
+    written: list[tuple[pl.DataFrame, list[str]]] = []
+    monkeypatch.setattr(
+        redact,
+        "checkpoint_redacted_chunk",
+        lambda _catalog, _table, chunk_df, key_cols: written.append(
+            (chunk_df, key_cols)
+        ),
+    )
+    asset_def = redact.build_redacted_asset(
+        name="zendesk_conversation_redacted",
+        source=AssetKey(["staging", "stg__zendesk__ticket_comment"]),
+        key_cols=["comment_id"],
+        text_cols=["comment_body", "ticket_subject"],
+        code_version="test_v1",
+        group_name="test",
+        pool="test",
+        source_filter=source_filter,
+    )
+    result = materialize(
+        [asset_def], resources={"io_manager": mem_io_manager}, run_config=run_config
+    )
+    assert result.success
+    return written
+
+
+def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staging source keyed on one integer column is read from the staging
+    database. Rows outside source_filter and rows already in the output are
+    skipped, and each text column gets its own <column>_redacted column.
+    """
+    tables = {
+        ("staging", "stg__zendesk__ticket_comment"): pl.LazyFrame(
+            {
+                "comment_id": [1, 2, 3],
+                "ticket_platform": ["mitlearn", "mitlearn", "ocw"],
+                "comment_body": ["Hi, I am PII", "already done", "out of scope"],
+                "ticket_subject": ["Refund for PII", "Refund", "Login"],
+            }
+        ),
+        ("intermediate", "zendesk_conversation_redacted"): pl.LazyFrame(
+            {"comment_id": [2], "redaction_version": [redact.REDACTION_VERSION]}
+        ),
+    }
+
+    written = _materialize_comment_asset(
+        monkeypatch, tables, source_filter=pl.col("ticket_platform") == "mitlearn"
+    )
+
+    ((chunk_df, key_cols),) = written
+    assert key_cols == ["comment_id"]
+    assert chunk_df.to_dicts() == [
+        {
+            "comment_id": 1,
+            "comment_body_redacted": "Hi, I am <PERSON>",
+            "ticket_subject_redacted": "Refund for <PERSON>",
+            "redaction_version": redact.REDACTION_VERSION,
+        }
+    ]
+
+
+def test_redacted_asset_keys_config_keeps_rows_matching_every_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keys compares values as strings, so "1" matches the integer comment_id 1,
+    and a row must match every column given.
+    """
+    tables = {
+        ("staging", "stg__zendesk__ticket_comment"): pl.LazyFrame(
+            {
+                "comment_id": [1, 2, 3],
+                "ticket_platform": ["mitlearn", "mitlearn", "ocw"],
+                "comment_body": ["one", "two", "three"],
+                "ticket_subject": ["a", "b", "c"],
+            }
+        ),
+    }
+    run_config = {
+        "ops": {
+            "intermediate__zendesk_conversation_redacted": {
+                "config": {
+                    "keys": {
+                        "comment_id": ["1", "3"],
+                        "ticket_platform": ["mitlearn"],
+                    }
+                }
+            }
+        }
+    }
+
+    written = _materialize_comment_asset(monkeypatch, tables, run_config=run_config)
+
+    ((chunk_df, _),) = written
+    assert chunk_df["comment_id"].to_list() == [1]
+
+
+def test_key_filter_on_one_column_matches_only_the_batch_keys() -> None:
+    table = pa.table({"comment_id": [1, 2, 3, 4]})
+    schema = Schema(NestedField(1, "comment_id", LongType(), required=False))
+    chunk_df = pl.DataFrame({"comment_id": [2, 4]})
+
+    key_filter = bind(
+        schema, redact._key_filter(chunk_df, ["comment_id"]), case_sensitive=True
+    )
+
+    assert table.filter(expression_to_pyarrow(key_filter)).to_pylist() == [
+        {"comment_id": 2},
+        {"comment_id": 4},
+    ]

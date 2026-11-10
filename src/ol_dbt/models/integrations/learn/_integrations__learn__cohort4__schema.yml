@@ -100,6 +100,63 @@ models:
       is null or past, so a future-dated row stays here but is hidden in Learn until
       then.
 
+- name: integrations__learn__content_file_units
+  description: >
+    One row per unit of an MITx Online or xPRO course run (one per visible
+    sequential, plus the course context), as MIT Learn's OlxArchive.units builds
+    them from the run's export, for SyncOpenEdXContentFilesTask to pass to
+    load_course_units after it loads the run's content files. Scoped like
+    integrations__learn__content_files, by (etl_source, run_readable_id). A run
+    has rows only when its units were built from the export its content files'
+    blocks came from; Learn keeps a run's units when it reads none.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id, unit_order]
+  columns:
+  - name: etl_source
+    description: str, mitxonline or xpro. Half of the scoped pull's key.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, xpro]
+  - name: run_readable_id
+    description: str, course run id; equals Unit.run.run_id. Half of the scoped pull's
+      key.
+    tests: [not_null]
+  - name: external_id
+    description: str, Unit.external_id, the sequential's usage key, or context. A
+      sequential the outline names twice has two rows; load_course_units keeps the
+      first it loads.
+    tests: [not_null]
+  - name: kind
+    description: str, Unit.kind
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [unit, context]
+  - name: title
+    description: str, the sequential's display_name, else its url_name; Course context
+      for the context unit. Learn cuts it to its column's length.
+    tests: [not_null]
+  - name: url
+    description: str, the LMS jump URL of the sequential, as Learn's get_jump_to_url
+      builds it; empty for the context unit
+    tests: [not_null]
+  - name: unit_order
+    description: bigint, the unit's place in the list OlxArchive.units returns, from
+      0. load_course_units numbers Unit.position from this order, over the units of
+      kind unit it keeps.
+    tests: [not_null]
+  - name: content_files
+    description: str, JSON array of [ContentFile key, relation] pairs in lesson order,
+      relation being core, assessment or supplementary. Keys are the run's integrations__learn__content_files
+      keys; a key with no published ContentFile in Learn (e.g. a file with no text)
+      is dropped by load_course_units.
+    tests: [not_null]
+
 - name: integrations__learn__ocw_content_files
   description: >
     One row per ContentFile of an OCW course run, for MIT Learn's
@@ -109,9 +166,11 @@ models:
     each resource's file. Not applied: Learn's nh3 sanitizing of a resource's
     description, so description is the HTML OCW published.
   config:
+    tags: [qa_scheduled]
     meta:
-      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
-      qa_buildable: false
+      qa_branches:
+      - ocw/app_postgres
+      - ocw/s3
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

@@ -365,6 +365,9 @@ models:
     - accepted_values:
         arguments:
           values: ["MITx Online", "edX.org"]
+  - name: courserunenrollment_id
+    description: int, primary key of the enrollment in MITx Online. Null for edX.org
+      enrollments, which have no id of their own
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:

@@ -195,3 +195,57 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: [content_file_source_system, courserun_readable_id, content_file_path]
+
+- name: stg__openedx__s3__course_units
+  description: The units MIT Learn breaks each Open edX course run into, from the
+    course's newest landed file only. A run whose newest file is empty (its units
+    could not be built) has no rows.
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: unit_source_system
+    description: str, Open edX deployment (mitxonline, xpro, mitx)
+    tests:
+    - not_null
+  - name: unit_course_xml_version
+    description: str, SHA-256 of the course export the units were built from
+    tests:
+    - not_null
+  - name: unit_order
+    description: bigint, the unit's place in the list Learn's OlxArchive.units returns,
+      from 0
+    tests:
+    - not_null
+  - name: unit_external_id
+    description: str, Unit.external_id, the sequential's usage key, or context
+    tests:
+    - not_null
+  - name: unit_kind
+    description: str, Unit.kind
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [unit, context]
+  - name: unit_title
+    description: str, the sequential's display_name, else its url_name; Course context
+      for the context unit
+    tests:
+    - not_null
+  - name: unit_url_name
+    description: str, the sequential's url_name; empty for the context unit
+    tests:
+    - not_null
+  - name: unit_content_files
+    description: str, JSON array of [ContentFile key, relation] pairs in lesson order
+    tests:
+    - not_null
+  - name: unit_built_at
+    description: timestamp, S3 modification time of the file the row came from
+    data_type: timestamp
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [unit_source_system, courserun_readable_id, unit_order]

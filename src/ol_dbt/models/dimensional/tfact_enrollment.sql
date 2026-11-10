@@ -5,14 +5,17 @@
     on_schema_change='append_new_columns'
 ) }}
 
-{#- The first incremental run after contract_fk is added reads a target without the column.
-    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{#- The first incremental run after contract_fk or is_verified is added reads a target without
+    the column. In a unit test `this` is the fixture's name, a string, which always has it. -#}
 {%- set target_has_contract_fk = false -%}
+{%- set target_has_is_verified = false -%}
 {%- if is_incremental() and this is string -%}
     {%- set target_has_contract_fk = true -%}
+    {%- set target_has_is_verified = true -%}
 {%- elif is_incremental() -%}
     {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
     {%- set target_has_contract_fk = 'contract_fk' in target_columns -%}
+    {%- set target_has_is_verified = 'is_verified' in target_columns -%}
 {%- endif %}
 
 -- Consolidate enrollments from all platforms
@@ -421,6 +424,10 @@ with mitxonline_enrollments as (
         , dim_platform_lookup.platform_pk as platform_fk
         , dim_contract.contract_pk as contract_fk
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
+        , coalesce(combined_enrollments.enrollment_mode, '') = 'verified'
+            and coalesce(combined_enrollments.enrollment_status, '') not in (
+                'refunded', 'deferred', 'transferred', 'unenrolled'
+            ) as is_verified
     from combined_enrollments
     left join user_lookup as ul_mitxonline
         on combined_enrollments.platform = 'mitxonline'
@@ -512,6 +519,8 @@ with mitxonline_enrollments as (
         , bool_or(enrollment_is_active) as stored_is_active
         , max(enrollment_mode) as stored_mode
         , max(enrollment_status) as stored_status
+        , {% if target_has_is_verified %}bool_or(is_verified){% else %}cast(null as boolean){% endif %}
+            as stored_is_verified
         , count(*) > 1 as stored_has_copies
     from {{ this }}
     group by enrollment_key
@@ -541,6 +550,7 @@ with mitxonline_enrollments as (
         , ewf.enrollment_updated_on
         , ewf.enrollment_is_edx_enrolled
         , ewf.order_id
+        , ewf.is_verified
     from enrollments_with_fks as ewf
 
     {% if is_incremental() %}
@@ -577,6 +587,8 @@ with mitxonline_enrollments as (
         or sfk.stored_is_active is distinct from ewf.enrollment_is_active
         or sfk.stored_mode is distinct from ewf.enrollment_mode
         or sfk.stored_status is distinct from ewf.enrollment_status
+        -- is_verified added or its rule changed, including every row on the run that adds the column
+        or sfk.stored_is_verified is distinct from ewf.is_verified
         or sfk.stored_has_copies
     )
     {% endif %}
@@ -603,4 +615,5 @@ select
     , enrollment_updated_on
     , enrollment_is_edx_enrolled
     , order_id
+    , is_verified
 from final

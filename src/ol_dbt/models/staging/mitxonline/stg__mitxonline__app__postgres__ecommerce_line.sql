@@ -14,6 +14,7 @@ with source as (
         , product_version_id
         , purchased_object_id as product_object_id
         , purchased_content_type_id as contenttype_id
+        , cast(discounted_unit_price as decimal(38, 2)) as line_discounted_unit_price
         ,{{ cast_timestamp_to_iso8601('created_on') }} as line_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as line_updated_on
     from most_recent_source

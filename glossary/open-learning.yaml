@@ -1,0 +1,346 @@
+---
+glossary:
+  name: open-learning
+  displayName: Open Learning
+  description: >-
+    What the terms used about MIT Open Learning's learners, courses and enrollments
+    mean in the warehouse, and the privacy categories its columns fall into. Each
+    term names the dimensional model that decides it.
+  mutuallyExclusive: false
+  owners:
+  - type: team
+    name: data-platform
+  reviewers:
+  - type: team
+    name: data-platform
+terms:
+- name: platform
+  displayName: Platform
+  synonyms:
+  - platform_code
+  - source platform
+  description: >-
+    The system a record came from, by its code in `dim_platform`: `mitxonline` (MITx
+    Online), `mitxpro` (MIT xPRO), `edxorg` (edX.org), `residential` (MITx Residential),
+    `bootcamps`, `emeritus` and `global_alumni` (xPRO courses run on partner platforms),
+    `micromasters`, `ocw` and `mitlearn`. Facts and `dim_course_run` carry it as `platform`,
+    `dim_course` as `primary_platform` and `dim_program` as `platform_code`.
+
+
+    A course or course run readable id is unique only within a platform: courses that
+    moved from edX.org to MITx Online kept their ids. A join on `courserun_readable_id`
+    or `course_readable_id` must also match the platform, or it fans out.
+
+
+    MicroMasters is not an Open edX instance of its own. Its course runs are stored
+    under the platform that ran them, and `micromasters` appears only on programs
+    and certificates.
+- name: user
+  displayName: User
+  synonyms:
+  - account holder
+  - person
+  description: >-
+    A person, as `dim_user` resolves them from their accounts on every platform. Accounts
+    are the same person when they share a lowercased email address or were already
+    linked upstream (MITx Online with edX.org, MIT Learn accounts sharing a global
+    id). For xPRO, Bootcamps, Residential, Emeritus and Global Alumni the email is
+    the only signal, so the same person under two emails is two users.
+
+
+    `user_pk` is derived from the person's most durable account id, so it survives
+    an email change; `user_pk_source` says which id it came from. Facts refer to it
+    as `user_fk`.
+
+
+    A user need not have enrolled in anything, e.g. an MIT Learn sign-up. See Learner.
+- name: learner
+  displayName: Learner
+  synonyms:
+  - student
+  - enrollee
+  description: >-
+    A user who has enrolled in a course run or a program: a `user_fk` that appears
+    in `tfact_enrollment`. `dim_user` has no learner flag and holds every account,
+    enrolled or not, so counting its rows counts users, not learners.
+
+
+    `afact_learner_courserun_progress` has one row per learner and course run, for
+    course enrollments whose `user_fk` and `courserun_fk` both resolved. `afact_learner_courserun_daily_activity`
+    is built from tracked events, not enrollments, so it also holds users with activity
+    but no enrollment (e.g. staff previewing a course); join it to `tfact_enrollment`
+    to keep learners only.
+
+
+    See Active learner.
+- name: course
+  displayName: Course
+  synonyms:
+  - course concept
+  description: >-
+    A course as a catalog entry, independent of when it is taught, e.g. 6.00.1x. One
+    current row per (`primary_platform`, `course_readable_id`) in `dim_course`, which
+    keeps history as SCD Type 2 (filter on `is_current`). A course has one or more
+    course runs; enrollments, grades and certificates belong to the runs.
+
+
+    edX.org, Emeritus and Global Alumni have no course table, so their courses are
+    built from course runs. Residential has no courses in `dim_course`, so its runs
+    have a null `course_fk`. OCW courses are in `dim_course` but have no runs or enrollments
+    in the dimensional models.
+- name: course-run
+  displayName: Course run
+  synonyms:
+  - run
+  - course offering
+  - section
+  description: >-
+    One offering of a course, with its own dates, enrollment window, enrollments,
+    grades and certificates. One current row per (`platform`, `courserun_readable_id`)
+    in `dim_course_run` (SCD Type 2, filter on `is_current`); `course_fk` points at
+    its course.
+
+
+    `courserun_readable_id` is not unique across platforms (e.g. `MITx/14.73x/2013_Spring`
+    is on both `edxorg` and `mitxonline`), so always pair it with `platform`.
+- name: program
+  displayName: Program
+  synonyms:
+  - MicroMasters
+  - professional certificate program
+  description: >-
+    A set of courses that leads to a program certificate, e.g. a MicroMasters program
+    or an xPRO professional certificate. One row per (`source_id`, `platform_code`)
+    in `dim_program`; `bridge_program_course` lists its courses and whether each is
+    required. Programs have no runs.
+
+
+    A program enrollment is a `tfact_enrollment` row with `enrollment_type = 'program'`,
+    and the fact holds MITx Online program enrollments only: xPRO, edX.org and MicroMasters
+    program enrollments are not in it. On a MicroMasters course enrollment `program_fk`
+    is looked up from the run's program membership, and on an xPRO course enrollment
+    it is the program the course was bought under.
+- name: enrollment
+  displayName: Enrollment
+  synonyms:
+  - registration
+  description: >-
+    A learner's registration in a course run or a program: one `tfact_enrollment`
+    row per (`enrollment_id`, `platform`, `enrollment_type`), where `enrollment_type`
+    is `course` or `program`. The row stays after the learner unenrolls, so counting
+    rows counts everyone who ever enrolled. Filter on `enrollment_is_active` for current
+    enrollments (see Active enrollment).
+
+
+    A learner can hold several enrollments in one run after refunds, deferrals or
+    transfers; `afact_learner_courserun_progress` reports the active one, else the
+    newest. Program enrollments in the fact are MITx Online only (see Program).
+- name: active-enrollment
+  displayName: Active enrollment
+  synonyms:
+  - currently enrolled
+  description: >-
+    An enrollment the learner has not left: `tfact_enrollment.enrollment_is_active
+    = true`, the platform's own flag. This is the canonical "currently enrolled" test.
+    Do not derive it from `enrollment_status`, which records why an enrollment changed,
+    is null on edX.org and Residential, and differs by platform: `deferred` marks
+    active audit enrollments on MITx Online but inactive ones on xPRO and Bootcamps.
+
+
+    It says nothing about whether the learner did anything in the course. See Active
+    learner.
+- name: active-learner
+  displayName: Active learner
+  synonyms:
+  - engaged learner
+  description: >-
+    A user with tracked course activity in a period: a row in `afact_learner_courserun_daily_activity`
+    for that day, month or course run. The table is built from events, not enrollments,
+    so it also counts users who never enrolled (e.g. staff previewing a course); join
+    to `tfact_enrollment` to count enrolled learners only. Activity is a video play,
+    problem check, course navigation, discussion event or Open edX chatbot submit;
+    enrolling and earning a certificate are not activity. `afact_learner_courserun_progress.last_active_on`
+    is the latest such day.
+
+
+    Only MITx Online, xPRO, Residential and edX.org have tracked activity. The day
+    is the event's date in the source's timezone, not UTC.
+
+
+    "Active" has three meanings in the warehouse and this is the behavioural one.
+    An Active enrollment is a current enrollment, and an Active account is an account
+    that has not been deactivated.
+- name: active-account
+  displayName: Active account
+  synonyms:
+  - is_active
+  description: >-
+    A platform account that has not been deactivated: the `dim_user.user_is_active_on_*`
+    flags. On MITx Online, xPRO, Residential, Bootcamps and MIT Learn the flag is
+    the account's own `is_active`, which the applications use to soft-delete accounts.
+    On edX.org it is derived instead: false when the account's email or username starts
+    with `retired__user` (a retired account), else true. Null when the user has no
+    account on that platform.
+
+
+    It is not a measure of use: an account can be active without ever being used.
+    See Active learner.
+- name: enrollment-mode
+  displayName: Enrollment mode
+  synonyms:
+  - track
+  - course mode
+  description: >-
+    The track a learner enrolled in, as the platform recorded it in `tfact_enrollment.enrollment_mode`.
+    The common values are `audit` and `verified` (see Verified); edX.org also has
+    `honor` and `credit`. Null for Bootcamps, Emeritus and Global Alumni, which have
+    no modes.
+- name: verified
+  displayName: Verified
+  synonyms:
+  - verified track
+  - verified certificate
+  - upgraded
+  description: >-
+    Two related uses.
+
+
+    As an enrollment mode, `enrollment_mode = 'verified'` is the certificate track
+    a learner pays for, as opposed to `audit`. The warehouse also sets it on some
+    DEDP course enrollments, whatever mode the platform recorded. On edX.org it does
+    so when a fulfilled MicroMasters order paid for the run. On MITx Online it does
+    so only for an enrollment with no `enrollment_status`, paid for by a fulfilled
+    MicroMasters order for the 3T2021, 1T2022 and 2T2022 runs and by a fulfilled MITx
+    Online order for any other run.
+
+
+    As a certificate type, `dim_certificate_type.certificate_type_code = 'verified'`.
+    `tfact_certificate` gives it to every MITx Online course and program certificate,
+    MicroMasters course certificate, edX.org program certificate and Bootcamps certificate.
+    edX.org course certificates take the mode recorded on the certificate, and xPRO
+    certificates are `professional`. `certificate_requires_id_verification` is a fixed
+    attribute of the type, not a record that the learner's identity was checked.
+- name: certificate
+  displayName: Certificate
+  synonyms:
+  - credential
+  - certified
+  description: >-
+    A certificate a platform issued to a learner for a course run (`certificate_scope
+    = 'course'`) or a program (`'program'`): one `tfact_certificate` row per (`certificate_id`,
+    `platform`, `certificate_scope`), typed by `certificate_type_fk` (see Verified).
+
+
+    A revoked certificate keeps its row (`certificate_is_revoked`). When a learner
+    has more than one for a run, `is_current` marks the one that stands: unrevoked
+    first, then the latest issued. A MicroMasters course certificate that arrives
+    from both edX.org and MicroMasters is collapsed to the edX.org row.
+
+
+    A learner is certified in a run (`afact_learner_courserun_progress.is_certified`)
+    when they hold an unrevoked course certificate for it, which does not require
+    a passing grade. edX.org certificates are never marked revoked, and Residential,
+    Emeritus and Global Alumni have no certificates in the warehouse.
+- name: pii
+  displayName: Personally identifiable information (PII)
+  synonyms:
+  - PII
+  - personal data
+  references:
+  - name: NIST SP 800-122
+    endpoint: https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf
+  description: >-
+    Per NIST SP 800-122, any information about an individual that can be used to distinguish
+    or trace their identity (e.g. name, email address, date and place of birth), and
+    any other information that is linked or linkable to them (e.g. educational, financial
+    and employment information). In the warehouse that covers `dim_user` and every
+    fact row that carries a `user_fk`.
+
+
+    OpenMetadata's auto-classification sets the `PII.Sensitive` and `PII.NonSensitive`
+    tags from column names and content. The terms under Identifiability say how directly
+    a column identifies a person, and the terms under FERPA classification say how
+    FERPA treats it.
+- name: identifiability
+  displayName: Identifiability
+  references:
+  - name: NIST SP 800-122
+    endpoint: https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf
+  mutuallyExclusive: true
+  description: >-
+    How directly a column identifies a person, after NIST SP 800-122. A column carries
+    at most one of these terms.
+- name: direct-identifier
+  parent: identifiability
+  displayName: Direct identifier
+  synonyms:
+  - direct PII
+  references:
+  - name: NIST SP 800-122
+    endpoint: https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf
+  description: >-
+    A value that identifies one person on its own: a name, an email address, or a
+    platform user id or username. In `dim_user`: `full_name`, `email`, `user_global_id`,
+    and every `*_user_id`, `*_username` and `*_identity_key` column.
+- name: indirect-identifier
+  parent: identifiability
+  displayName: Indirect identifier
+  synonyms:
+  - quasi-identifier
+  references:
+  - name: NIST SP 800-122
+    endpoint: https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf
+  - name: 34 CFR 99.3 (FERPA definitions)
+    endpoint: https://www.ecfr.gov/current/title-34/subtitle-A/part-99/subpart-A/section-99.3
+  description: >-
+    A value that does not identify a person alone but can in combination with others,
+    e.g. date of birth, gender, location, employer or job title. In `dim_user`: `birth_year`,
+    `gender`, `address_country`, `address_state`, `company`, `job_title`, `industry`
+    and `highest_education`. A small group broken down by these columns can single
+    a person out.
+- name: ferpa-classification
+  displayName: FERPA classification
+  references:
+  - name: 34 CFR 99.3 (FERPA definitions)
+    endpoint: https://www.ecfr.gov/current/title-34/subtitle-A/part-99/subpart-A/section-99.3
+  mutuallyExclusive: true
+  description: >-
+    How FERPA treats a column of student data. Under 34 CFR 99.3 directory information
+    is a part of a student's education record, so a column carries the narrower term:
+    Directory information when the value is a directory item, Education record otherwise.
+    A column carries at most one of these terms.
+- name: directory-information
+  parent: ferpa-classification
+  displayName: Directory information
+  references:
+  - name: 34 CFR 99.3 (FERPA definitions)
+    endpoint: https://www.ecfr.gov/current/title-34/subtitle-A/part-99/subpart-A/section-99.3
+  description: >-
+    Information from a student's education record that would not generally be considered
+    harmful or an invasion of privacy if disclosed, and that an institution may disclose
+    without consent after giving notice, unless the student has opted out. 34 CFR
+    99.3 lists e.g. name, address, telephone listing, email address, photograph, date
+    and place of birth, enrollment status, dates of attendance, and degrees, honors
+    and awards received; each institution designates its own list. It excludes social
+    security numbers and, with narrow exceptions, student ID numbers.
+
+
+    Directory information is still PII. In `dim_user`: `full_name` and `email`.
+- name: education-record
+  parent: ferpa-classification
+  displayName: Education record
+  synonyms:
+  - educational record
+  references:
+  - name: 34 CFR 99.3 (FERPA definitions)
+    endpoint: https://www.ecfr.gov/current/title-34/subtitle-A/part-99/subpart-A/section-99.3
+  description: >-
+    A record directly related to a student and maintained by the institution or a
+    party acting for it (34 CFR 99.3), e.g. grades, assignments and submissions, and
+    financial aid records. Disclosing the parts that are not directory information
+    needs the student's written consent unless a FERPA exception applies.
+
+
+    In the dimensional models: grades (`tfact_grade` and the grade columns of `afact_learner_courserun_progress`),
+    the financial aid income in `dim_user`, and the profile's `gender`, `company`,
+    `job_title` and `industry`.

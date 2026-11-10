@@ -6,7 +6,8 @@ description: null
 params:
   adhoc_filters: []
   all_columns:
-  - program_name
+  - program_title
+  - program_readable_id
   - total_enrollments
   - unique_users
   - unique_countries

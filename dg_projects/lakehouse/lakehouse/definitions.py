@@ -23,10 +23,7 @@ from dagster_airbyte import (
     DagsterAirbyteTranslator,
     build_airbyte_assets_definitions,
 )
-from dagster_dbt import (
-    DbtCliResource,
-    build_dbt_asset_selection,
-)
+from dagster_dbt import DbtCliResource
 from dagster_dbt.asset_utils import (
     get_asset_key_for_model,
     get_manifest_and_translator_from_dbt_assets,
@@ -88,6 +85,7 @@ from lakehouse.assets.superset import (
 from lakehouse.lib.automation_targets import (
     OCW_LEARN_MODELS,
     dbt_automation_target,
+    dbt_job_target,
     learn_integrations_qa_target,
     ocw_learn_target,
 )
@@ -665,11 +663,14 @@ posthog_staging_schedule = ScheduleDefinition(
 # never been created, because edX.org lists no active non-MicroMasters MIT
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
-# raw__canvas__s3__course_content is the same until canvas_content_ingest's first
-# load, which is started by hand. Remove it here once that has landed.
+# raw__openedx__s3__course_units is the same until course_xml_blocks_ingest's
+# first load after the openedx course_units output lands its first files; remove
+# stg__openedx__s3__course_units then. integrations__learn__content_file_units
+# waits on it without being listed: dbt_automation_sensor's condition holds a
+# model while any_deps_missing, and nothing else schedules it.
 AWAITING_RAW_TABLE = {
-    "stg__canvas__s3__course_content",
     "stg__edxorg__discovery__api__programs",
+    "stg__openedx__s3__course_units",
 }
 
 non_airbyte_staging_models = sorted(
@@ -691,9 +692,8 @@ non_airbyte_staging_schedules = (
                 name="non_airbyte_staging_daily",
                 job=define_asset_job(
                     name="non_airbyte_staging_job",
-                    selection=build_dbt_asset_selection(
-                        [full_dbt_project],
-                        dbt_select=" ".join(non_airbyte_staging_models),
+                    selection=dbt_job_target(
+                        full_dbt_project, " ".join(non_airbyte_staging_models)
                     ),
                 ),
                 # After the cron-driven dlt ingests in data_loading (03:00 to
@@ -726,8 +726,10 @@ non_airbyte_staging_schedules = (
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that
 # QA's data_loading schedules load daily, so QA holds close to production's
 # rows. Those schedules set no default status, so they run in QA because they
-# were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
-# omitted in QA).
+# were started in its UI. The OCW views read the production OCW live bucket,
+# which ocw_content_ingest_daily_schedule sweeps in QA from 04:35 (started in
+# QA's UI, since it defaults to STOPPED outside production), joined to QA
+# ocw-studio's published sites, so they hold only the courses both publish.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(

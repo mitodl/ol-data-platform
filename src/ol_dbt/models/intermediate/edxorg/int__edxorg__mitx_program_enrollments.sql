@@ -1,6 +1,7 @@
 with program_learners as (
     select *
     from {{ ref('stg__edxorg__s3__program_learner_report') }}
+    where courserun_readable_id not like '{{ var("edxorg_demo_course_readable_id") }}/%'
 )
 
 , micromasters_programs as (

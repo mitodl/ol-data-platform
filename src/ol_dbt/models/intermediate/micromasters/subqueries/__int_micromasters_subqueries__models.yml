@@ -675,3 +675,36 @@ unit_tests:
     rows:
     - {user_mitxonline_id: 1, programcertificate_is_revoked: true}
     - {user_mitxonline_id: 2, programcertificate_is_revoked: false}
+- name: test___micromasters_program_certificates_dedp_from_mitxonline_hashes_the_uuid_without_dashes
+  description: >
+    MITx Online's migration set a copied certificate's uuid to the MicroMasters
+    certificate's hash with dashes added. micromasters_program_certificate_hashed_id
+    hashes the uuid without its dashes, so it matches the MicroMasters certificate's
+    program_certificate_hashed_id. program_certificate_hashed_id hashes the uuid as
+    stored.
+  model: __micromasters_program_certificates_dedp_from_mitxonline
+  given:
+  - input: ref('int__mitxonline__program_certificates')
+    rows:
+    - {user_id: 1, user_username: copied, program_id: 1, programcertificate_uuid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
+  - input: ref('int__mitx__programs')
+    rows:
+    - {mitxonline_program_id: 1, micromasters_program_id: 2, program_title: DEDP ID,
+      is_dedp_program: true}
+  expect:
+    format: sql
+    # Fixture SQL can't call macros, so this repeats default__generate_hash_id.
+    rows: |
+      select
+          'copied' as user_mitxonline_username
+          , 1 as user_mitxonline_id
+          , 2 as micromasters_program_id
+          , 'DEDP ID' as program_title
+          , 1 as mitxonline_program_id
+          , lower(to_hex(sha256(cast('0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d' as varbinary))))
+          as program_certificate_hashed_id
+          , lower(to_hex(sha256(cast('0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d' as varbinary))))
+          as micromasters_program_certificate_hashed_id
+          , '2023-01-01T00:00:00Z' as program_completion_timestamp
+          , false as programcertificate_is_revoked

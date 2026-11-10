@@ -489,26 +489,30 @@ models:
     tests:
     - not_null
   - name: discount_type
-    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
-      if the ammount of the discount refers to a percent of, a dollar amount off or
-      a discounted price
+    description: string, one of "percent-off", "dollars-off", "fixed-price" and "paid-amount-off".
+      Specifies if the amount of the discount refers to a percent off, a dollar amount
+      off, a discounted price, or the amount the learner paid for a qualifying prior
+      purchase (resolved at checkout; the discount stores 0)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["percent-off", "dollars-off", "fixed-price"]
+          values: ["percent-off", "dollars-off", "fixed-price", "paid-amount-off"]
   - name: discount_amount_text
     description: str, discount amount in readable format. It can be percent-off which
-      is <dollar amount>% off, dollars-off which is $<dollar amount> off or fixed-price
+      is <dollar amount>% off, dollars-off which is $<dollar amount> off, fixed-price
+      which is Fixed Price followed by the price, or "Paid Amount Off" for paid-amount-off
     tests:
     - not_null
   - name: discount_redemption_type
-    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    description: string, one of "one-time", "one-time-per-user", "unlimited", "program-child-purchase"
+      (required by paid-amount-off) and "internal" (attached by MITx Online itself)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["one-time", "one-time-per-user", "unlimited"]
+          values: ["one-time", "one-time-per-user", "unlimited", "program-child-purchase",
+            "internal"]
   - name: discount_max_redemptions
     description: int, maximum times a coupon can be redeemed
   - name: discount_code
@@ -614,6 +618,9 @@ models:
   - name: contenttype_id
     description: int, foreign key in the django_contenttype table, content type of
       the product
+  - name: line_discounted_unit_price
+    description: numeric, the price of the line after any discount, as recorded at
+      purchase
 
 - name: stg__mitxonline__app__postgres__reversion_revision
   description: This table is used to track changes to products and transactions
@@ -691,6 +698,14 @@ models:
     description: string, readable id for the order. Shared with micromasters
     tests:
     - not_null
+    # int__micromasters__orders finds a migrated MicroMasters order by this number, so
+    # a repeated one would duplicate its rows. Warn only: its order_id unique test
+    # fails on that and blocks only the MicroMasters models, not every model built on
+    # MITx Online orders.
+    - unique:
+        config:
+          where: "order_reference_number like 'MM-%'"
+          severity: warn
   - name: order_payment_processor
     description: string, captures what payment processor was used for an order
   - name: order_total_price_paid
@@ -1465,16 +1480,21 @@ models:
 
 - name: stg__mitxonline__openedx__tracking_logs__user_activity
   description: This table is cleaned to remove duplicate events, events without user
-    identifiers , and events that represent server errors
+    identifiers, and events that represent server errors. Enrollment events sent through
+    the edX API have no user context, so this model keeps them and takes the learner
+    from event.user_id.
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
+      It is empty for enrollment events sent through the edX API. Join auth_user on
+      openedx_user_id to get the learner's username.
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, open edX user ID extracted from context field. This id doesn't
-      always match with auth_user in open edX table, there can be multiple openedx_user_ids
-      for the same user_username. For those cases, use openedx_user_id from auth_user
+    description: int, open edX user ID extracted from context field, or from event.user_id
+      for enrollment events sent through the edX API. This id doesn't always match
+      with auth_user in open edX table, there can be multiple openedx_user_ids for
+      the same user_username. For those cases, use openedx_user_id from auth_user
       open edX table.
     tests:
     - not_null

@@ -25,13 +25,12 @@ clean-targets: # directories to be removed by `dbt clean`
 - "target"
 - "dbt_packages"
 
+# Without a search order dbt looks in this project before the package. Our
+# day_of_week macros take one argument and dbt_date's take two, so dbt_date
+# keeps its own implementations.
 dispatch:
-- macro_namespace: dbt_utils
-  search_order: ["trino_utils", "dbt_utils"]
 - macro_namespace: dbt_date
-  search_order: ["trino_utils", "dbt_date"]
-- macro_namespace: metrics
-  search_order: ["trino_utils", "metrics"]
+  search_order: ["dbt_date"]
 
 vars:
   schema_suffix: dev
@@ -62,6 +61,9 @@ vars:
     dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: "2023-08-01"
     # Entitlements expiring before this date are not migrated to MITx Online
     edxorg_migration_entitlement_expiration_cutoff: "2026-01-01"
+    # edX's demo course. The programs API lists it as the only course of unpublished or
+    # deleted programs, and program models leave it out (mitodl/hq#14172).
+    edxorg_demo_course_readable_id: "edX/DemoX"
     ocw_production_url: "https://ocw.mit.edu/"
     # MIT PE feed paths are root-relative (/courses/...), so no trailing slash
     mitpe_url: "https://professional.mit.edu"
@@ -69,13 +71,25 @@ vars:
     mitlearn_url: "https://learn.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
-    # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
-    mitxpro_url: "https://xpro.mit.edu"
+    # xPRO marketing site per warehouse environment (macro warehouse_var), no trailing
+    # slash. Course and program page URLs are built on it, so QA's rows, loaded from
+    # rc.xpro.mit.edu, link there. local has no xPRO app; local-dev's MIT Learn reads
+    # xpro.mit.edu. Values from MITXPRO_BASE_URL in ol-infrastructure's xpro stacks.
+    mitxpro_url:
+      production: "https://xpro.mit.edu"
+      qa: "https://rc.xpro.mit.edu"
+      ci: "https://xpro-ci.odl.mit.edu"
+      local: "https://xpro.mit.edu"
     # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
     # The image file column contains paths like 'original_images/course.jpg' — these vars
     # supply the scheme+host prefix to form a complete URL. Verify against the Django
     # MEDIA_URL setting for each app in production.
-    xpro_media_url: "https://ol-xpro-app-production.s3.amazonaws.com/"
+    # xPRO's media bucket is ol-xpro-app-<env> (ol-infrastructure applications/xpro).
+    xpro_media_url:
+      production: "https://ol-xpro-app-production.s3.amazonaws.com/"
+      qa: "https://ol-xpro-app-qa.s3.amazonaws.com/"
+      ci: "https://ol-xpro-app-ci.s3.amazonaws.com/"
+      local: "https://ol-xpro-app-production.s3.amazonaws.com/"
     mitxonline_media_url: "https://mitxonline.mit.edu/media/"
     micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
     micromasters_production_url: "https://micromasters.mit.edu/"
@@ -126,7 +140,7 @@ models:
       +materialized: table
       +schema: staging
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+        select: ["read_only_production", "ol_data_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -135,7 +149,7 @@ models:
       +materialized: table
       +schema: migration
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+        select: ["read_only_production", "ol_data_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -145,7 +159,7 @@ models:
       +schema: dimensional
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'ol_business_analyst', 'reverse_etl']
+          'ol_business_analyst']
       # Incremental dims use delete+insert and accumulate one small file per run.
       # 14-day snapshot retention provides a time-travel window for point-in-time
       # queries and safe re-runs across two weekly optimize cycles.
@@ -162,7 +176,7 @@ models:
       +schema: intermediate
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl"]
+          "ol_business_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -172,7 +186,7 @@ models:
       +schema: mart
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'ol_business_analyst', 'reverse_etl', 'finance']
+          'ol_business_analyst', 'finance']
       # 14-day retention so mart snapshots survive a missed nightly run.
       +meta:
         openmetadata:
@@ -187,7 +201,7 @@ models:
       +schema: reporting
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl"]
+          "ol_business_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -196,7 +210,7 @@ models:
       +materialized: table
       +schema: integrations
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
+        select: ["read_only_production", "ol_data_analyst", "mit_learn_etl"]
     b2b_analytics:
       # StarRocks' own tables, so only on a target writing default_catalog. A
       # lake target (catalog ol_data_lake_<env>) would put them in
@@ -234,7 +248,11 @@ models:
         update: []
         delete: []
         all privileges: []
-      +properties: {}
+      # Clears the root Iceberg `format` property, which StarRocks native tables
+      # and materialized views reject. The empty value is null, not {}:
+      # dbt-starrocks 1.12.2 renders {} as an empty PROPERTIES () block that
+      # fails to parse (https://github.com/StarRocks/dbt-starrocks/issues/128).
+      +properties:
       +meta:
         required_docs: true
         iceberg_maintenance:
@@ -255,7 +273,8 @@ models:
         update: []
         delete: []
         all privileges: []
-      +properties: {}
+      # null, not {}, as in b2b_analytics above
+      +properties:
       +meta:
         required_docs: true
         iceberg_maintenance:
@@ -265,7 +284,7 @@ models:
       +schema: external
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl", "mit_irx"]
+          "ol_business_analyst", "mit_irx"]
       # Every build replaces these tables whole, so a compacted copy lasts only
       # until the next build, there are no old snapshots to expire, and the
       # CREATE TABLE AS already writes statistics.
@@ -324,7 +343,7 @@ snapshots:
   open_learning:
     +grants:
       select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-        'ol_business_analyst', 'reverse_etl']
+        'ol_business_analyst']
       all privileges: ["accountadmin", "ol_platform_admin"]
     # See models above.
     +properties: "{{ none if target.type == 'starrocks' else {'format': \"'PARQUET'\"\

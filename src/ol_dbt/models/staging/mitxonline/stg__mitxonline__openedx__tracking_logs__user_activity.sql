@@ -11,12 +11,27 @@
 with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
     where
-        username != ''
-        and {{ json_query_string('context', "'$.user_id'") }} != 'null'
+        (
+            (username != '' and {{ json_query_string('context', "'$.user_id'") }} != 'null')
+            -- MITx Online enrolls learners through the edX API, so these events carry the learner only in event.user_id
+            or (username = '' and event_type like 'edx.course.enrollment.%')
+        )
         and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
         and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
+
+        -- load the API enrollments from before this model kept them, without a full refresh.
+        -- a separate scan with a literal bound is fast; an "or" in the filter above made each run 4x slower
+        {% set api_enrollment_start = run_query(
+            "select coalesce(min(useractivity_timestamp), '9999') from " ~ this ~ " where user_username = ''"
+        ).columns[0].values()[0] %}
+        union all
+        select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
+        where
+            username = '' and event_type like 'edx.course.enrollment.%'
+            and {{ json_query_string('event', "'$.exception'") }} is null
+            and {{ adapter.quote('time') }} < '{{ api_enrollment_start }}' --noqa
     {% endif %}
 )
 
@@ -41,7 +56,10 @@ with source as (
         , event_type as useractivity_event_type
         , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
         --- extract common fields from context object
-        , cast({{ json_query_string('context', "'$.user_id'") }} as integer) as openedx_user_id
+        , coalesce(
+            {{ try_cast(json_query_string('context', "'$.user_id'"), 'integer') }}
+            , {{ try_cast(json_query_string('event', "'$.user_id'"), 'integer') }}
+        ) as openedx_user_id
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- due to log collector changes, values of time field come with different formats

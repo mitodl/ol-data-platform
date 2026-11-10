@@ -33,7 +33,7 @@ Neither function touches a check the run selected, and ``keep`` is how they
 know. A person can select a check on an unbuilt model on purpose. A job built
 on a bare ``build_dbt_asset_selection`` selects them by accident whenever a
 parent is selected, because that selection resolves checks from dbt's eager
-selection, so ``learn_integrations_qa_target`` removes them from the job's
+selection, so ``dbt_job_target`` removes them from a scheduled job's
 selection before the run starts.
 
 Pure functions only, for the reason ``surrogate_key_drift`` gives.

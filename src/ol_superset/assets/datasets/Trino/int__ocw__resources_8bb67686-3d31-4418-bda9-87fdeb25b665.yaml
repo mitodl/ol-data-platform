@@ -6,8 +6,8 @@ columns:
   column_name: external_resource_backup_url_status_code
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -19,8 +19,8 @@ columns:
   column_name: external_resource_url_status_code
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -32,8 +32,8 @@ columns:
   column_name: external_resource_backup_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -45,8 +45,8 @@ columns:
   column_name: image_alt_text
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -58,8 +58,8 @@ columns:
   column_name: video_youtube_speakers
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -71,8 +71,8 @@ columns:
   column_name: video_thumbnail_file
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -84,8 +84,8 @@ columns:
   column_name: video_youtube_tags
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -97,8 +97,8 @@ columns:
   column_name: video_captions_file
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -110,8 +110,8 @@ columns:
   column_name: video_transcript_file
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -123,8 +123,8 @@ columns:
   column_name: video_archive_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -136,8 +136,8 @@ columns:
   column_name: learning_resource_types
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -149,8 +149,8 @@ columns:
   column_name: external_resource_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -162,8 +162,8 @@ columns:
   column_name: video_youtube_description
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -175,8 +175,8 @@ columns:
   column_name: video_youtube_id
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -188,8 +188,8 @@ columns:
   column_name: resource_live_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -201,8 +201,8 @@ columns:
   column_name: course_live_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -214,8 +214,8 @@ columns:
   column_name: image_caption
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -227,8 +227,8 @@ columns:
   column_name: image_credit
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -240,8 +240,8 @@ columns:
   column_name: resource_filename
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -253,8 +253,8 @@ columns:
   column_name: course_name
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -266,8 +266,8 @@ columns:
   column_name: course_year
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -279,8 +279,8 @@ columns:
   column_name: course_number
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -292,8 +292,8 @@ columns:
   column_name: website_title
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -305,8 +305,8 @@ columns:
   column_name: resource_uuid
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -318,8 +318,8 @@ columns:
   column_name: course_uuid
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -331,8 +331,8 @@ columns:
   column_name: resource_title
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -344,8 +344,8 @@ columns:
   column_name: resource_type
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -357,8 +357,8 @@ columns:
   column_name: course_title
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -370,8 +370,8 @@ columns:
   column_name: course_term
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -383,8 +383,8 @@ columns:
   column_name: content_type
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -396,8 +396,8 @@ columns:
   column_name: studio_url
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -409,8 +409,8 @@ columns:
   column_name: metadata
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -422,8 +422,8 @@ columns:
   column_name: external_resource_license_warning
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -435,8 +435,8 @@ columns:
   column_name: external_resource_is_broken
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -448,14 +448,157 @@ columns:
   column_name: resource_draft
   datetime_format: null
   description: null
-  expression: null
-  extra: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
   is_dttm: false
   python_date_format: null
   type: BOOLEAN
+  verbose_name: null
+- advanced_data_type: null
+  column_name: external_resource_wayback_url
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_uploaded_filename
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: video_archive_filename
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: external_resource_status
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_ocw_type
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_file_size
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_file_type
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_audience
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_description
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_license
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: resource_level
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
   verbose_name: null
 currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
@@ -471,7 +614,8 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra: null
+  extra:
+    warning_markdown: ''
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)

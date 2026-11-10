@@ -171,7 +171,7 @@ with blocks as (
     left join file_exclusions
         on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
         and candidate_files.source_system = file_exclusions.content_file_source_system
-        and regexp_replace(candidate_files.source_path, '^[^/]*/', '') = file_exclusions.content_file_path
+        and {{ regexp_replace_all('candidate_files.source_path', "'^[^/]*/'", "''") }} = file_exclusions.content_file_path
     where not coalesce(file_exclusions.content_file_is_excluded, false)
 )
 
@@ -279,10 +279,7 @@ with blocks as (
         , module_files.extracted_at
         , module_files.edx_module_id
         , module_files.key_release_date as release_date
-        , case module_files.source_system
-            when 'mitxonline' then 'https://courses.mitxonline.mit.edu'
-            when 'xpro' then 'https://courses.xpro.mit.edu'
-        end as root_url
+        , {{ openedx_lms_root_url('module_files.source_system') }} as root_url
         , video_transcript_map.video_id
         -- get_title_for_content: a transcript takes its video's name, an XML
         -- block its display_name, an HTML file the display_name of its html/

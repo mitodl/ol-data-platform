@@ -93,7 +93,8 @@ with enroll_dtl as (
         on a.order_id = combined__orders.order_Id
         and a.line_id = combined__orders.line_id
         and a.platform = combined__orders.platform
-    where a.courserunenrollment_enrollment_mode = 'verified'
+    {{ join_verified_course_enrollments('a') }}
+    where verified_course_enrollments.is_verified
         and a.courserunenrollment_is_active
     group by
         a.user_email

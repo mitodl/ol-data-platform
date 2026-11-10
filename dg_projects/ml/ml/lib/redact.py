@@ -1,16 +1,31 @@
-"""Presidio-based PII redaction for feedback title/text."""
+"""Presidio PII redaction for text columns, and a factory for keyed redaction assets."""
 
 import os
 import re
 
 import polars as pl
-from dagster import get_dagster_logger
+from dagster import (
+    AssetExecutionContext,
+    AssetKey,
+    AssetsDefinition,
+    Config,
+    MetadataValue,
+    asset,
+    get_dagster_logger,
+)
+from ml.lib.warehouse import read_table, warehouse_database
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
+from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
+from pydantic import Field
 from pyiceberg.catalog import Catalog
 from pyiceberg.expressions import And, BooleanExpression, EqualTo, In, Or
 
+# The feedback_redacted defaults; other assets pass their own key and text columns.
 JOIN_COLS = ["source_slug", "source_record_ref"]
+TEXT_COLS = ["title", "text"]
 
 # Bump when the masking rules or the upstream text change. A full refresh
 # re-redacts only rows stored with another version, so it resumes after a crash.
@@ -21,14 +36,6 @@ REDACTION_VERSION = "v3"
 REDACT_CHECKPOINT_BATCH_SIZE = int(
     os.environ.get("REDACT_CHECKPOINT_BATCH_SIZE", "20000")
 )
-
-REDACTED_SCHEMA = {
-    "source_slug": pl.String,
-    "source_record_ref": pl.String,
-    "title_redacted": pl.String,
-    "text_redacted": pl.String,
-    "redaction_version": pl.String,
-}
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
@@ -211,59 +218,71 @@ def _redact_text(value: str | None) -> str | None:
 
 
 def filter_unredacted(
-    source_df: pl.DataFrame, already_redacted_df: pl.DataFrame
+    source_df: pl.DataFrame,
+    already_redacted_df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
 ) -> pl.DataFrame:
-    """Drop rows already present in the feedback_redacted output."""
-    return source_df.join(
-        already_redacted_df.select(JOIN_COLS), on=JOIN_COLS, how="anti"
-    )
+    """Drop rows already present in the redacted output."""
+    return source_df.join(already_redacted_df.select(key_cols), on=key_cols, how="anti")
 
 
-def redact_titles_and_text(df: pl.DataFrame) -> pl.DataFrame:
-    """Mask PII in the title/text columns of a feedback frame.
+def redact_columns(
+    df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
+    text_cols: list[str] = TEXT_COLS,
+) -> pl.DataFrame:
+    """Mask PII in the text columns of a frame.
 
     Args:
-        df: a frame with (at least) source_slug, source_record_ref, title, text
-            columns, e.g. int__feedback__unioned.
+        df: a frame with (at least) the key and text columns.
+        key_cols: the columns that identify a row, kept as they are.
+        text_cols: the columns to redact. Each becomes <column>_redacted.
 
     Returns:
-        pl.DataFrame: source_slug, source_record_ref, title_redacted, text_redacted,
-            redaction_version - keyed the same way feedback_pk is minted, for
-            tfact_feedback to left-join.
+        pl.DataFrame: the key columns, one <column>_redacted per text column, and
+            redaction_version.
     """
     return df.select(
-        pl.col("source_slug"),
-        pl.col("source_record_ref"),
-        pl.col("title")
-        .map_elements(_redact_text, return_dtype=pl.String)
-        .alias("title_redacted"),
-        pl.col("text")
-        .map_elements(_redact_text, return_dtype=pl.String)
-        .alias("text_redacted"),
+        *key_cols,
+        *(
+            pl.col(column)
+            .map_elements(_redact_text, return_dtype=pl.String)
+            .alias(f"{column}_redacted")
+            for column in text_cols
+        ),
         pl.lit(REDACTION_VERSION).alias("redaction_version"),
     )
 
 
-def _key_filter(chunk_df: pl.DataFrame) -> BooleanExpression:
+def _key_filter(
+    chunk_df: pl.DataFrame, key_cols: list[str] = JOIN_COLS
+) -> BooleanExpression:
     # Not pyiceberg's upsert: it ORs one (slug AND ref) pair per row, and at 5,000
-    # rows its scan ran for over 19 minutes. One IN list per source takes ~10s.
-    parts: list[BooleanExpression] = [
-        And(EqualTo("source_slug", slug), In("source_record_ref", refs))
-        for slug, refs in chunk_df.group_by("source_slug")
-        .agg(pl.col("source_record_ref"))
-        .iter_rows()
-    ]
+    # rows its scan ran for over 19 minutes. One IN list per group takes ~10s.
+    *group_cols, last_col = key_cols
+    if not group_cols:
+        return In(last_col, chunk_df[last_col].to_list())
+    parts: list[BooleanExpression] = []
+    for row in chunk_df.group_by(group_cols).agg(pl.col(last_col)).iter_rows():
+        *group_values, values = row
+        condition: BooleanExpression = In(last_col, values)
+        for column, value in zip(group_cols, group_values, strict=True):
+            condition = And(EqualTo(column, value), condition)
+        parts.append(condition)
     return parts[0] if len(parts) == 1 else Or(*parts)
 
 
 def checkpoint_redacted_chunk(
-    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
+    catalog: Catalog,
+    table_identifier: str,
+    chunk_df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
 ) -> None:
-    """Replace one redacted chunk's rows in the feedback_redacted table."""
+    """Replace one redacted chunk's rows in the redacted table."""
     if chunk_df.height == 0:
         return
-    if chunk_df.select(JOIN_COLS).is_duplicated().any():
-        msg = f"Duplicate {JOIN_COLS} in a redacted chunk; overwrite would keep both"
+    if chunk_df.select(key_cols).is_duplicated().any():
+        msg = f"Duplicate {key_cols} in a redacted chunk; overwrite would keep both"
         raise ValueError(msg)
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
@@ -274,7 +293,8 @@ def checkpoint_redacted_chunk(
     # The write casts by position, so match the table's column order.
     ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
     table.overwrite(
-        df=ordered_chunk_df.to_arrow(), overwrite_filter=_key_filter(chunk_df)
+        df=ordered_chunk_df.to_arrow(),
+        overwrite_filter=_key_filter(chunk_df, key_cols),
     )
 
 
@@ -282,6 +302,8 @@ def redact_and_checkpoint(
     df: pl.DataFrame,
     checkpoint_target: tuple[Catalog, str],
     batch_size: int = REDACT_CHECKPOINT_BATCH_SIZE,
+    key_cols: list[str] = JOIN_COLS,
+    text_cols: list[str] = TEXT_COLS,
 ) -> int:
     """Redact df in chunks, writing each as it completes. Returns rows written."""
     log = get_dagster_logger()
@@ -289,8 +311,10 @@ def redact_and_checkpoint(
     chunk_starts = range(0, df.height, batch_size)
     written = 0
     for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
-        chunk_df = redact_titles_and_text(df.slice(chunk_start, batch_size))
-        checkpoint_redacted_chunk(catalog, table_identifier, chunk_df)
+        chunk_df = redact_columns(
+            df.slice(chunk_start, batch_size), key_cols, text_cols
+        )
+        checkpoint_redacted_chunk(catalog, table_identifier, chunk_df, key_cols)
         written += chunk_df.height
         log.info(
             "Wrote chunk %d/%d (%d rows) to %s",
@@ -300,3 +324,154 @@ def redact_and_checkpoint(
             table_identifier,
         )
     return written
+
+
+class RedactedAssetConfig(Config):
+    full_refresh: bool = Field(
+        default=False,
+        description=(
+            "Re-redact every row not yet redacted with the current rules "
+            "(REDACTION_VERSION in ml.lib.redact), not only rows missing from the "
+            "table. Each batch is saved as it finishes, so a rerun after a crash "
+            "continues where it stopped."
+        ),
+    )
+    batch_size: int = Field(
+        default=REDACT_CHECKPOINT_BATCH_SIZE,
+        ge=1,
+        description="Rows redacted and written together.",
+    )
+    sample_limit: int | None = Field(
+        default=None,
+        description="Cap the number of upstream rows read, for fast local testing.",
+    )
+    keys: dict[str, list[str]] | None = Field(
+        default=None,
+        description=(
+            "Only process rows whose columns match these values, for spot-checking "
+            'known cases, e.g. {"source_record_ref": ["123"], "source_slug": '
+            '["zendesk"]}. Values are compared as strings.'
+        ),
+    )
+
+
+def build_redacted_asset(  # noqa: PLR0913
+    *,
+    name: str,
+    source: AssetKey,
+    key_cols: list[str],
+    text_cols: list[str],
+    code_version: str,
+    group_name: str,
+    pool: str,
+    source_filter: pl.Expr | None = None,
+    description: str | None = None,
+) -> AssetsDefinition:
+    """Build an asset that writes <name> with each text column's PII masked.
+
+    The output has the key columns, one <column>_redacted per text column, and
+    redaction_version. A run redacts only rows missing from the output, and writes
+    each batch as it finishes.
+
+    Args:
+        name: the asset and output table name, in the intermediate schema.
+        source: the dbt model's asset key, [<layer>, <model>]; the asset reads the
+            model from that layer's warehouse database.
+        key_cols: the columns that identify a row. They must be unique and
+            non-null. Put the column with the most distinct values last: the
+            overwrite filter has one IN list per value of the other columns.
+        text_cols: the columns to redact.
+        code_version: the asset's code version.
+        group_name: the Dagster asset group.
+        pool: the Dagster concurrency pool.
+        source_filter: keeps only the source rows to redact.
+        description: the asset description.
+
+    Returns:
+        AssetsDefinition: the redaction asset.
+    """
+    source_layer, source_table = source.path
+    database_name = warehouse_database("intermediate")
+
+    @asset(
+        name=name,
+        key_prefix=["intermediate"],
+        code_version=code_version,
+        group_name=group_name,
+        description=description,
+        deps=[source],
+        automation_condition=upstream_or_code_changes(),
+        io_manager_key="io_manager",
+        pool=pool,
+        metadata={
+            "schema": database_name,
+            "write_mode": "upsert",
+            "upsert_options": {"join_cols": key_cols},
+            "schema_update_mode": "update",
+        },
+    )
+    def _redacted(
+        context: AssetExecutionContext, config: RedactedAssetConfig
+    ) -> pl.DataFrame:
+        source_lazy = get_dbt_model_as_dataframe(
+            database_name=warehouse_database(source_layer), table_name=source_table
+        )
+        if source_filter is not None:
+            source_lazy = source_lazy.filter(source_filter)
+        for column, values in (config.keys or {}).items():
+            source_lazy = source_lazy.filter(
+                pl.col(column).cast(pl.String).is_in(values)
+            )
+        if config.sample_limit is not None:
+            source_lazy = source_lazy.limit(config.sample_limit)
+        source_df = source_lazy.collect()
+
+        already_redacted_df = source_df.select(key_cols).clear()
+        existing_lazy = read_table("intermediate", name)
+        if existing_lazy is not None:
+            if config.full_refresh:
+                # Rows from before redaction_version existed have no version, so a
+                # full refresh redoes them.
+                current = (
+                    pl.col("redaction_version") == REDACTION_VERSION
+                    if "redaction_version" in existing_lazy.collect_schema().names()
+                    else pl.lit(False)  # noqa: FBT003
+                )
+                existing_lazy = existing_lazy.filter(current)
+            already_redacted_df = existing_lazy.select(key_cols).collect()
+
+        unredacted_df = filter_unredacted(source_df, already_redacted_df, key_cols)
+        redacted_count = redact_and_checkpoint(
+            unredacted_df,
+            (get_glue_catalog(), f"{database_name}.{name}"),
+            batch_size=config.batch_size,
+            key_cols=key_cols,
+            text_cols=text_cols,
+        )
+
+        context.log.info(
+            "Redacted %d rows (%d already redacted, %d total upstream)",
+            redacted_count,
+            already_redacted_df.height,
+            source_df.height,
+        )
+        context.add_output_metadata(
+            {
+                "redacted_count": MetadataValue.int(redacted_count),
+                "already_redacted_count": MetadataValue.int(already_redacted_df.height),
+                "redaction_version": MetadataValue.text(REDACTION_VERSION),
+                "full_refresh": MetadataValue.bool(config.full_refresh),
+            }
+        )
+        # Every row is already written chunk by chunk. Returning them would make the
+        # IO manager upsert all of them again in one write, the step that failed at
+        # about 594k rows.
+        return pl.DataFrame(
+            schema={
+                **source_df.select(key_cols).schema,
+                **{f"{column}_redacted": pl.String for column in text_cols},
+                "redaction_version": pl.String,
+            }
+        )
+
+    return _redacted

@@ -9,6 +9,7 @@ import ast
 from pathlib import Path
 
 import lakehouse
+import pytest
 from dagster import (
     AssetCheckKey,
     AssetCheckResult,
@@ -17,7 +18,10 @@ from dagster import (
     asset_check,
 )
 from dagster_dbt import build_dbt_asset_selection, dbt_assets
-from lakehouse.lib.automation_targets import learn_integrations_qa_target
+from lakehouse.lib.automation_targets import (
+    dbt_job_target,
+    learn_integrations_qa_target,
+)
 from lakehouse.lib.stale_descendant_tests import (
     stale_descendant_test_names,
     unselected_model_test_names,
@@ -279,7 +283,37 @@ def test_the_qa_job_excludes_the_test_on_the_model_it_does_not_build():
     ) == [QA_FK]
 
 
-def test_the_qa_job_uses_the_target():
+def test_the_staging_job_excludes_the_test_on_the_descendant_it_does_not_build():
+    """The production shape: staging rebuilt, its descendants left to automation.
+
+    A bare selection of stg_programs selects the FK test attached to
+    int_requirements, so the exclusion keeps it and it compares the new
+    stg_programs with the int_requirements the previous tick built.
+    """
+    selection = dbt_job_target(qa_project, "stg_programs")
+    keep = {key.name for key in selection.resolve_checks(QA_GRAPH)}
+
+    assert selection.resolve(QA_GRAPH) == {AssetKey("stg_programs")}
+    assert keep == set()
+    assert stale_descendant_test_names(QA_MANIFEST, {STG_PROGRAMS}, keep=keep) == [
+        QA_FK
+    ]
+
+
+@pytest.mark.parametrize(
+    ("job_name", "selection"),
+    [
+        (
+            "learn_integrations_qa_job",
+            "learn_integrations_qa_target(full_dbt_project)",
+        ),
+        (
+            "non_airbyte_staging_job",
+            "dbt_job_target(full_dbt_project, ' '.join(non_airbyte_staging_models))",
+        ),
+    ],
+)
+def test_the_scheduled_dbt_jobs_use_the_target(job_name, selection):
     source = Path(lakehouse.__file__).parent.joinpath("definitions.py").read_text()
     selections = [
         ast.unparse(keyword.value)
@@ -287,14 +321,13 @@ def test_the_qa_job_uses_the_target():
         if isinstance(node, ast.Call)
         and getattr(node.func, "id", "") == "define_asset_job"
         and any(
-            keyword.arg == "name"
-            and getattr(keyword.value, "value", "") == "learn_integrations_qa_job"
+            keyword.arg == "name" and getattr(keyword.value, "value", "") == job_name
             for keyword in node.keywords
         )
         for keyword in node.keywords
         if keyword.arg == "selection"
     ]
-    assert selections == ["learn_integrations_qa_target(full_dbt_project)"]
+    assert selections == [selection]
 
 
 def test_the_exclusion_reaches_the_build_only_for_a_subset_run():

@@ -16,7 +16,7 @@
 #   - Fetches the S3 location from Glue at runtime and verifies it contains the table
 #     name before deleting, so a bad/empty location never triggers a wide `s3 rm`.
 #
-# Prereq for datasets you are virtualizing (e.g. discussion_detail_report): deploy the
+# Prereq for datasets you are virtualizing: deploy the
 # virtual-dataset change to prod FIRST, so nothing still reads the physical table when
 # you drop it.
 #
@@ -46,9 +46,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Default to the two known stale reporting orphans (see the dbt CI/QA hardening work).
+# Default to the known stale reporting orphans (see the dbt CI/QA hardening work).
 if [[ ${#TABLES[@]} -eq 0 ]]; then
-  TABLES=(discussion_detail_report video_engagements_report)
+  TABLES=(video_engagements_report)
 fi
 
 $APPLY || echo "== DRY RUN (pass --apply to delete) =="

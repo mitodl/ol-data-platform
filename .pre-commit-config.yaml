@@ -47,7 +47,7 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.17.3'
+  rev: 'v0.17.4'
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -106,7 +106,7 @@ repos:
     pass_filenames: false
     require_serial: true
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: v1.31.1
+  rev: v1.32.0
   hooks:
   - id: zizmor
     args: [--no-progress, --min-severity=medium, --min-confidence=medium]

@@ -87,6 +87,16 @@ class Strict(BaseModel):
             expected = _container_types(field.annotation)
             if expected:
                 decoded[key] = _decode_json_container(value, expected)
+            # Haiku sometimes writes its notes as one plain sentence; failing the
+            # scope over it lost 13 of 46 UAI scopes' context stage (2026-11-09).
+            # Only notes: a stray string elsewhere (e.g. labels) still fails and is
+            # retried, and so does a truncated JSON array.
+            if (
+                key == "notes"
+                and isinstance(decoded[key], str)
+                and not value.lstrip().startswith("[")
+            ):
+                decoded[key] = [value] if value.strip() else []
         return decoded
 
 
