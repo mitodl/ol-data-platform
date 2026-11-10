@@ -41,8 +41,10 @@ from dlt.sources.sql_database import (
     sql_table,
 )
 from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
-from sqlalchemy import event
+from sqlalchemy import Boolean, event
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL, Engine
+from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, vault
 
@@ -107,12 +109,16 @@ class DatabaseTable:
             duplicate rows even though the ``dev`` and deployed runs do not.
         excluded_columns: Columns never to select. Use this for secrets and
             credential material, which must not reach the warehouse at all.
+        db_schema: Schema to read this table from when it is not the spec's,
+            e.g. Open edX's ``edxapp_csmh`` database beside ``edxapp`` on the
+            same MySQL server. ``None`` takes the spec's.
     """
 
     name: str
     primary_key: str | Sequence[str] | None = None
     cursor_column: str | None = None
     excluded_columns: Sequence[str] = ()
+    db_schema: str | None = None
 
     def __post_init__(self) -> None:
         """Reject an incremental table that has no key to merge on."""
@@ -308,6 +314,26 @@ class EmptyTableLoader(TableLoader):
             )
 
 
+def mysql_boolean_adapter(sql_type: TypeEngine[Any]) -> TypeEngine[Any]:
+    """Reflect MySQL ``tinyint(1)``, Django's ``BooleanField``, as boolean.
+
+    SQLAlchemy reflects it as ``TINYINT`` and dlt maps that to ``bigint``,
+    while the Airbyte MySQL source lands the same columns as ``boolean``
+    (e.g. production raw__mitx__openedx__mysql__student_courseenrollment
+    .is_active). Downstream models union them with boolean columns from other
+    sources, which fails on a ``bigint``. MariaDB keeps the display width the
+    match depends on.
+
+    :param sql_type: The reflected column type.
+
+    :returns: ``Boolean`` for ``tinyint(1)``, the reflected type otherwise.
+    :rtype: TypeEngine
+    """
+    if isinstance(sql_type, mysql.TINYINT) and sql_type.display_width == 1:
+        return Boolean()
+    return sql_type
+
+
 def build_table_resource(
     spec: DatabaseSourceSpec,
     table: DatabaseTable,
@@ -323,7 +349,7 @@ def build_table_resource(
     resource = sql_table(
         credentials=_credentials_for(spec, resolved_profile),
         table=table.name,
-        schema=spec.db_schema,
+        schema=table.db_schema or spec.db_schema,
         incremental=incremental,
         chunk_size=DEFAULT_CHUNK_SIZE,
         # pyarrow reflects source types faithfully instead of re-inferring them
@@ -338,6 +364,9 @@ def build_table_resource(
         # pyiceberg refuses on a table that holds rows (see
         # config.DLT_LOAD_ID_COLUMN), failing every later load of that table.
         table_adapter_callback=remove_nullability_adapter,
+        type_adapter_callback=(
+            mysql_boolean_adapter if spec.drivername == MYSQL_DRIVER else None
+        ),
         excluded_columns=list(table.excluded_columns) or None,
         write_disposition="merge" if table.cursor_column else "replace",
         primary_key=table.primary_key,

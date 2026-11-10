@@ -43,6 +43,7 @@ def test_every_source_package_is_covered() -> None:
     known = {
         "canvas_content",
         "course_xml_blocks",
+        "edxapp",
         "edxorg_program_reports",
         "edxorg_s3",
         "google_ads",
