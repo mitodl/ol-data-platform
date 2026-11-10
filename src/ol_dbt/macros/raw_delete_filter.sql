@@ -58,7 +58,7 @@
                 count(*)
                 , case
                     when max(_keyset_read_started_at)
-                        < {{ dbt.dateadd('hour', -spec['max_age_hours'], dbt.current_timestamp()) }}
+                        < {{ dbt.dateadd('hour', -spec['max_age_hours'], current_timestamptz()) }}
                     then 1 else 0
                 end
             from {{ keyset }}

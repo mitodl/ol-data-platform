@@ -1251,7 +1251,10 @@ On the unit:
   writes a `dbt_is_deleted` `'True'` row) or `aged_out` (nothing is written, for a source that
   only returns recent records, such as a feed; the snapshot has no `dbt_is_deleted`). A
   database unit (`app_postgres`, `mysql`, `openedx_notes`) defaults to `deleted`; any other
-  unit with a table in scope must state it, and `validate` fails until it does.
+  unit with a table in scope must state it, and `validate` fails until it does. Moving a live
+  unit from `aged_out` to `deleted` needs `alter table <snapshot> add column dbt_is_deleted
+  varchar` on each of its snapshots first. dbt fails the run otherwise ("Snapshot target is
+  missing configured columns"), and the delete guard reads that column.
 - `history.live`: whether dbt builds the unit's snapshots. Default false, so a unit's files are
   generated disabled until it is rolled out. History rolls out a unit at a time once its
   prerequisites hold (8430c2 items 26-27), and a unit's snapshots have to run for at least one

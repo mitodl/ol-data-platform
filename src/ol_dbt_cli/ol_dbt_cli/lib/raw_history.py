@@ -461,7 +461,7 @@ def stale_history_files(repo_root: Path, rendered: dict[Path, str]) -> list[Path
         stale += sorted(
             path.relative_to(repo_root)
             for path in snapshot_dir.iterdir()
-            if path.relative_to(repo_root) not in rendered
+            if path.is_file() and path.relative_to(repo_root) not in rendered
         )
     return stale
 

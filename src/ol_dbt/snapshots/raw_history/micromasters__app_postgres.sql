@@ -209,6 +209,7 @@
 {{ raw_history_snapshot(
     'raw__micromasters__app__postgres__social_auth_usersocialauth',
     unique_key='id',
+    exclude_columns=['extra_data'],
     live=false
 ) }}
 {% endsnapshot %}
