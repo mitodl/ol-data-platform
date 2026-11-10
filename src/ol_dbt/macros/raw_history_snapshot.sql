@@ -111,7 +111,9 @@
             ~ limit ~ " and " ~ floor
         ) }}
     {%- endif -%}
-    {%- if allow_list is string or allow_list is not iterable -%}
+    {#- A mapping is iterable, and `in` would test only its keys, so
+        {snapshot_x: false} would still allow the deletes. -#}
+    {%- if allow_list is string or allow_list is mapping or allow_list is not iterable -%}
         {{ exceptions.raise_compiler_error(
             "raw_history_allow_deletes must be a list of snapshot names, got "
             ~ allow_list
