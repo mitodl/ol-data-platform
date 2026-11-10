@@ -1035,8 +1035,8 @@ class TestChangeLogSql:
         sql = stamp_change_log_sql(LEARNER_VIEW)
         assert TOMBSTONE_RETENTION_DAYS == 90
         assert sql.endswith(
-            "where not (m.row_hash is null and c.is_deleted and c.changed_on < "
-            "date_sub(utc_timestamp(), interval 90 day))"
+            "where not coalesce(m.row_hash is null and c.is_deleted and c.changed_on < "
+            "date_sub(utc_timestamp(), interval 90 day), false)"
         )
 
 

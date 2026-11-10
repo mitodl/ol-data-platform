@@ -733,8 +733,10 @@ def stamp_change_log_sql(view: ChangeTrackedView) -> str:
         f"select {', '.join(select)} "
         f"from ({_current_rows_sql(view)}) m "
         f"full outer join {view.change_log} c on {join} "
-        "where not (m.row_hash is null and c.is_deleted and c.changed_on < "
-        f"date_sub(utc_timestamp(), interval {TOMBSTONE_RETENTION_DAYS} day))"
+        # coalesce: a null is_deleted or changed_on must keep the row, not let
+        # WHERE drop it as unknown.
+        "where not coalesce(m.row_hash is null and c.is_deleted and c.changed_on < "
+        f"date_sub(utc_timestamp(), interval {TOMBSTONE_RETENTION_DAYS} day), false)"
     )
 
 
