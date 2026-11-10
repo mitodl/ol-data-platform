@@ -79,6 +79,11 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = "static"
 
+# The mit-learn commit the port follows, as the outputs' code version. Bumping
+# it is what re-runs every course export: upstream_or_code_changes only sees a
+# code change through the code version.
+OLX_PORT_VERSION = "mit-learn-5da30ef30"
+
 # mit-learn learning_resources/constants.py
 VALID_TEXT_FILE_TYPES = [
     ".doc",
@@ -1421,6 +1426,7 @@ def build_unit_rows(
         "course_file_exclusions": AssetOut(
             key=AssetKey(("openedx", "processed_data", "course_file_exclusions")),
             io_manager_key="s3file_io_manager",
+            code_version=OLX_PORT_VERSION,
             automation_condition=upstream_or_code_changes(),
             description=(
                 "Every file in a course export, flagged with whether MIT Learn "
@@ -1432,6 +1438,7 @@ def build_unit_rows(
         "course_units": AssetOut(
             key=AssetKey(("openedx", "processed_data", "course_units")),
             io_manager_key="s3file_io_manager",
+            code_version=OLX_PORT_VERSION,
             automation_condition=upstream_or_code_changes(),
             description=(
                 "The units MIT Learn breaks a course run into (one per visible "

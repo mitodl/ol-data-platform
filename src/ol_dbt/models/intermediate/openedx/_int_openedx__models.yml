@@ -70,6 +70,7 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
       coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: video,
       coursestructure_xml_block_display_name: Intro Video, coursestructure_xml_block_path: course/video/0123456789abcdef0123456789abcdef.xml,
+      coursestructure_xml_block_attributes: '{"url_name": "0123456789abcdef0123456789abcdef"}',
       coursestructure_xml_raw_xml: '<video display_name="Intro Video"><transcript
         language="en" src="intro clip-en.srt"/></video>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # A pointer file: attributes only. It shares its key with html/abcd.html,
@@ -287,9 +288,10 @@ unit_tests:
   description: >
     A block whose url_name has a colon is stored below its type folder (a:b in
     html/a/b.xml). Its key is the one the exclusion row carries (Learn's
-    OlxArchive.key, mit-learn#4264), its html body takes the title of the block
-    beside it, and a transcript's video is named by its url_name. A run whose
-    exclusion rows predate the key falls back to the path rule.
+    OlxArchive.key, mit-learn#4264), its html body is titled from html/<stem>.xml
+    as Learn titles it (so not from html/a/b.xml), and a transcript's jump URL
+    names its video by the url_name on the video file. A run whose exclusion rows
+    predate the key falls back to the path rule.
   model: int__openedx__content_files
   given:
   - input: ref('stg__openedx__s3__course_xml_blocks')
@@ -306,8 +308,9 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitxonline,
       coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: video,
       coursestructure_xml_block_display_name: Lecture, coursestructure_xml_block_path: course/video/vid/1.xml,
-      coursestructure_xml_raw_xml: '<video display_name="Lecture"><transcript language="en"
-        src="v1.srt"/></video>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_block_attributes: '{"url_name": "vid:1"}', coursestructure_xml_raw_xml: '<video
+        display_name="Lecture"><transcript language="en" src="v1.srt"/></video>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     - {courserun_readable_id: "course-v1:X+Y+R2", coursestructure_xml_source_system: mitxonline,
       coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
       coursestructure_xml_block_display_name: Pset 1, coursestructure_xml_block_path: course/chapter/801r_Pset/Pset1.xml,
@@ -342,12 +345,12 @@ unit_tests:
   expect:
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@html+block@802r:Radiation",
-      title: Radiation Pressure}
+      title: Radiation, url: null}
     - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@chapter+block@801r_Pset:Pset1",
-      title: Pset 1}
+      title: Pset 1, url: null}
     - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@video+block@vid:1",
-      title: Lecture}
+      title: Lecture, url: null}
     - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@v1.srt",
-      title: Lecture}
+      title: Lecture, url: "https://courses.mitxonline.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/vid:1"}
     - {courserun_readable_id: "course-v1:X+Y+R2", edx_module_id: "block-v1:X+Y+R2+type@801r_Pset+block@Pset1",
-      title: Pset 1}
+      title: Pset 1, url: null}

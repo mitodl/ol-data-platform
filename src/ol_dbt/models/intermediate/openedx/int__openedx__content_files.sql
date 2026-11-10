@@ -228,7 +228,8 @@ with blocks as (
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
--- video's id (its url_name, so video/a/b.xml is a:b) and display name.
+-- video's id and display name. The id is the url_name on the video file's root
+-- (a:b for video/a/b.xml), and a video file without one maps nothing.
 , video_transcripts as (
     select
         blocks.courserun_readable_id
@@ -238,16 +239,15 @@ with blocks as (
             , '+type@asset+block@'
             , replace({{ html_unescape('transcript.src') }}, ' ', '_')
         ) as transcript_module_id
-        , {{ regexp_replace_all(
-            "replace(substring(blocks.coursestructure_xml_block_path, length('course/video/') + 1), '/', ':')"
-            , "'\\.[^.]*$'", "''"
-        ) }} as video_id
+        , {{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }} as video_id
         , blocks.coursestructure_xml_block_display_name as video_title
     from blocks
     cross join {{ unnest_regexp_matches(
         'blocks.coursestructure_xml_raw_xml', "'<transcript\\s[^>]*src=\"([^\"]*)\"'", 'transcript', 'src'
     ) }}
-    where blocks.coursestructure_xml_block_path like 'course/video/%'
+    where
+        blocks.coursestructure_xml_block_path like 'course/video/%'
+        and {{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }} is not null
 )
 
 , video_transcript_map as (
@@ -285,14 +285,14 @@ with blocks as (
         , {{ openedx_lms_root_url('module_files.source_system') }} as root_url
         , video_transcript_map.video_id
         -- get_title_for_content: a transcript takes its video's name, an XML
-        -- block its display_name, an HTML file the display_name of the html
-        -- block beside it (html/a/b.html: html/a/b.xml), else of the html/
-        -- block of its name, and anything else a title made from the file name.
+        -- block its display_name, an HTML file the display_name of its html/
+        -- pointer, and anything else a title made from the file name. Learn
+        -- looks for the pointer beside the file first, but under a path that
+        -- keeps the export's top folder, which never exists, so a body below
+        -- html/ (html/a/b.html) is titled from html/b.xml too.
         , coalesce(
             nullif(case
                 when module_files.file_extension = '.xml' then module_files.xml_display_name
-                when module_files.file_extension = '.html' and html_titles_beside.xml_path is not null
-                    then html_titles_beside.display_name
                 when module_files.file_extension = '.html' then html_titles.display_name
                 else video_transcript_map.video_title
             end, '')
@@ -303,11 +303,6 @@ with blocks as (
         on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
         and module_files.source_system = video_transcript_map.source_system
         and module_files.edx_module_id = video_transcript_map.transcript_module_id
-    left join html_titles as html_titles_beside
-        on module_files.file_extension = '.html'
-        and module_files.courserun_readable_id = html_titles_beside.courserun_readable_id
-        and module_files.source_system = html_titles_beside.source_system
-        and html_titles_beside.xml_path = {{ regexp_replace_all('module_files.source_path', "'\\.html$'", "'.xml'") }}
     left join html_titles
         on module_files.file_extension = '.html'
         and module_files.courserun_readable_id = html_titles.courserun_readable_id
