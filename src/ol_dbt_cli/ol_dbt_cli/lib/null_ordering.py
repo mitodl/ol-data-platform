@@ -14,7 +14,7 @@ to a macro as a Jinja string, and the ``order_by`` argument of ``array_agg_filte
 when it is a string literal or a variable the file sets to one. A sort key
 written wholly in Jinja (``order by {{ order_by }}``) is the caller's to check.
 A query's own ORDER BY (top-level or in a subquery) is read only when a LIMIT or
-OFFSET follows it before any Jinja statement; otherwise it only orders output rows.
+OFFSET follows it, inside a Jinja ``if`` or not; otherwise it only orders output rows.
 """
 
 from __future__ import annotations
@@ -24,7 +24,14 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import yaml
 
-from ol_dbt_cli.lib.sql_source import other_engine_spans, sql_code, starrocks_macro_names, yaml_sql_strings
+from ol_dbt_cli.lib.sql_source import (
+    jinja_statement_spans,
+    macro_declarations,
+    other_engine_spans,
+    sql_code,
+    starrocks_macro_names,
+    yaml_sql_strings,
+)
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -42,11 +49,13 @@ _DETAIL = (
 
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 _SUBQUERY = re.compile(r"\s*(?:select|with)\b", re.IGNORECASE)
-# Words that end a sort list at depth 0: a window frame, a LIMIT, group_concat's SEPARATOR.
-# `t.range` is a column.
-_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|offset|separator)(?!\w)", re.IGNORECASE)
+# Words that end a window's or an aggregate's sort list at depth 0: a frame, a LIMIT,
+# group_concat's SEPARATOR. `t.range` is a column.
+_VALUE_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|separator)(?!\w)", re.IGNORECASE)
+# A query's sort list also ends at an OFFSET, which Trino writes before LIMIT, or the next query.
+_QUERY_LIST_END = re.compile(r"(?<![\w.])(?:limit|offset|union|intersect|except|select)(?!\w)|;", re.IGNORECASE)
 _ROW_LIMIT = re.compile(r"(?:limit|offset)\b", re.IGNORECASE)
-_JINJA_STATEMENT = re.compile(r"\{%")
+_NOT_NEWLINE = re.compile(r"[^\n]")
 _EXPLICIT = re.compile(r"(?:\bdesc|\bnulls\s+(?:first|last))\s*\Z", re.IGNORECASE)
 _EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 _ORDER_BY_ARG = re.compile(
@@ -90,7 +99,7 @@ def _sorts_rows_into_a_value(code: str, order_by: int) -> bool:
     return preceding.isalnum() or preceding == "_"
 
 
-def _list_spans(code: str, start: int, end: int) -> Iterator[tuple[int, int]]:
+def _list_spans(code: str, start: int, end: int, list_end: re.Pattern[str]) -> Iterator[tuple[int, int]]:
     """Split the sort list from *start* at its depth-0 commas, up to *end* or its closing paren."""
     depth = 0
     item_start = start
@@ -106,14 +115,16 @@ def _list_spans(code: str, start: int, end: int) -> Iterator[tuple[int, int]]:
         elif depth == 0 and char == ",":
             yield item_start, index
             item_start = index + 1
-        elif depth == 0 and _LIST_END.match(code, index):
+        elif depth == 0 and list_end.match(code, index):
             break
         index += 1
     yield item_start, index
 
 
-def _ascending_keys(source: str, code: str, start: int, end: int) -> Iterator[SortKey]:
-    for item_start, item_end in _list_spans(code, start, end):
+def _ascending_keys(
+    source: str, code: str, start: int, end: int, list_end: re.Pattern[str] = _VALUE_LIST_END
+) -> Iterator[SortKey]:
+    for item_start, item_end in _list_spans(code, start, end, list_end):
         key = code[item_start:item_end]
         if not key.strip() or _EXPLICIT.search(key):
             continue
@@ -134,18 +145,27 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
     :rtype: Iterator[SortKey]
     """
     code = sql_code(source)
+    # sql_code keeps the strings in a `{% if target.name == 'dev' %}` as code, which would
+    # read as part of the key before it. A sort list is read with every statement blanked,
+    # unless the ORDER BY is itself in a statement's string (`{% set x = "... order by y" %}`).
+    statements = jinja_statement_spans(source)
+    chars = list(code)
+    for start, end in statements:
+        chars[start:end] = _NOT_NEWLINE.sub(" ", code[start:end])
+    outside_statements = "".join(chars)
+    macro_bodies = [match.span("body") for match in macro_declarations(source)]
     for match in _ORDER_BY.finditer(code):
-        if _sorts_rows_into_a_value(code, match.start()):
-            yield from _ascending_keys(source, code, match.end(), len(code))
-        else:
-            # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it.
-            # Its list ends at the next Jinja statement: an `{% if %}` around the LIMIT or
-            # an `{% endmacro %}` would otherwise run it on into code that is not a sort key.
-            statement = _JINJA_STATEMENT.search(source, match.end())
-            bound = statement.start() if statement else len(code)
-            *_, (_, list_end) = _list_spans(code, match.end(), bound)
-            if _ROW_LIMIT.match(code, list_end):
-                yield from _ascending_keys(source, code, match.end(), list_end)
+        in_statement = any(start <= match.start() < end for start, end in statements)
+        view = code if in_statement else outside_statements
+        if _sorts_rows_into_a_value(view, match.start()):
+            yield from _ascending_keys(source, view, match.end(), len(view))
+            continue
+        # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it. The
+        # list stays inside its macro, whose `{% endmacro %}` is blank here.
+        bound = next((end for start, end in macro_bodies if start <= match.start() < end), len(view))
+        *_, (_, list_end) = _list_spans(view, match.end(), bound, _QUERY_LIST_END)
+        if _ROW_LIMIT.match(view, list_end):
+            yield from _ascending_keys(source, view, match.end(), list_end, _QUERY_LIST_END)
 
     variables = {m.group("name"): m.span("value") for m in _SET_STRING.finditer(source)}
     for call in _ORDER_BY_ARG.finditer(source):

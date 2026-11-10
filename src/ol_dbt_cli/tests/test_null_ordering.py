@@ -110,16 +110,32 @@ def test_reads_sql_and_order_by_passed_as_jinja_strings(sql: str, keys: list[str
         ("select (select id from t order by created_on limit 1) as first_id", ["created_on"]),
         ("select id from t\norder by created_on\nlimit 10\n", ["created_on"]),
         ("select id from t order by a, b nulls last offset 5 limit 1", ["a"]),
+        ("select id from t order by a offset 5", ["a"]),
+        ("select id from t order by a {% if is_incremental() %}limit 10{% endif %}", ["a"]),
+        ("select id from t order by a\n{% if target.name == 'dev' %}limit 10{% endif %}", ["a"]),
+        ("select id from t order by a {% if x %}, b{% endif %} limit 10", ["a", "b"]),
         ("select * from t order by a nulls last {% if target.name == 'dev' %} limit 10 {% endif %}", []),
+        ("select * from t order by a {# limit 1 #}", []),
+        ("select * from t order by a, '{% if x %}'", []),
         (
             "{% macro a() %}select * from t order by x{% endmacro %}"
             "{% macro b() %}select y, z from u limit 1{% endmacro %}",
             [],
         ),
+        ("select * from t order by x union all select * from u limit 1", []),
     ],
 )
 def test_reads_a_query_order_by_that_a_limit_follows(sql: str, keys: list[str]) -> None:
     assert _keys(sql) == keys
+
+
+def test_a_jinja_statement_string_is_not_part_of_a_window_key() -> None:
+    sql = "select row_number() over (order by a nulls last {% if target.name == 'dev' %}, b{% endif %}) from t"
+    assert _keys(sql) == ["b"]
+
+
+def test_a_window_list_does_not_end_at_offset() -> None:
+    assert _keys("select row_number() over (partition by p order by offset) from t") == ["offset"]
 
 
 def test_a_qualified_column_named_like_a_frame_word_is_a_key() -> None:

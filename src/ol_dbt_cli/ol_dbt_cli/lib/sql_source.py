@@ -69,6 +69,20 @@ def sql_code(source: str) -> str:
     return "".join(chars)
 
 
+def jinja_statement_spans(source: str) -> list[tuple[int, int]]:
+    """Return the spans of the ``{% ... %}`` statements in *source*.
+
+    A statement inside a comment or a quoted SQL string is part of that token, so it is not one.
+
+    :param source: The text of a SQL file, or a SQL string from YAML.
+    :returns: The ``(start, end)`` offsets of each statement, tag delimiters included.
+    :rtype: list[tuple[int, int]]
+    """
+    return [
+        match.span() for match in _TOKEN.finditer(source) if match.group("jinja") and match.group().startswith("{%")
+    ]
+
+
 def macro_declarations(source: str) -> Iterator[re.Match[str]]:
     """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
 
