@@ -34,7 +34,7 @@ from typing import Any
 import boto3
 from cyclopts import App
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
-from ol_orchestrate.lib.lake_orphan_sweep import S3_DELETE_BATCH_SIZE, normalize
+from ol_orchestrate.lib.lake_orphan_sweep import delete_objects, normalize
 
 app = App(name="history-table-restore")
 
@@ -80,17 +80,7 @@ def undelete(location: str, *, deleted_after: datetime, execute: bool = False) -
     )
     if not execute:
         return
-    errors: list[str] = []
-    for start in range(0, len(markers), S3_DELETE_BATCH_SIZE):
-        response = s3().delete_objects(
-            Bucket=bucket,
-            Delete={"Objects": markers[start : start + S3_DELETE_BATCH_SIZE]},
-        )
-        errors += [
-            f"{error['Key']}: {error['Code']} {error['Message']}"
-            for error in response.get("Errors", [])
-        ]
-    if errors:
+    if errors := delete_objects(s3(), bucket, markers):
         msg = f"{len(errors)} delete markers could not be removed: {errors[:5]}"
         raise RuntimeError(msg)
     print(f"Removed {len(markers)} delete markers.")

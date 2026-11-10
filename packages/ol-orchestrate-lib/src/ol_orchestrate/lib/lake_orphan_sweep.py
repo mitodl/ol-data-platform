@@ -244,6 +244,29 @@ def measure(s3: Any, bucket: str, prefix: str) -> dict[str, Any]:
     }
 
 
+def delete_objects(s3: Any, bucket: str, objects: list[dict[str, str]]) -> list[str]:
+    """Delete objects in batches of :data:`S3_DELETE_BATCH_SIZE`.
+
+    :param objects: ``{"Key": ...}`` entries, with a ``"VersionId"`` to delete
+        one version (e.g. a delete marker) rather than add a marker.
+    :returns: one ``"<key>: <code> <message>"`` line per object S3 refused.
+    """
+    errors: list[str] = []
+    for start in range(0, len(objects), S3_DELETE_BATCH_SIZE):
+        response = s3.delete_objects(
+            Bucket=bucket,
+            Delete={
+                "Objects": objects[start : start + S3_DELETE_BATCH_SIZE],
+                "Quiet": True,
+            },
+        )
+        errors += [
+            f"{error['Key']}: {error['Code']} {error['Message']}"
+            for error in response.get("Errors", [])
+        ]
+    return errors
+
+
 def require_minimum_age(min_age_days: int) -> None:
     """Raise unless the age floor is at least a day.
 
@@ -330,16 +353,7 @@ def delete_prefix(  # noqa: PLR0911, PLR0913
     # Logged before the first batch, so a run that dies part way through a
     # prefix still names it.
     logger.info("Deleting s3://%s/ (%d objects, %d bytes)", path, len(keys), size)
-    errors: list[str] = []
-    for start in range(0, len(keys), S3_DELETE_BATCH_SIZE):
-        batch = [{"Key": key} for key in keys[start : start + S3_DELETE_BATCH_SIZE]]
-        response = s3.delete_objects(
-            Bucket=bucket, Delete={"Objects": batch, "Quiet": True}
-        )
-        errors += [
-            f"{error['Key']}: {error['Code']} {error['Message']}"
-            for error in response.get("Errors", [])
-        ]
+    errors = delete_objects(s3, bucket, [{"Key": key} for key in keys])
     return PrefixOutcome(
         bucket, prefix, "deleted", objects=len(keys), bytes=size, errors=errors
     )
