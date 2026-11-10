@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from ol_dlt.database import DatabaseSourceSpec
-from ol_dlt.sources import learn_ai_app, mitlearn_app, ocw_studio_app
+from ol_dlt.sources import learn_ai_app, mitlearn_app, ocw_studio_app, xpro_app
 
 # src/ol_dlt/tests/sources/ -> repo root.
 UNITS_DIR = Path(__file__).parents[4] / "ingestion" / "inventory" / "units"
@@ -25,6 +25,12 @@ SOURCES = [
         learn_ai_app.LEARN_AI_APP_SPEC,
         "learn_ai__app_postgres",
         id="learn_ai_app",
+    ),
+    pytest.param(
+        xpro_app,
+        xpro_app.XPRO_APP_SPEC,
+        "xpro__app_postgres",
+        id="xpro_app",
     ),
     pytest.param(
         ocw_studio_app,
@@ -88,7 +94,12 @@ def test_resources_follow_the_raw_naming_convention(
 
 
 @pytest.mark.parametrize(
-    "spec", [mitlearn_app.MITLEARN_APP_SPEC, learn_ai_app.LEARN_AI_APP_SPEC]
+    "spec",
+    [
+        mitlearn_app.MITLEARN_APP_SPEC,
+        learn_ai_app.LEARN_AI_APP_SPEC,
+        xpro_app.XPRO_APP_SPEC,
+    ],
 )
 def test_password_hash_is_excluded(spec: DatabaseSourceSpec) -> None:
     """``users_user.password`` is a Django password hash, not analytical data."""
