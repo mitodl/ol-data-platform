@@ -714,9 +714,8 @@ non_airbyte_staging_schedules = (
 # input exists) with their upstream staging and intermediate models. `ol-dbt
 # validate`'s qa_branch_contract check fails a tagged model that reads more than
 # one ingestion unit unless it declares every one of them in qa_branches and the
-# committed QA observation shows them held (program_certificates lists the
-# empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
-# complete relative to QA's apps rather than a silently partial union. The
+# committed QA observation shows them held, so a QA build is complete relative
+# to QA's apps rather than a silently partial union. The
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that
 # QA's data_loading schedules load daily, so QA holds close to production's
 # rows. Those schedules set no default status, so they run in QA because they
