@@ -405,6 +405,11 @@ RFC 12711's other three open questions are not resolved here and do not gate any
 
 ## 7. Measured QA state and the strategies it set (step 3, 2026-09-17)
 
+The tables below record QA as measured on 2026-09-17. They are not current: on 2026-11-12 dlt
+sources began loading mitlearn, learn_ai and ocw studio's app databases and the mitx, xPro and
+MITx Online Open edX databases into QA. `ingestion/inventory/qa_observation.json` holds what QA
+raw holds now.
+
 Every unit's `strategies.qa` now follows one rule:
 
 - `ingest`: the unit is `scoped` and at least one model declares it in `meta.qa_branches`.
