@@ -9,7 +9,7 @@
 ) }}
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_log_events') }}
     where
         (
             (username != '' and {{ json_query_string('context', "'$.user_id'") }} != 'null')
@@ -27,7 +27,7 @@ with source as (
             "select coalesce(min(useractivity_timestamp), '9999') from " ~ this ~ " where user_username = ''"
         ).columns[0].values()[0] %}
         union all
-        select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
+        select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_log_events') }}
         where
             username = '' and event_type like 'edx.course.enrollment.%'
             and {{ json_query_string('event', "'$.exception'") }} is null
@@ -36,7 +36,7 @@ with source as (
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__mitxonline__openedx__tracking_logs'
+    raw_table='raw__mitxonline__openedx__tracking_log_events'
     , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
 , cleaned as (

@@ -1188,3 +1188,41 @@ retired:
     what Airbyte loaded, with its _airbyte_* and _ab_source_file_* columns.
   frozen: true
   modeled: false
+- deployment: mitx
+  layer: tracking_logs
+  raw_tables:
+  - raw__mitx__openedx__tracking_logs
+  retired_on: '2026-11-12'
+  reason: >-
+    Replaced by raw__mitx__openedx__tracking_log_events, which
+    ol_dlt.sources.tracking_logs loads from the same files in
+    mitx-production-edxapp-tracking/valid/ (#3286). On 2026-11-12 the dlt
+    table held all 477,953 files this one did, each loaded once. Per file,
+    477,245 row counts matched this table's one-copy count (fewest rows of any
+    sync). For the other 708, the distinct events matched: 428 files here hold
+    duplicate rows written within one sync, and for 280 the first sync read a
+    partly written file. The "MITx Tracking Logs → S3 Data Lake" connection is
+    disabled and kept, not deleted. dbt no longer reads the table. It stays in
+    place, read-only, as the archive of what Airbyte loaded, with its
+    _airbyte_* and _ab_source_file_* columns.
+  frozen: true
+  modeled: false
+- deployment: mitxonline
+  layer: tracking_logs
+  raw_tables:
+  - raw__mitxonline__openedx__tracking_logs
+  retired_on: '2026-11-12'
+  reason: >-
+    Replaced by raw__mitxonline__openedx__tracking_log_events, which
+    ol_dlt.sources.tracking_logs loads from the same files in
+    mitxonline-production-edxapp-tracking/valid/ (#3286). On 2026-11-12 the dlt
+    table held all 448,092 files this one did, each loaded once. Per file,
+    447,703 row counts matched this table's one-copy count (fewest rows of any
+    sync). For the other 389, the distinct events matched (1,280,291 against
+    9,054,416 rows here): this table holds rows duplicated within a sync and
+    partly written first reads. The "MITx Online Tracking Logs → S3 Data Lake"
+    connection is disabled and kept, not deleted. dbt no longer reads the
+    table. It stays in place, read-only, as the archive of what Airbyte loaded,
+    with its _airbyte_* and _ab_source_file_* columns.
+  frozen: true
+  modeled: false
