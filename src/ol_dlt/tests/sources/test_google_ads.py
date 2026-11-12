@@ -4,7 +4,6 @@ import importlib
 import re
 from datetime import date, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import dlt
@@ -79,7 +78,7 @@ class FakeClient:
     def get_service(self, _name: str) -> "FakeClient":
         return self
 
-    def search_stream(self, *, customer_id: str, query: str) -> list[Any]:
+    def search(self, *, customer_id: str, query: str) -> list[Any]:
         self.queries.append((customer_id, query))
         resource = _match(r" FROM (\w+)", query).group(1)
         if resource == "customer_client":
@@ -103,7 +102,7 @@ class FakeClient:
             ][:limit]
         else:
             rows = []
-        return [SimpleNamespace(results=rows)]
+        return rows
 
 
 def _keyword_windows(client: FakeClient) -> list[tuple[str, str]]:

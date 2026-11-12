@@ -385,9 +385,9 @@ def google_ads_source(
     def _search(
         customer_id: str, query: str, fields: tuple[str, ...]
     ) -> Iterator[dict[str, Any]]:
-        for batch in _service().search_stream(customer_id=customer_id, query=query):
-            for row in batch.results:
-                yield flatten_row(row, fields)
+        # Not search_stream: OTel gRPC tracing breaks google-ads streaming calls.
+        for row in _service().search(customer_id=customer_id, query=query):
+            yield flatten_row(row, fields)
 
     # Every table resource is a transformer of this one, and dlt runs a shared
     # parent once per extraction, so a run reads the account list once and every
