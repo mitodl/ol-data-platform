@@ -4,6 +4,7 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -21,6 +22,7 @@ from ol_llm import (
     UseCase,
     complete_sync,
     get_prompt,
+    load_default,
     process_batch,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -78,40 +80,15 @@ SUMMARY_THINKING: ThinkingEffort = "low"
 
 SUMMARY_PROMPT_NAME = "feedback-summary"
 
-# The embedded default: what a run uses with tracing off (local development) or
-# when Opik cannot be reached at the start of a run. Deployed runs use the Opik
-# version labeled with their environment, so editing this does not change their
-# output.
-SUMMARY_PROMPT = (
-    "You are analyzing feedback about MIT Learn, MIT Open Learning's platform for "
-    "courses and AI learning assistants. The text below is feedback from a "
-    "learner. It may be a support ticket, messages to an AI assistant (a tutor, "
-    "syllabus, or course recommendation bot), a forum post, or a comment on a "
-    "piece of course content. Only the learner's own words are included, but they "
-    "may quote a reply.\n\n"
-    "In 1-3 sentences, describe from the learner's point of view:\n"
-    "- what they were trying to do,\n"
-    "- any problem, confusion, or blocker they had with the platform, a course or "
-    "its materials, or the assistant,\n"
-    "- any feature or content they asked for or said was missing.\n\n"
-    "Describe the need in general terms. Refer to courses by subject (for "
-    'example, "a finance course"), not by title. Do not describe how support '
-    "resolved it.\n\n"
-    "Describe a problem or request only if the learner states one about the "
-    "platform, a course, its materials, or the assistant. Problems the learner "
-    "analyzes as part of the course subject, such as a weakness in a policy or "
-    "case study they are discussing, are not feedback. If the text is an "
-    "introduction, an answer to an assignment or discussion prompt, or a "
-    "reflection on the course subject, say that in a few words and name the "
-    'topic, for example "The learner shared a reflection on supply chain '
-    'trade-offs."\n\n'
-    "The text may be very short. Never ask for more text and never say there is "
-    "nothing to summarize. If the text is too short to tell what the learner "
-    "wanted, restate what it says in a few words.\n\n"
-    "Write plain text only, with no headings, lists, or Markdown. Do not include "
-    "names, email addresses, or other personal details.\n\n"
-    "<learner_text>\n{{conversation_text}}\n</learner_text>"
+# The embedded default: the version prompts.toml points Production at, as
+# `ol-llm-prompts export` committed it. A run uses it with tracing off (local
+# development) or when Opik cannot be reached at the start of a run. Deployed
+# runs use the Opik version labeled with their environment.
+PROMPTS_DIR = Path(__file__).parents[1] / "prompts"
+SUMMARY_DEFAULT = load_default(
+    SUMMARY_PROMPT_NAME, directory=PROMPTS_DIR, template=TextTemplate
 )
+SUMMARY_PROMPT = SUMMARY_DEFAULT.template
 
 logger = logging.getLogger(__name__)
 
@@ -138,30 +115,35 @@ def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     Warns when the labeled version's text differs from SUMMARY_PROMPT. The
     template hash is part of every row's key, so a run that then falls back to
     SUMMARY_PROMPT re-summarizes every conversation, and the next run that
-    reaches Opik does it again.
+    reaches Opik does it again. In Production that means the label is not where
+    prompts.toml points.
 
-    :returns: the prompt, or SUMMARY_PROMPT marked degraded when Opik could not
+    :returns: the prompt, or SUMMARY_DEFAULT marked degraded when Opik could not
         be reached.
     :rtype: ManagedPrompt[TextTemplate]
     :raises PromptLabelMissingError: in Production, if Opik has no version of the
         prompt labeled production.
     """
-    embedded = TextTemplate(template=SUMMARY_PROMPT)
     try:
         prompt = get_prompt(
-            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
+            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
         )
     except LookupError:
         seed_prompt_environment(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
         prompt = get_prompt(
-            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
+            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
         )
-    if prompt.source == "opik" and prompt.template_hash != embedded.template_hash:
+    if (
+        prompt.source == "opik"
+        and prompt.template_hash != SUMMARY_DEFAULT.template_hash
+    ):
         logger.warning(
-            "Opik's %s %s differs from SUMMARY_PROMPT; copy it into the code so "
-            "an Opik outage does not re-summarize every conversation",
+            "Opik's %s %s differs from the %s export in ml/prompts; until "
+            "prompts.toml points at it and its export is committed, an Opik "
+            "outage re-summarizes every conversation",
             prompt.name,
             prompt.version,
+            SUMMARY_DEFAULT.version,
         )
     return prompt
 

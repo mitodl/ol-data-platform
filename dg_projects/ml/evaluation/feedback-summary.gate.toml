@@ -6,10 +6,11 @@ mode = "advisory"  # until the thresholds have a few baselines behind them
 suite = "ml.lib.summarize_gate:suite"
 judge_model = "bedrock:us.anthropic.claude-sonnet-5"
 
-# The version production runs. A pull request that promotes the prompt changes
-# this; one that changes the model or the call changes ml/lib/summarize.py.
-[prompts]
-feedback-summary = "v4"
+# Tested at the version the pointer file says production runs, so a pull request
+# that moves the pointer evaluates the version merging promotes. One that changes
+# the model or the call changes ml/lib/summarize.py.
+pointers = "../prompts.toml"
+prompts = ["feedback-summary"]
 
 [dataset]
 name = "feedback-summary-golden"

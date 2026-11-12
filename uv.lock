@@ -3118,7 +3118,7 @@ dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-llm"
-version = "0.0.11"
+version = "0.0.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -3130,9 +3130,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3b/85/5cb171d676f01a52fcbf7824014a63f16b129d05c8807b58de63e4ecaa68/ol_llm-0.0.11.tar.gz", hash = "sha256:bbd14898e75255352c6136d154b68f91debabd73b2cc2b39604e4951883333f2", size = 328975, upload-time = "2026-11-10T16:09:18.093Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/5d/7d6fcdf9a24c8a9b6ec2411e8e9837042a94463b352ec4568019f4d54619/ol_llm-0.0.12.tar.gz", hash = "sha256:547830a15f2bd0aaff4785d3a43cfaccdca3adfc2a65ba2e94fe4b212bd5052b", size = 337355, upload-time = "2026-11-10T21:57:16.094Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/ad/af48803efff6f0f8f18a2efa09c54813fd8be179f5b6e04921577905dfae/ol_llm-0.0.11-py3-none-any.whl", hash = "sha256:eab95572e42932513906bf006c37df0d0ac460a4aa9ff3a23a512497ca0d4b25", size = 166018, upload-time = "2026-11-10T16:09:16.686Z" },
+    { url = "https://files.pythonhosted.org/packages/43/ec/bafc267ac45d6690e6709c8c4b5f5fcc29887941981f58544c42e02e2cf6/ol_llm-0.0.12-py3-none-any.whl", hash = "sha256:9901f3deec59eb25e10c9e73f3284658bb6b15b30cc57bdc4a1e1c8c0ab677b6", size = 171946, upload-time = "2026-11-10T21:57:14.634Z" },
 ]
 
 [package.optional-dependencies]
@@ -3200,7 +3200,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
     { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.3" },
-    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.11" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.12" },
     { name = "pandas", specifier = "~=3.1.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },

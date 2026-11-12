@@ -47,6 +47,9 @@ repos:
     - uv.lock
     - --exclude-files
     - src/ol_dbt/package-lock.yml
+    # A prompt export's SHA-256 of its template (ol-llm-prompts export).
+    - --exclude-lines
+    - '^\s*"template_hash": "[0-9a-f]{64}",$'
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
   rev: 'v0.17.4'

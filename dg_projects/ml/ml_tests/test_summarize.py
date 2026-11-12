@@ -1,5 +1,6 @@
 """Tests for ml.lib.summarize."""
 
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -17,6 +18,7 @@ from ol_llm import (
     ManagedPrompt,
     TextTemplate,
 )
+from ol_llm.pointers import PromptPointers
 from ol_llm.testing import override_models
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
@@ -100,8 +102,17 @@ def test_fetch_summary_prompt_uses_the_embedded_default_with_tracing_off() -> No
     prompt = summarize.fetch_summary_prompt()
 
     assert prompt.source == "embedded"
-    assert prompt.version is None
-    assert prompt.template.template == summarize.SUMMARY_PROMPT
+    assert prompt.template == summarize.SUMMARY_DEFAULT
+
+
+def test_the_embedded_default_is_the_pointed_version() -> None:
+    pointers = PromptPointers.load(Path(__file__).parents[1] / "prompts.toml")
+
+    assert pointers.exports == summarize.PROMPTS_DIR
+    assert (
+        summarize.SUMMARY_DEFAULT.version
+        == pointers.prompts[summarize.SUMMARY_PROMPT_NAME]
+    )
 
 
 def _stored(**columns: list[object]) -> pl.DataFrame:
@@ -659,7 +670,7 @@ def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
         prompt = summarize.fetch_summary_prompt()
 
     assert prompt is PROMPT
-    assert "differs from SUMMARY_PROMPT" in caplog.text
+    assert "differs from the" in caplog.text
 
 
 def test_fetch_summary_prompt_seeds_a_missing_label_then_fetches_again(
