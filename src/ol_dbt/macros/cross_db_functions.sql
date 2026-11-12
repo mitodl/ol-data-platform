@@ -48,7 +48,9 @@
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
     {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
-    cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as varchar)
+    {# json_string serializes the JSON value, so a string keeps its quotes as on Trino; a
+       cast to varchar would unquote it #}
+    json_string(json_query(parse_json({{ json_col }}), {{ json_path }}))
 {%- endmacro %}
 
 
