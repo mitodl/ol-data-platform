@@ -533,3 +533,48 @@ def test_google_ads_change_events_have_a_freshness_check() -> None:
     assert any(
         check_key.asset_key == key for check_key in _REPO.asset_checks_defs_by_key
     )
+
+
+def _course_xml_blocks_schedule_keys(repo: Any) -> set[str]:
+    schedule = repo.get_schedule_def("course_xml_blocks_ingest_daily_schedule")
+    return {
+        key.to_user_string()
+        for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+    }
+
+
+@pytest.mark.parametrize(
+    ("environment", "status"),
+    [
+        ("qa", dg.DefaultScheduleStatus.RUNNING),
+        ("production", dg.DefaultScheduleStatus.RUNNING),
+        ("dev", dg.DefaultScheduleStatus.STOPPED),
+    ],
+)
+def test_course_xml_blocks_schedule_runs_in_qa_without_edxorg(
+    environment: str, status: dg.DefaultScheduleStatus
+) -> None:
+    """edX.org's tables are `qa: mirror` and live only in production's zone."""
+    with _repository_for(environment) as repo:
+        schedule = repo.get_schedule_def("course_xml_blocks_ingest_daily_schedule")
+        assert schedule.default_status == status
+        scheduled = _course_xml_blocks_schedule_keys(repo)
+    edxorg = {
+        key for key in scheduled if key.split("/")[-1].startswith("raw__edxorg__")
+    }
+    assert "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks" in scheduled
+    if environment == "qa":
+        assert not edxorg
+    else:
+        assert edxorg == {
+            "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
+            "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
+        }
+
+
+@pytest.mark.parametrize("environment", ["dev", "qa", "production"])
+def test_posthog_schedule_is_not_defined_in_qa(environment: str) -> None:
+    """posthog/s3 is `qa: omit`; a hand-started QA schedule failed hourly."""
+    with _repository_for(environment) as repo:
+        names = {schedule.name for schedule in repo.schedule_defs}
+    assert ("posthog_events_ingest_hourly_schedule" in names) == (environment != "qa")

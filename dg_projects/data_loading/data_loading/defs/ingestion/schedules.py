@@ -281,23 +281,25 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
 # blocks on 2026-10-05, 18 GB of openedx structure blocks on 2026-10-06) a
 # budget at a time; later runs read only new course versions.
 #
-# RUNNING by default in production, unlike the schedules above. A schedule
-# without default_status starts STOPPED, which is how the PostHog ingest never
-# ran after it shipped. Elsewhere it stays stopped: the source always reads the
-# production landing zone.
+# RUNNING by default in QA and production, unlike the schedules above. A
+# schedule without default_status starts STOPPED, which is how the PostHog
+# ingest never ran after it shipped. QA reads its own landing zone and leaves
+# out the edX.org tables, which are `qa: mirror` and live only in production's
+# zone; selecting them failed every QA run on an s3:ListBucket denial.
 course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
     name="course_xml_blocks_ingest_daily_schedule",
     target=dg.AssetSelection.keys(
         *(
             ["ol_warehouse_raw_data", raw_table]
-            for raw_table in course_xml_blocks.TABLES
+            for raw_table, table in course_xml_blocks.TABLES.items()
+            if not (DAGSTER_ENV == "qa" and table.singleton)
         )
     ),
     cron_schedule="45 4 * * *",
     execution_timezone="Etc/UTC",
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
-        if DAGSTER_ENV == "production"
+        if DAGSTER_ENV in {"qa", "production"}
         else dg.DefaultScheduleStatus.STOPPED
     ),
 )
@@ -511,7 +513,10 @@ defs = dg.Definitions(
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         *qa_first_app_database_schedules,
-        posthog_events_ingest_schedule,
+        # posthog/s3 is `qa: omit`. Leaving the schedule out of QA, rather
+        # than relying on its STOPPED default, stops a tick that someone
+        # started by hand: it failed every hour on production's landing zone.
+        *([posthog_events_ingest_schedule] if DAGSTER_ENV != "qa" else []),
         course_xml_blocks_ingest_schedule,
         edxorg_program_reports_ingest_schedule,
         *tracking_logs_ingest_schedules.values(),
