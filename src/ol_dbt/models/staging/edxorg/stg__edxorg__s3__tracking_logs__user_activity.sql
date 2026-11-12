@@ -11,6 +11,9 @@ with source as (
     where
         username != ''
         and {{ json_query_string('context', "'$.user_id'") }} is not null
+        {#- edX.org is not a QA branch of any model reading this (RFC 12711), and
+            a first build exceeds QA StarRocks' batch resource group. -#}
+        {{ exclude_from_lakes(['qa']) }}
 
         {% if is_incremental() %}
             and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
