@@ -8,10 +8,8 @@ with course_block_source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__api__course_structure_blocks') }}
 )
 
--- A retrieval is kept when the course's content hash differs from its previous retrieval's. The hash covers the
--- whole course, so it is compared per course and not per block: a block that is removed and later restored would
--- otherwise compare its restored copy with its own last copy, match, and be dropped from the restoring retrieval.
--- The hash breaks ties between two retrievals at the same timestamp.
+-- Keep only retrievals whose course hash changed. The hash is compared per course, not per block, so a block
+-- removed and later restored is kept in the retrieval that restores it.
 , course_retrieval as (
     select * from (
         select
@@ -47,11 +45,10 @@ with course_block_source as (
                 order by course_block_source.block_content_hash asc, course_block_source.block_index asc
             ) as block_copy_number
         from course_block_source
-        inner join course_retrieval
-            on
-                course_block_source.course_id = course_retrieval.course_id
-                and course_block_source.retrieved_at = course_retrieval.retrieved_at
-                and course_block_source.course_content_hash = course_retrieval.course_content_hash
+        where (course_block_source.course_id, course_block_source.retrieved_at, course_block_source.course_content_hash) in (
+            select course_retrieval.course_id, course_retrieval.retrieved_at, course_retrieval.course_content_hash
+            from course_retrieval
+        )
     ) as retrieved_block
     where block_copy_number = 1
 )
