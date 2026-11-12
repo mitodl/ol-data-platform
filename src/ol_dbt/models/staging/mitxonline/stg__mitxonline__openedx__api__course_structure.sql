@@ -12,27 +12,6 @@ with course_block_source as (
 -- whole course, so it is compared per course and not per block: a block that is removed and later restored would
 -- otherwise compare its restored copy with its own last copy, match, and be dropped from the restoring retrieval.
 -- The hash breaks ties between two retrievals at the same timestamp.
-, course_retrieval as (
-    select * from (
-        select
-            course_id
-            , retrieved_at
-            , course_content_hash
-            , lag(course_content_hash) over (
-                partition by course_id
-                order by retrieved_at asc, course_content_hash asc
-            ) as previous_content_hash
-        from (
-            select distinct
-                course_id
-                , retrieved_at
-                , course_content_hash
-            from course_block_source
-        ) as distinct_retrieval
-    ) as ordered_retrieval
-    where previous_content_hash is null or previous_content_hash != course_content_hash
-)
-
 -- The raw table can hold a block more than once in one retrieval, so only one copy is kept.
 , course_block as (
     select * from (
@@ -46,13 +25,17 @@ with course_block_source as (
                     , course_block_source.course_content_hash
                 order by course_block_source.block_content_hash asc, course_block_source.block_index asc
             ) as block_copy_number
+            -- A groups frame steps back one retrieval, not one row of the same retrieval.
+            , last_value(course_block_source.course_content_hash) over (
+                partition by course_block_source.course_id
+                order by course_block_source.retrieved_at asc, course_block_source.course_content_hash asc
+                groups between 1 preceding and 1 preceding
+            ) as previous_content_hash
         from course_block_source
-        where (course_block_source.course_id, course_block_source.retrieved_at, course_block_source.course_content_hash) in (
-            select course_retrieval.course_id, course_retrieval.retrieved_at, course_retrieval.course_content_hash
-            from course_retrieval
-        )
-    ) as retrieved_block
-    where block_copy_number = 1
+    ) as ordered_block
+    where
+        block_copy_number = 1
+        and (previous_content_hash is null or previous_content_hash != course_content_hash)
 )
 
 , cleaned as (
