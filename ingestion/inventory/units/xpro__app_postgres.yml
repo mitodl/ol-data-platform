@@ -25,6 +25,10 @@ loader: airbyte
 # column.
 raw_metadata_column:
 table_prefix: raw__xpro__app__postgres__
+# Loads QA. Production is still the Airbyte connection below.
+dlt:
+  source_module: ol_dlt.sources.xpro_app
+  write_disposition: replace
 airbyte:
   source_kind: source-postgres
   replication_method: xmin

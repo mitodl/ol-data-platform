@@ -41,7 +41,8 @@ DAGSTER_SELECTOR_SUFFIX = "s3 data lake"
 INCREMENTAL_PREFIX = "incremental"
 XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
-LOCAL_INGEST_STRATEGY = "ingest"
+INGEST_STRATEGY = "ingest"
+LOCAL_INGEST_STRATEGY = INGEST_STRATEGY
 AIRBYTE_LOADER = "airbyte"
 DLT_LOADER = "dlt"
 DAGSTER_LOADER = "dagster"
@@ -85,6 +86,14 @@ LOADER_METADATA_COLUMNS: dict[str, str | None] = {
     DLT_LOADER: DLT_METADATA_COLUMN,
     DAGSTER_LOADER: None,
 }
+
+# The lake a dbt build reads raw tables from. `loader` records what loads
+# production. A unit migrating to dlt runs its `dlt:` source in the other lakes
+# first, so in a lake whose strategy is `ingest` its tables carry dlt's column
+# and not the production loader's (RFC 12711 step 8: QA staging failed ordering
+# a dlt-loaded table by `_airbyte_extracted_at`).
+PRODUCTION_LAKE = "production"
+DLT_FIRST_LAKES = ("qa", "local")
 # Which Airbyte deployment a connection belongs to when it does not say.
 # Units written before connections carried `environment` describe the
 # production workspace, the only one the generator could reach.
@@ -613,12 +622,27 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
 # ---------------------------------------------------------------------------
 
 
-def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | list[str] | None:
+def lake_loader(unit: Unit, lake: str) -> str | None:
+    """Return the loader that lands the unit's raw tables in ``lake``.
+
+    `loader` describes production. Outside it, a unit that names a `dlt:` source
+    and whose strategy for the lake is `ingest` is loaded by that source.
+    """
+    if lake != PRODUCTION_LAKE and DLT_LOADER in unit.data:
+        strategies = unit.data.get("strategies") or {}
+        if strategies.get(lake) == INGEST_STRATEGY:
+            return DLT_LOADER
+    loader = unit.data.get("loader")
+    return loader if isinstance(loader, str) else None
+
+
+def raw_metadata_column(unit: Unit, table: dict[str, Any], lake: str = PRODUCTION_LAKE) -> str | list[str] | None:
     """Resolve the raw-metadata ordering column(s) for one declared table.
 
     Returns the column name, a list of names in precedence order, or None meaning
     "this table has no metadata column, so do not deduplicate it". Precedence: the
-    table's own declaration, then the unit's, then the loader default.
+    table's own declaration, then the unit's, then the default of the loader that
+    lands the table in ``lake``. A declaration holds in every lake.
 
     Resolution is per TABLE rather than per source because a dbt source mixes
     tables from units with different loaders — dbt's own `source.loader` is not
@@ -631,12 +655,12 @@ def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | list[str] | 
             # `raw_metadata_column: null` is a real answer ("no column"), which
             # is why this tests for the KEY rather than for truthiness.
             return declared if isinstance(declared, (str, list)) else None
-    loader = unit.data.get("loader")
-    return LOADER_METADATA_COLUMNS.get(loader) if isinstance(loader, str) else None
+    loader = lake_loader(unit, lake)
+    return LOADER_METADATA_COLUMNS.get(loader) if loader is not None else None
 
 
-def raw_metadata_columns(units: list[Unit]) -> dict[str, str | list[str] | None]:
-    """Map every declared raw table to its metadata column(s) (or None).
+def raw_metadata_columns(units: list[Unit], lake: str = PRODUCTION_LAKE) -> dict[str, str | list[str] | None]:
+    """Map every declared raw table to its metadata column(s) (or None) in ``lake``.
 
     Keyed on `raw_table`, which §3.3 rule 8 guarantees names exactly one unit,
     so the mapping is unambiguous even where prefixes nest.
@@ -646,8 +670,23 @@ def raw_metadata_columns(units: list[Unit]) -> dict[str, str | list[str] | None]
         for table in unit.tables:
             raw_table = table.get("raw_table")
             if isinstance(raw_table, str) and raw_table:
-                resolved[raw_table] = raw_metadata_column(unit, table)
+                resolved[raw_table] = raw_metadata_column(unit, table, lake)
     return resolved
+
+
+def lake_metadata_overrides(units: list[Unit]) -> dict[str, dict[str, str | list[str] | None]]:
+    """Per lake, the tables whose metadata column differs from production's."""
+    production = raw_metadata_columns(units)
+    overrides: dict[str, dict[str, str | list[str] | None]] = {}
+    for lake in DLT_FIRST_LAKES:
+        differing = {
+            raw_table: column
+            for raw_table, column in raw_metadata_columns(units, lake).items()
+            if column != production[raw_table]
+        }
+        if differing:
+            overrides[lake] = differing
+    return overrides
 
 
 GENERATED_MACRO_NAME = "_raw_metadata_columns"
@@ -661,7 +700,6 @@ def render_dbt_metadata_columns(units: list[Unit]) -> str:
     a seed) is what makes every dbt invocation agree — local, CI and Dagster
     alike — with no runtime plumbing to forget.
     """
-    mapping = raw_metadata_columns(units)
     lines = [
         "{#-",
         "    GENERATED FILE - DO NOT EDIT.",
@@ -673,10 +711,32 @@ def render_dbt_metadata_columns(units: list[Unit]) -> str:
         "    pick the newest copy of a record key, or a list of columns in precedence",
         "    order. `none` means the table carries no metadata column, so it must not",
         "    be deduplicated.",
+        "",
+        "    raw_metadata_column_map() is the production lake. A unit whose `dlt:`",
+        "    source loads another lake ahead of its production cutover has different",
+        "    columns there, listed per lake in raw_metadata_column_lake_overrides().",
         "-#}",
         "{% macro raw_metadata_column_map() %}",
         "    {% do return({",
     ]
+    lines += _rendered_entries(raw_metadata_columns(units), indent=8)
+    lines += [
+        "    }) %}",
+        "{% endmacro %}",
+        "",
+        "{% macro raw_metadata_column_lake_overrides() %}",
+        "    {% do return({",
+    ]
+    for lake, overrides in sorted(lake_metadata_overrides(units).items()):
+        lines.append(f"        '{lake}': {{")
+        lines += _rendered_entries(overrides, indent=12)
+        lines.append("        },")
+    lines += ["    }) %}", "{% endmacro %}", ""]
+    return "\n".join(lines)
+
+
+def _rendered_entries(mapping: dict[str, str | list[str] | None], indent: int) -> list[str]:
+    lines = []
     for raw_table in sorted(mapping):
         column = mapping[raw_table]
         if column is None:
@@ -685,9 +745,8 @@ def render_dbt_metadata_columns(units: list[Unit]) -> str:
             rendered = f"'{column}'"
         else:
             rendered = "[" + ", ".join(f"'{name}'" for name in column) + "]"
-        lines.append(f"        '{raw_table}': {rendered},")
-    lines += ["    }) %}", "{% endmacro %}", ""]
-    return "\n".join(lines)
+        lines.append(f"{' ' * indent}'{raw_table}': {rendered},")
+    return lines
 
 
 def unit_key(data: dict[str, Any]) -> str:
