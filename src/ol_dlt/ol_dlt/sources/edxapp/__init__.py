@@ -128,6 +128,19 @@ _CHUNK_SIZES = {
     "coursewarehistoryextended_studentmodulehistoryextended": 10_000,
 }
 
+# ORA2's retired AI grading. QA's mitx database has none of these tables
+# (inspected 2026-11-12); production keeps them with no rows (Athena,
+# 2026-11-12), and only the external/irx/mitx models read them.
+_OPTIONAL_TABLES = frozenset(
+    {
+        "assessment_aiclassifier",
+        "assessment_aiclassifierset",
+        "assessment_aigradingworkflow",
+        "assessment_aitrainingworkflow",
+        "assessment_aitrainingworkflow_training_examples",
+    }
+)
+
 
 def _table(name: str) -> DatabaseTable:
     return DatabaseTable(
@@ -136,6 +149,7 @@ def _table(name: str) -> DatabaseTable:
         excluded_columns=_EXCLUDED_COLUMNS.get(name, ()),
         db_schema=_TABLE_SCHEMAS.get(name),
         chunk_size=_CHUNK_SIZES.get(name, DEFAULT_CHUNK_SIZE),
+        optional=name in _OPTIONAL_TABLES,
     )
 
 

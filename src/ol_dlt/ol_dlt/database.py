@@ -44,6 +44,7 @@ from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
 from sqlalchemy import Boolean, Numeric, Table, event
 from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL, Engine
+from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, vault
@@ -115,6 +116,12 @@ class DatabaseTable:
         chunk_size: Rows per batch for a table whose rows are too wide for
             ``DEFAULT_CHUNK_SIZE``. A batch is held in memory whole, so the run
             pod's limit bounds rows times average row width.
+        optional: The source database may lack this table, and the load skips
+            it with a warning rather than failing. For tables a deployment
+            dropped, e.g. QA's mitx edxapp database has none of the
+            ``assessment_ai*`` tables production keeps (empty). The skipped
+            table gets no raw table, and its asset still reports a
+            materialization, without a row count.
     """
 
     name: str
@@ -123,6 +130,7 @@ class DatabaseTable:
     excluded_columns: Sequence[str] = ()
     db_schema: str | None = None
     chunk_size: int = DEFAULT_CHUNK_SIZE
+    optional: bool = False
 
     def __post_init__(self) -> None:
         """Reject an incremental table that has no key to merge on."""
@@ -409,7 +417,7 @@ def build_table_resource(
             else None
         ),
     )
-    return resource.with_name(raw_name).apply_hints(
+    resource = resource.with_name(raw_name).apply_hints(
         table_name=raw_name,
         table_format=config.active_table_format(resolved_profile),
         # Nullable, overriding dlt's required default -- see
@@ -417,6 +425,48 @@ def build_table_resource(
         # an Iceberg table that already holds rows.
         columns=config.DLT_LOAD_ID_COLUMN,
     )
+    if table.optional:
+        _skip_when_absent(resource, spec, table)
+    return resource
+
+
+def _skip_when_absent(
+    resource: Any, spec: DatabaseSourceSpec, table: DatabaseTable
+) -> None:  # noqa: ANN401
+    """End ``resource`` quietly when the source database lacks ``table``.
+
+    Reflection is deferred to the resource's first item, so an absent table
+    raises ``NoSuchTableError`` there, before any row. Catching it only around
+    that first item keeps any later error loud. The wrapper replaces the
+    resource's own generating step rather than wrapping the resource in
+    another one, because iterating a resource drops the schema hints dlt's
+    reflection yields first. ``Pipe.replace_gen`` is dlt's internal API, so
+    tests/test_database.py's optional-table tests pin this to the locked dlt.
+
+    Reflection raises ``NoSuchTableError`` with the bare table name whatever the
+    schema (SQLAlchemy's ``Inspector.reflect_table``), so any other name is a
+    different table and stays an error.
+    """
+    pipe = resource._pipe  # noqa: SLF001
+    rows = pipe.gen
+
+    def rows_unless_absent() -> Iterator[Any]:
+        items = rows()
+        try:
+            first = next(items)
+        except StopIteration:
+            return
+        except NoSuchTableError as error:
+            if str(error) != table.name:
+                raise
+            logger.warning(
+                "%s: source table %s does not exist; skipping it", spec.name, error
+            )
+            return
+        yield first
+        yield from items
+
+    pipe.replace_gen(rows_unless_absent)
 
 
 def build_database_source(
