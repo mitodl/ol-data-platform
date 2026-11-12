@@ -385,9 +385,7 @@ def google_ads_source(
     def _search(
         customer_id: str, query: str, fields: tuple[str, ...]
     ) -> Iterator[dict[str, Any]]:
-        # Not search_stream: the OpenTelemetry gRPC instrumentation on Dagster run
-        # workers turns a streaming response into a generator, which breaks the
-        # google-ads client's own interceptors. The pager fetches pages lazily.
+        # Not search_stream: OTel gRPC tracing breaks google-ads streaming calls.
         for row in _service().search(customer_id=customer_id, query=query):
             yield flatten_row(row, fields)
 
