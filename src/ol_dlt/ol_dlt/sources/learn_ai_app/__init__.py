@@ -40,8 +40,17 @@ LEARN_AI_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(
             name="ai_chatbots_chatresponserating", primary_key="checkpoint_id"
         ),
-        DatabaseTable(name="ai_chatbots_djangocheckpoint", primary_key="id"),
-        DatabaseTable(name="ai_chatbots_tutorbotoutput", primary_key="id"),
+        # LangGraph checkpoints: `checkpoint` and `metadata` average 32 KB a row
+        # (p99 269 KB, max 30 MB) in production raw (Athena, 2026-11-12), and
+        # psycopg2 parses the jsonb into Python objects, so a default 50,000-row
+        # batch ran the QA run pod out of its 8 GiB.
+        DatabaseTable(
+            name="ai_chatbots_djangocheckpoint", primary_key="id", chunk_size=1_000
+        ),
+        # `chat_json` averages 8.4 KB a row (p99 49 KB).
+        DatabaseTable(
+            name="ai_chatbots_tutorbotoutput", primary_key="id", chunk_size=5_000
+        ),
         DatabaseTable(name="ai_chatbots_userchatsession", primary_key="id"),
         DatabaseTable(
             name="users_user", primary_key="id", excluded_columns=("password",)

@@ -6,10 +6,12 @@ from typing import Any, NoReturn
 
 import dlt
 import pytest
+from dlt.sources.sql_database import remove_nullability_adapter
 from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
 from dlt.sources.sql_database.schema_types import sqla_col_to_column_schema
-from sqlalchemy import Boolean, Column, create_engine
+from sqlalchemy import Boolean, Column, MetaData, Table, create_engine
 from sqlalchemy.dialects import mysql
+from sqlalchemy.dialects.mysql import pymysql as mysql_pymysql
 from sqlalchemy.engine import URL
 from sqlalchemy.types import TypeEngine
 
@@ -56,15 +58,59 @@ def test_other_mysql_integers_keep_their_type(sql_type: TypeEngine[Any]) -> None
     assert database.mysql_boolean_adapter(sql_type) is sql_type
 
 
+@pytest.mark.parametrize("sql_type", [mysql.DOUBLE(), mysql.REAL()])
+def test_mysql_doubles_are_read_as_floats(sql_type: TypeEngine[Any]) -> None:
+    """Django's FloatField, which the QA xPro and MITx Online edxapp loads failed on.
+
+    Read as reflected, a double comes back as a Decimal rounded to 10 places
+    and dlt types the column decimal(38, 9) from it. Airbyte lands a double.
+    """
+    values = [2 / 3, 1e300, None]
+    dialect = mysql_pymysql.dialect()
+    reflected = sql_type.result_processor(dialect, None)
+    assert reflected is not None
+    assert reflected(2 / 3) != 2 / 3
+
+    table = Table(
+        "studentmodule", MetaData(), Column("grade", sql_type, nullable=False)
+    )
+    grade = database.mysql_table_adapter(table).c.grade
+    processor = grade.type.result_processor(dialect, None)
+    read = [processor(value) if processor else value for value in values]
+    assert read == values
+    column = sqla_col_to_column_schema(
+        grade, "full", type_adapter_callback=database.mysql_boolean_adapter
+    )
+    assert column is not None
+    assert column["data_type"] == "double"
+    # Declared NOT NULL, as remove_nullability_adapter must still undo.
+    assert column.get("nullable") is not False
+    assert (
+        row_tuples_to_arrow(
+            [(value,) for value in read], columns={"grade": column}, tz="UTC"
+        )
+        .column("grade")
+        .to_pylist()
+        == values
+    )
+
+
 @pytest.mark.parametrize(
-    ("drivername", "expected"),
+    ("drivername", "table_adapter", "type_adapter"),
     [
-        (database.MYSQL_DRIVER, database.mysql_boolean_adapter),
-        (database.POSTGRES_DRIVER, None),
+        (
+            database.MYSQL_DRIVER,
+            database.mysql_table_adapter,
+            database.mysql_boolean_adapter,
+        ),
+        (database.POSTGRES_DRIVER, remove_nullability_adapter, None),
     ],
 )
-def test_only_mysql_sources_adapt_tinyint(
-    drivername: str, expected: object, monkeypatch: pytest.MonkeyPatch
+def test_only_mysql_sources_get_the_mysql_adapters(
+    drivername: str,
+    table_adapter: object,
+    type_adapter: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
 
@@ -83,7 +129,30 @@ def test_only_mysql_sources_adapt_tinyint(
     )
     with pytest.raises(_CapturedError):
         database.build_table_resource(spec, spec.tables[0], profile="dev")
-    assert captured["type_adapter_callback"] is expected
+    assert captured["table_adapter_callback"] is table_adapter
+    assert captured["type_adapter_callback"] is type_adapter
+
+
+@pytest.mark.parametrize(
+    ("table", "expected"),
+    [
+        (DatabaseTable(name="widget", primary_key="id"), database.DEFAULT_CHUNK_SIZE),
+        (DatabaseTable(name="wide", primary_key="id", chunk_size=1_000), 1_000),
+    ],
+)
+def test_table_chunk_size_reaches_sql_table(
+    table: DatabaseTable, expected: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_sql_table(**kwargs: Any) -> NoReturn:
+        captured.update(kwargs)
+        raise _CapturedError
+
+    monkeypatch.setattr(database, "sql_table", fake_sql_table)
+    with pytest.raises(_CapturedError):
+        database.build_table_resource(_SPEC, table, profile="dev")
+    assert captured["chunk_size"] == expected
 
 
 class _CapturedError(Exception):
