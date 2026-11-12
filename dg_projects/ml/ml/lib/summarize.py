@@ -112,11 +112,12 @@ def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     on first use. Production's label moves only by hand or from the promotion
     job, so there a missing label raises.
 
-    Warns when the labeled version's text differs from SUMMARY_PROMPT. The
-    template hash is part of every row's key, so a run that then falls back to
-    SUMMARY_PROMPT re-summarizes every conversation, and the next run that
-    reaches Opik does it again. In Production that means the label is not where
-    prompts.toml points.
+    Warns when the labeled version's text differs from the committed export
+    (SUMMARY_DEFAULT). The template hash is part of every row's key, so while
+    they differ, a run that falls back to the export re-summarizes every
+    conversation, and the next run that reaches Opik does it again. When they
+    match, a fallback run computes the same keys as one that reached Opik. In
+    Production a difference means the label is not where prompts.toml points.
 
     :returns: the prompt, or SUMMARY_DEFAULT marked degraded when Opik could not
         be reached.
