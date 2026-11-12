@@ -2084,7 +2084,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg", "sql-database"], specifier = ">=1.32,<2" },
     { name = "duckdb", specifier = ">=1.2,!=1.5.0,!=1.5.1,<2" },
-    { name = "google-ads", specifier = ">=29,<32" },
+    { name = "google-ads", specifier = ">=31.4,<32" },
     { name = "hvac", specifier = ">=2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pyiceberg", extras = ["glue"], specifier = ">=0.9" },

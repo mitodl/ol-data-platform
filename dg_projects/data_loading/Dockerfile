@@ -120,4 +120,7 @@ RUN mkdir -p /opt/otel && \
 ENV DLT_PROJECT_DIR="/app"
 ENV PYICEBERG_HOME="/app/.dlt"
 
+# OTel gRPC tracing breaks google-ads search_stream; version = GOOGLE_ADS_API_VERSION.
+ENV OTEL_PYTHON_GRPC_EXCLUDED_SERVICES="google.ads.googleads.v25.services.GoogleAdsService"
+
 WORKDIR /app

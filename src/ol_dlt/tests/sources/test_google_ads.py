@@ -4,17 +4,17 @@ import importlib
 import re
 from datetime import date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import dlt
 import pytest
-from google.ads.googleads.client import _DEFAULT_VERSION
 
 from ol_dlt import config
 from ol_dlt.sources import google_ads
 
 GoogleAdsRow = importlib.import_module(
-    f"google.ads.googleads.{_DEFAULT_VERSION}.services.types.google_ads_service"
+    f"google.ads.googleads.{google_ads.GOOGLE_ADS_API_VERSION}.services.types.google_ads_service"
 ).GoogleAdsRow
 
 MANAGER_ID = "1000000000"
@@ -75,10 +75,11 @@ class FakeClient:
         # Dates the next keyword fetch leaves out, as if Google retracted them.
         self.dropped_dates: set[str] = set()
 
-    def get_service(self, _name: str) -> "FakeClient":
+    def get_service(self, _name: str, version: str) -> "FakeClient":
+        assert version == google_ads.GOOGLE_ADS_API_VERSION
         return self
 
-    def search(self, *, customer_id: str, query: str) -> list[Any]:
+    def search_stream(self, *, customer_id: str, query: str) -> list[Any]:
         self.queries.append((customer_id, query))
         resource = _match(r" FROM (\w+)", query).group(1)
         if resource == "customer_client":
@@ -102,7 +103,11 @@ class FakeClient:
             ][:limit]
         else:
             rows = []
-        return rows
+        half = len(rows) // 2
+        return [
+            SimpleNamespace(results=rows[:half]),
+            SimpleNamespace(results=rows[half:]),
+        ]
 
 
 def _keyword_windows(client: FakeClient) -> list[tuple[str, str]]:
@@ -246,3 +251,13 @@ def test_one_source_object_advances_each_run(
     # Run 4 re-read 11-11 and Google no longer returned it, so staging drops it.
     assert is_current(by_date["2026-11-04"])
     assert not is_current(by_date["2026-11-11"])
+
+
+def test_dockerfile_excludes_the_pinned_google_ads_service_from_tracing() -> None:
+    dockerfile = Path(__file__).parents[4] / "dg_projects/data_loading/Dockerfile"
+    version = google_ads.GOOGLE_ADS_API_VERSION
+    service = f"google.ads.googleads.{version}.services.GoogleAdsService"
+    value = _match(
+        r'OTEL_PYTHON_GRPC_EXCLUDED_SERVICES="([^"]*)"', dockerfile.read_text()
+    ).group(1)
+    assert service in value.split(",")

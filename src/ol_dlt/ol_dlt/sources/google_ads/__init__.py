@@ -62,6 +62,8 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_ADS_VAULT_MOUNT = "secret-data"
 GOOGLE_ADS_VAULT_PATH = "pipelines/google_ads"
+# Pinned: the data_loading Dockerfile excludes this version from OTel tracing.
+GOOGLE_ADS_API_VERSION = "v25"
 
 DEFAULT_START_DATE = "2021-01-01"
 # Customers come from a HubSpot offline import days to weeks after the click,
@@ -380,14 +382,15 @@ def google_ads_source(
 
     @functools.cache
     def _service() -> Any:  # noqa: ANN401
-        return _client().get_service("GoogleAdsService")
+        return _client().get_service("GoogleAdsService", version=GOOGLE_ADS_API_VERSION)
 
     def _search(
         customer_id: str, query: str, fields: tuple[str, ...]
     ) -> Iterator[dict[str, Any]]:
-        # Not search_stream: OTel gRPC tracing breaks google-ads streaming calls.
-        for row in _service().search(customer_id=customer_id, query=query):
-            yield flatten_row(row, fields)
+        # Needs OTEL_PYTHON_GRPC_EXCLUDED_SERVICES from the data_loading Dockerfile.
+        for batch in _service().search_stream(customer_id=customer_id, query=query):
+            for row in batch.results:
+                yield flatten_row(row, fields)
 
     # Every table resource is a transformer of this one, and dlt runs a shared
     # parent once per extraction, so a run reads the account list once and every
