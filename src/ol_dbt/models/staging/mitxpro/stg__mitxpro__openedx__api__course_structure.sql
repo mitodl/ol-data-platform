@@ -41,7 +41,6 @@ with course_block_source as (
                 order by course_block_source.block_content_hash asc, course_block_source.block_index asc
             ) as block_copy_number
         from course_block_source
-        -- Not an inner join: on Trino a join that carries block_details drops a random set of rows.
         where (course_block_source.course_id, course_block_source.retrieved_at, course_block_source.course_content_hash) in (
             select course_retrieval.course_id, course_retrieval.retrieved_at, course_retrieval.course_content_hash
             from course_retrieval
