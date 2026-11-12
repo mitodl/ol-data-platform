@@ -34,7 +34,7 @@ permissions: {}
 
 jobs:
   feedback-summary:
-    uses: mitodl/ol-llm/.github/workflows/evaluation-gate.yml@bf74fc6cf5b2e89c2e281092a646ff70acc13f8c # ol-llm-v0.0.12
+    uses: mitodl/ol-llm/.github/workflows/evaluation-gate.yml@5b80e69a290d82e4facbb8f0f09be00e3244eeff # ol-llm-v0.0.13
     permissions:
       contents: read
       pull-requests: write
