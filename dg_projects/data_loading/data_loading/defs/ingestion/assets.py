@@ -542,7 +542,9 @@ edxorg_s3_table_assets = [
 # The course archive assets in the edxorg and openedx code locations land one
 # JSON Lines file of parsed XML blocks per course version; nothing else loads
 # them into raw. The edxorg and openedx structure blocks are the same layout.
-# One op per table, like edxorg_s3, so they drain independently.
+# One op per table, like edxorg_s3, so they drain independently. QA has no
+# edX.org tables here: they are `qa: mirror`, and building their source under
+# the qa profile raises (XmlBlocksTable.bucket_url_for).
 course_xml_blocks_assets = [
     build_batched_assets(
         # course_xml_blocks_openedx etc. for the block tables, as before.
@@ -554,6 +556,7 @@ course_xml_blocks_assets = [
         translator=RawDataDltTranslator(),
     )
     for raw_table, table in course_xml_blocks.TABLES.items()
+    if not (DAGSTER_ENV == "qa" and table.singleton)
 ]
 
 

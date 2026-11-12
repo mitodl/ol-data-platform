@@ -33,8 +33,9 @@ from ol_dlt.sources import (
     ocw_studio_app,
     xpro_app,
 )
+from sqlalchemy.engine import URL
 
-from ol_dlt import keyset
+from ol_dlt import database, keyset
 
 _REPO = defs.get_repository_def()
 
@@ -75,7 +76,7 @@ def _is_mitxonline_app_table(key: str) -> bool:
 
 
 @contextmanager
-def _repository_for(environment: str) -> Iterator[Any]:
+def _repository_for(environment: str, profile: str = "dev") -> Iterator[Any]:
     """Build the code location as the gRPC server would under ``environment``.
 
     ``DAGSTER_ENV`` is resolved once, at import of
@@ -85,9 +86,10 @@ def _repository_for(environment: str) -> Iterator[Any]:
     constant instead would stay green if somebody dropped the conditional it
     guards, which is the regression worth catching.
 
-    ``DLT_PROFILE`` is pinned to ``dev`` so the re-import stays hermetic: the
+    ``DLT_PROFILE`` defaults to ``dev`` so the re-import stays hermetic: the
     destination objects are constructed either way, and a production one has
-    no business being built in a test.
+    no business being built in a test. Pass ``qa`` only to catch a source that
+    fails to build under the profile QA's code server actually runs.
     """
     saved_modules = {
         name: module
@@ -104,7 +106,7 @@ def _repository_for(environment: str) -> Iterator[Any]:
                 del sys.modules[name]
 
     os.environ["DAGSTER_ENVIRONMENT"] = environment
-    os.environ["DLT_PROFILE"] = "dev"
+    os.environ["DLT_PROFILE"] = profile
     _purge()
     try:
         module = importlib.import_module("data_loading.definitions")
@@ -570,6 +572,31 @@ def test_course_xml_blocks_schedule_runs_in_qa_without_edxorg(
             "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
             "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         }
+
+
+def test_code_location_builds_under_the_qa_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """QA's code server runs with DLT_PROFILE=qa, and dlt sources are built at
+    import. A source that refuses the qa profile (an edX.org course table)
+    would stop the whole location from loading, which the dev-profile builds
+    above cannot see. Database hosts come from the Pulumi stack in QA, so the
+    connection URL is stubbed; nothing connects either way.
+    """
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda spec, profile: URL.create(spec.drivername, host="qa.invalid"),  # noqa: ARG005
+    )
+    with _repository_for("qa", profile="qa") as repo:
+        keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+    assert "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks" in keys
+    assert not {
+        key
+        for key in keys
+        if key.split("/")[-1].startswith("raw__edxorg__s3__course_")
+        and key.split("/")[-1].endswith("_blocks")
+    }
 
 
 @pytest.mark.parametrize("environment", ["dev", "qa", "production"])
