@@ -2,8 +2,30 @@ with course_block_source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__api__course_structure_blocks') }}
 )
 
--- Keep one copy of each block, and only from retrievals whose course hash changed. The hash is compared per
--- course, not per block, so a block removed and later restored is kept in the retrieval that restores it.
+-- Keep only retrievals whose course hash changed. The hash is compared per course, not per block, so a block
+-- removed and later restored is kept in the retrieval that restores it.
+, course_retrieval as (
+    select * from (
+        select
+            course_id
+            , retrieved_at
+            , course_content_hash
+            , lag(course_content_hash) over (
+                partition by course_id
+                order by retrieved_at asc, course_content_hash asc
+            ) as previous_content_hash
+        from (
+            select distinct
+                course_id
+                , retrieved_at
+                , course_content_hash
+            from course_block_source
+        ) as distinct_retrieval
+    ) as ordered_retrieval
+    where previous_content_hash is null or previous_content_hash != course_content_hash
+)
+
+-- The raw table can hold a block more than once in one retrieval, so only one copy is kept.
 , course_block as (
     select * from (
         select
@@ -16,17 +38,13 @@ with course_block_source as (
                     , course_block_source.course_content_hash
                 order by course_block_source.block_content_hash asc, course_block_source.block_index asc
             ) as block_copy_number
-            -- A groups frame steps back one retrieval, not one row of the same retrieval.
-            , last_value(course_block_source.course_content_hash) over (
-                partition by course_block_source.course_id
-                order by course_block_source.retrieved_at asc, course_block_source.course_content_hash asc
-                groups between 1 preceding and 1 preceding
-            ) as previous_content_hash
         from course_block_source
-    ) as ordered_block
-    where
-        block_copy_number = 1
-        and (previous_content_hash is null or previous_content_hash != course_content_hash)
+        where (course_block_source.course_id, course_block_source.retrieved_at, course_block_source.course_content_hash) in (
+            select course_retrieval.course_id, course_retrieval.retrieved_at, course_retrieval.course_content_hash
+            from course_retrieval
+        )
+    ) as retrieved_block
+    where block_copy_number = 1
 )
 
 , cleaned as (
