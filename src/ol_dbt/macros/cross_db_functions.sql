@@ -6,10 +6,11 @@
 #}
 
 {#
-    json_extract_value: Cross-db extraction of a JSON value. On Trino this returns varchar
-    (JSON-formatted text), NOT a native JSON value -- safe to select directly as a persisted
-    model column. On DuckDB/StarRocks it returns a native JSON value (those connectors don't
-    have this restriction).
+    json_extract_value: Cross-db extraction of a JSON value. On Trino and StarRocks this
+    returns varchar (JSON-formatted text), NOT a native JSON value -- safe to select directly
+    as a persisted model column. StarRocks cannot write a JSON column to an Iceberg table
+    either ("Unsupported primitive column type JSON"). On DuckDB it returns a native JSON
+    value.
 
     This replaces the Trino-specific: json_query(col, 'lax $.path')
 
@@ -47,7 +48,7 @@
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
     {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
-    json_query(parse_json({{ json_col }}), {{ json_path }})
+    cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as varchar)
 {%- endmacro %}
 
 
