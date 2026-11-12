@@ -30,6 +30,7 @@ from functools import partial
 from typing import Any
 
 from ol_dlt.database import (
+    DEFAULT_CHUNK_SIZE,
     MYSQL_DRIVER,
     DatabaseSourceSpec,
     DatabaseTable,
@@ -120,6 +121,13 @@ _TABLE_SCHEMAS = {
 # Django password hash; no dbt model selects it.
 _EXCLUDED_COLUMNS = {"auth_user": ("password",)}
 
+# Rows per batch for tables too wide for DEFAULT_CHUNK_SIZE. mitx's extended
+# history `state` averages 16.8 KB a row in production raw (Athena,
+# 2026-11-12), so a default batch is 840 MB of text before pyarrow copies it.
+_CHUNK_SIZES = {
+    "coursewarehistoryextended_studentmodulehistoryextended": 10_000,
+}
+
 
 def _table(name: str) -> DatabaseTable:
     return DatabaseTable(
@@ -127,6 +135,7 @@ def _table(name: str) -> DatabaseTable:
         primary_key="id",
         excluded_columns=_EXCLUDED_COLUMNS.get(name, ()),
         db_schema=_TABLE_SCHEMAS.get(name),
+        chunk_size=_CHUNK_SIZES.get(name, DEFAULT_CHUNK_SIZE),
     )
 
 

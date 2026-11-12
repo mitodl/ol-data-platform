@@ -41,7 +41,7 @@ from dlt.sources.sql_database import (
     sql_table,
 )
 from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
-from sqlalchemy import Boolean, event
+from sqlalchemy import Boolean, Numeric, Table, event
 from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL, Engine
 from sqlalchemy.types import TypeEngine
@@ -112,6 +112,9 @@ class DatabaseTable:
         db_schema: Schema to read this table from when it is not the spec's,
             e.g. Open edX's ``edxapp_csmh`` database beside ``edxapp`` on the
             same MySQL server. ``None`` takes the spec's.
+        chunk_size: Rows per batch for a table whose rows are too wide for
+            ``DEFAULT_CHUNK_SIZE``. A batch is held in memory whole, so the run
+            pod's limit bounds rows times average row width.
     """
 
     name: str
@@ -119,6 +122,7 @@ class DatabaseTable:
     cursor_column: str | None = None
     excluded_columns: Sequence[str] = ()
     db_schema: str | None = None
+    chunk_size: int = DEFAULT_CHUNK_SIZE
 
     def __post_init__(self) -> None:
         """Reject an incremental table that has no key to merge on."""
@@ -334,6 +338,31 @@ def mysql_boolean_adapter(sql_type: TypeEngine[Any]) -> TypeEngine[Any]:
     return sql_type
 
 
+def mysql_table_adapter(table: Table) -> Table:
+    """Read MySQL ``double`` and ``real`` as floats, then drop nullability.
+
+    Django's ``FloatField`` is a MySQL ``double``, which SQLAlchemy's MySQL
+    dialect reflects with ``asdecimal=True``: the select it runs returns each
+    value as a ``Decimal`` rounded to 10 fractional digits. dlt maps only
+    ``Numeric`` types, which ``Float`` no longer subclasses in SQLAlchemy 2.1,
+    so the column takes its type from those values, ``decimal(38, 9)``, and
+    the load fails on the first value with more digits (e.g.
+    courseware_studentmodule.grade). The column type has to change on the
+    reflected table, which dlt both selects from and maps; a type adapter only
+    reaches the mapping, and the values would still be rounded. Airbyte lands
+    these columns as ``double``.
+
+    :param table: The reflected table.
+
+    :returns: The table, its float columns retyped, every column nullable.
+    :rtype: Table
+    """
+    for column in table.columns:
+        if isinstance(column.type, (mysql.DOUBLE, mysql.REAL)):
+            column.type = Numeric(asdecimal=False)
+    return remove_nullability_adapter(table)
+
+
 def build_table_resource(
     spec: DatabaseSourceSpec,
     table: DatabaseTable,
@@ -351,7 +380,7 @@ def build_table_resource(
         table=table.name,
         schema=table.db_schema or spec.db_schema,
         incremental=incremental,
-        chunk_size=DEFAULT_CHUNK_SIZE,
+        chunk_size=table.chunk_size,
         # pyarrow reflects source types faithfully instead of re-inferring them
         # from sampled rows, which keeps the Iceberg schema stable run to run.
         backend="pyarrow",
@@ -363,7 +392,11 @@ def build_table_resource(
         # would otherwise evolve the Iceberg table with a REQUIRED column, which
         # pyiceberg refuses on a table that holds rows (see
         # config.DLT_LOAD_ID_COLUMN), failing every later load of that table.
-        table_adapter_callback=remove_nullability_adapter,
+        table_adapter_callback=(
+            mysql_table_adapter
+            if spec.drivername == MYSQL_DRIVER
+            else remove_nullability_adapter
+        ),
         type_adapter_callback=(
             mysql_boolean_adapter if spec.drivername == MYSQL_DRIVER else None
         ),
