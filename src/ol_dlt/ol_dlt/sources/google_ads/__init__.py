@@ -385,9 +385,11 @@ def google_ads_source(
     def _search(
         customer_id: str, query: str, fields: tuple[str, ...]
     ) -> Iterator[dict[str, Any]]:
-        for batch in _service().search_stream(customer_id=customer_id, query=query):
-            for row in batch.results:
-                yield flatten_row(row, fields)
+        # Not search_stream: the OpenTelemetry gRPC instrumentation on Dagster run
+        # workers turns a streaming response into a generator, which breaks the
+        # google-ads client's own interceptors. The pager fetches pages lazily.
+        for row in _service().search(customer_id=customer_id, query=query):
+            yield flatten_row(row, fields)
 
     # Every table resource is a transformer of this one, and dlt runs a shared
     # parent once per extraction, so a run reads the account list once and every
