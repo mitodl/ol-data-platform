@@ -1195,6 +1195,27 @@
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
 
 {#
+    cast_to_timestamptz: a zone-less timestamp read as UTC, as the type the
+    *_to_timestamptz macros return. StarRocks has no zoned type and keeps UTC
+    instants as DATETIME.
+#}
+{% macro cast_to_timestamptz(timestamp_expr) -%}
+    {{ adapter.dispatch('cast_to_timestamptz', 'open_learning')(timestamp_expr) }}
+{%- endmacro %}
+
+{% macro default__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamp(6) with time zone)
+{%- endmacro %}
+
+{% macro duckdb__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamptz)
+{%- endmacro %}
+
+{% macro starrocks__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as datetime)
+{%- endmacro %}
+
+{#
     null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has
     no `timestamp` type. A macro for the whole expression rather than
     `cast(null as {{ dbt.type_timestamp() }})`, which ol-dbt validate's raw-SQL

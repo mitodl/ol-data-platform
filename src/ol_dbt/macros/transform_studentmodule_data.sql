@@ -28,14 +28,14 @@
   --   input_state   object   — UI widget rendering state; not analytically useful
   --
   -- studentmodule_created_on is timestamp(6) in the Iceberg staging table;
-  -- cast directly to timestamp with time zone (session TZ = UTC).
+  -- read it as a UTC instant (session TZ = UTC).
   , studentmodulehistory as (
     select
       studentmodulehistoryextended_id
       , studentmodule_id
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      , cast(studentmodule_created_on as timestamp(6) with time zone) as event_timestamp
+      , {{ cast_to_timestamptz('studentmodule_created_on') }} as event_timestamp
       , {{ json_query_string('studentmodule_state_data', "'$.attempts'") }} as attempt
       , {{ json_query_string('studentmodule_state_data', "'$.seed'") }} as seed
       -- correct_map is the per-part correctness for this submission only (~400 bytes).
@@ -53,11 +53,11 @@
       {% if watermark_expr %}
         and (
           {{ watermark_expr }} is null
-          or cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
+          or {{ cast_to_timestamptz('studentmodule_created_on') }} > {{ watermark_expr }}
         )
       {% elif is_incremental() %}
         and (
-          cast(studentmodule_created_on as timestamp(6) with time zone) > (
+          {{ cast_to_timestamptz('studentmodule_created_on') }} > (
             select max(event_timestamp) from {{ this }}
             where platform = '{{ platform }}'
           )
