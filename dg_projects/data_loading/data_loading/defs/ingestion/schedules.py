@@ -292,7 +292,7 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
         *(
             ["ol_warehouse_raw_data", raw_table]
             for raw_table, table in course_xml_blocks.TABLES.items()
-            if not (DAGSTER_ENV == "qa" and table.singleton)
+            if table.ingested_under(DAGSTER_ENV)
         )
     ),
     cron_schedule="45 4 * * *",
@@ -309,8 +309,9 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
 # reports are loaded well ahead of the next non_airbyte_staging_daily at 06:00.
 # The first runs walk the 4.93 TB backlog, at most 430 GB per run at the
 # 200-batch cap (the first run, 2026-10-27, read 385 GB); later runs read one
-# day of reports. RUNNING by default in production only, as for the course XML
-# blocks: the source always reads the production landing zone.
+# day of reports. RUNNING by default in production only: the source always
+# reads the production landing zone, and QA (`qa: mirror`) does not define the
+# schedule at all.
 #
 # That first run peaked at 8.06 GB RSS against the 8Gi default limit, with the
 # largest batch at 2.05 GiB, so a load peaks near 3.7x its batch. A batch can
@@ -513,12 +514,17 @@ defs = dg.Definitions(
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         *qa_first_app_database_schedules,
-        # posthog/s3 is `qa: omit`. Leaving the schedule out of QA, rather
-        # than relying on its STOPPED default, stops a tick that someone
-        # started by hand: it failed every hour on production's landing zone.
-        *([posthog_events_ingest_schedule] if DAGSTER_ENV != "qa" else []),
+        # posthog/s3 is `qa: omit` and edxorg/program_reports is `qa: mirror`,
+        # and both read production's landing zone, which QA cannot list.
+        # Leaving them out of QA, rather than relying on their STOPPED
+        # default, stops a tick someone started by hand: the PostHog one
+        # failed every hour.
+        *(
+            [posthog_events_ingest_schedule, edxorg_program_reports_ingest_schedule]
+            if DAGSTER_ENV != "qa"
+            else []
+        ),
         course_xml_blocks_ingest_schedule,
-        edxorg_program_reports_ingest_schedule,
         *tracking_logs_ingest_schedules.values(),
         ocw_content_ingest_schedule,
         canvas_content_ingest_schedule,

@@ -461,6 +461,7 @@ def test_qa_reads_its_own_landing_zone_and_never_ingests_edxorg(
     table = course_xml_blocks.TABLES[raw_table]
     is_edxorg = raw_table.startswith("raw__edxorg__")
     assert table.singleton == is_edxorg
+    assert table.ingested_under(profile) == (not (profile == "qa" and is_edxorg))
     if profile == "qa" and is_edxorg:
         with pytest.raises(ValueError, match="qa: mirror"):
             table.bucket_url_for(profile)

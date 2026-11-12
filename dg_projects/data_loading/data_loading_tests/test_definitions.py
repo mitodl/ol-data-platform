@@ -599,9 +599,21 @@ def test_code_location_builds_under_the_qa_profile(
     }
 
 
+@pytest.mark.parametrize(
+    "schedule_name",
+    [
+        "posthog_events_ingest_hourly_schedule",
+        "edxorg_program_reports_ingest_daily_schedule",
+    ],
+)
 @pytest.mark.parametrize("environment", ["dev", "qa", "production"])
-def test_posthog_schedule_is_not_defined_in_qa(environment: str) -> None:
-    """posthog/s3 is `qa: omit`; a hand-started QA schedule failed hourly."""
+def test_production_landing_zone_schedules_are_not_defined_in_qa(
+    environment: str, schedule_name: str
+) -> None:
+    """posthog/s3 is `qa: omit` and edxorg/program_reports `qa: mirror`; both
+    read production's landing zone, and a hand-started QA PostHog schedule
+    failed hourly.
+    """
     with _repository_for(environment) as repo:
         names = {schedule.name for schedule in repo.schedule_defs}
-    assert ("posthog_events_ingest_hourly_schedule" in names) == (environment != "qa")
+    assert (schedule_name in names) == (environment != "qa")

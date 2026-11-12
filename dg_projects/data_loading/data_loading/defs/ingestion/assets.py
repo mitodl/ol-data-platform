@@ -556,7 +556,7 @@ course_xml_blocks_assets = [
         translator=RawDataDltTranslator(),
     )
     for raw_table, table in course_xml_blocks.TABLES.items()
-    if not (DAGSTER_ENV == "qa" and table.singleton)
+    if table.ingested_under(DAGSTER_ENV)
 ]
 
 

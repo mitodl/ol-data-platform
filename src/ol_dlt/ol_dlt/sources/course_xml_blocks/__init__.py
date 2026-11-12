@@ -237,6 +237,13 @@ class XmlBlocksTable:
                 self, "pipeline_name", f"course_xml_blocks__{self.pipeline_prefix}"
             )
 
+    def ingested_under(self, profile: str) -> bool:
+        """Return whether this profile loads the table from a landing zone.
+
+        QA gets a singleton table's rows from the production mirror instead.
+        """
+        return not (profile == "qa" and self.singleton)
+
     def bucket_url_for(self, profile: str) -> str:
         """Return the landing bucket a profile reads this table's files from.
 
@@ -244,13 +251,13 @@ class XmlBlocksTable:
         code location lands, because QA's IAM role cannot read production's
         zone and QA users are not production users.
 
-        :raises ValueError: For a singleton table under ``qa``, whose rows QA
-            gets from the production mirror. Reading production's zone into
-            QA raw would bypass the mirror.
+        :raises ValueError: For a table the profile does not ingest
+            (``ingested_under``). Reading production's zone into QA raw would
+            bypass the mirror.
         """
         if profile != "qa":
             return LANDING_BUCKET
-        if self.singleton:
+        if not self.ingested_under(profile):
             msg = (
                 f"{self.raw_table} is qa: mirror; QA does not ingest it from "
                 "the landing zone"
