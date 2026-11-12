@@ -9,8 +9,9 @@ with edxorg_grade as (
             {{ format_course_id("replace(edxorg_grade.courserun_readable_id, 'course-v1:', '')", false) }}
             , '15.390.1x_SPA+1T1015', '15.390.1x_SPA+1T2015'
         ) as courserun_readable_id
-        -- Some course grading policies have a zero-width space before the label
-        , replace(edxorg_grade.courserungrade_letter_grade, {{ codepoint_char(8203) }}, '')
+        -- Some course grading policies have a zero-width space before the label.
+        -- MITx Online treats an empty letter grade as missing, so keep it null
+        , nullif(replace(edxorg_grade.courserungrade_letter_grade, {{ codepoint_char(8203) }}, ''), '')
             as courserungrade_letter_grade
     from {{ ref('stg__edxorg__s3__courserun_grade') }} as edxorg_grade
     inner join {{ ref('int__mitx__users') }} as mitx__users

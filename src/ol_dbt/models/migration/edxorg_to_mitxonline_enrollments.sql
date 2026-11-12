@@ -25,8 +25,10 @@ with combined_enrollments as (
         cast(user_id as varchar) as user_id
         -- The export mixes {org}/{course}/{run} and course-v1 IDs
         , {{ format_course_id("replace(courserun_readable_id, 'course-v1:', '')", false) }} as courserun_readable_id
-        -- Some course grading policies have a zero-width space before the label
-        , replace(courserungrade_letter_grade, {{ codepoint_char(8203) }}, '') as courserungrade_letter_grade
+        -- Some course grading policies have a zero-width space before the label.
+        -- MITx Online treats an empty letter grade as missing, so keep it null
+        , nullif(replace(courserungrade_letter_grade, {{ codepoint_char(8203) }}, ''), '')
+            as courserungrade_letter_grade
     from {{ ref('stg__edxorg__s3__courserun_grade') }}
     where courserungrade_letter_grade is not null
 )
