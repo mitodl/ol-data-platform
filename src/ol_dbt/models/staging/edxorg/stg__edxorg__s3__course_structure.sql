@@ -7,11 +7,8 @@ with course_block_source as (
     where _source_file like '%|prod/%'
 )
 
--- A retrieval is kept when the course's content hash differs from its previous retrieval's. The hash covers the
--- whole course, so it is compared per course and not per block: a block that is removed and later restored would
--- otherwise compare its restored copy with its own last copy, match, and be dropped from the restoring retrieval.
--- The hash breaks ties between two retrievals at the same timestamp.
--- The raw table can hold a block more than once in one retrieval, so only one copy is kept.
+-- Keep one copy of each block, and only from retrievals whose course hash changed. The hash is compared per
+-- course, not per block, so a block removed and later restored is kept in the retrieval that restores it.
 , course_block as (
     select * from (
         select
