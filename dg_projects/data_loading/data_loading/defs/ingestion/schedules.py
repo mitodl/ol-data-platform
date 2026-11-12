@@ -184,6 +184,9 @@ QA_FIRST_APP_DATABASE_CRONS = {
     "mitlearn_app": "10 5 * * *",  # mitlearn/app_postgres, 24h
     "learn_ai_app": "30 */6 * * *",  # learn_ai/app_postgres, 6h
     "ocw_studio_app": "50 */6 * * *",  # ocw/app_postgres, 6h
+    "mitx_edxapp": "15 */12 * * *",  # mitx/mysql, 12h
+    "xpro_edxapp": "35 */12 * * *",  # xpro/mysql, 12h (history: 24h)
+    "mitxonline_edxapp": "55 */12 * * *",  # mitxonline/mysql, 12h
 }
 # Defined only where the assets are (QA_FIRST_APP_DATABASE_ENVIRONMENTS), and
 # selected by definition so a table added to a spec needs no edit here.

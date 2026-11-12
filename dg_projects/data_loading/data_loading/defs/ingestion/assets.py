@@ -30,6 +30,7 @@ from dagster_dlt.translator import DltResourceTranslatorData
 from ol_dlt.sources import (
     canvas_content,
     course_xml_blocks,
+    edxapp,
     edxorg_program_reports,
     edxorg_s3,
     google_ads,
@@ -197,6 +198,13 @@ QA_FIRST_APP_DATABASES: dict[str, tuple[Callable[[], Any], Any]] = {
         ocw_studio_app.build_source,
         ocw_studio_app.ocw_studio_app_pipeline,
     ),
+    **{
+        spec.name: (
+            edxapp.source_builder(deployment),
+            edxapp.EDXAPP_PIPELINES[deployment],
+        )
+        for deployment, spec in edxapp.EDXAPP_SPECS.items()
+    },
 }
 
 qa_first_app_database_assets: dict[str, AssetsDefinition] = (

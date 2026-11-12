@@ -2,12 +2,16 @@
 
 import sqlite3
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import dlt
 import pytest
-from sqlalchemy import create_engine
+from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
+from dlt.sources.sql_database.schema_types import sqla_col_to_column_schema
+from sqlalchemy import Boolean, Column, create_engine
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL
+from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, database
 from ol_dlt.database import DatabaseSourceSpec, DatabaseTable
@@ -31,6 +35,59 @@ def _iceberg_pipeline(lake: Path, tmp_path: Path, name: str) -> dlt.Pipeline:
         dataset_name="raw",
         pipelines_dir=str(tmp_path / "pipelines"),
     )
+
+
+def test_mysql_tinyint1_reflects_as_boolean() -> None:
+    """Django's BooleanField is tinyint(1) on MariaDB; Airbyte lands it as boolean."""
+    adapted = database.mysql_boolean_adapter(mysql.TINYINT(display_width=1))
+    assert isinstance(adapted, Boolean)
+    column = sqla_col_to_column_schema(Column("is_active", adapted), "full")
+    assert column is not None
+    assert column["data_type"] == "bool"
+    assert row_tuples_to_arrow(
+        [(1,), (0,), (None,)], columns={"is_active": column}, tz="UTC"
+    ).column("is_active").to_pylist() == [True, False, None]
+
+
+@pytest.mark.parametrize(
+    "sql_type", [mysql.TINYINT(display_width=4), mysql.TINYINT(), mysql.INTEGER()]
+)
+def test_other_mysql_integers_keep_their_type(sql_type: TypeEngine[Any]) -> None:
+    assert database.mysql_boolean_adapter(sql_type) is sql_type
+
+
+@pytest.mark.parametrize(
+    ("drivername", "expected"),
+    [
+        (database.MYSQL_DRIVER, database.mysql_boolean_adapter),
+        (database.POSTGRES_DRIVER, None),
+    ],
+)
+def test_only_mysql_sources_adapt_tinyint(
+    drivername: str, expected: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_sql_table(**kwargs: Any) -> NoReturn:
+        captured.update(kwargs)
+        raise _CapturedError
+
+    monkeypatch.setattr(database, "sql_table", fake_sql_table)
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__",
+        database="example",
+        vault_mount="example",
+        tables=(DatabaseTable(name="widget", primary_key="id"),),
+        drivername=drivername,
+    )
+    with pytest.raises(_CapturedError):
+        database.build_table_resource(spec, spec.tables[0], profile="dev")
+    assert captured["type_adapter_callback"] is expected
+
+
+class _CapturedError(Exception):
+    pass
 
 
 def test_cursor_column_requires_primary_key() -> None:
