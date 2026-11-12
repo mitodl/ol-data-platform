@@ -20,6 +20,19 @@ with combined_enrollments as (
         and courseruncertificate_grade is not null
 )
 
+, edxorg_letter_grade as (
+    select
+        cast(user_id as varchar) as user_id
+        -- The export mixes {org}/{course}/{run} and course-v1 IDs
+        , {{ format_course_id("replace(courserun_readable_id, 'course-v1:', '')", false) }} as courserun_readable_id
+        -- Some course grading policies have a zero-width space before the label.
+        -- MITx Online treats an empty letter grade as missing, so keep it null
+        , nullif(replace(courserungrade_letter_grade, {{ codepoint_char(8203) }}, ''), '')
+            as courserungrade_letter_grade
+    from {{ ref('stg__edxorg__s3__courserun_grade') }}
+    where courserungrade_letter_grade is not null
+)
+
 , edxorg_runs as (
     select * from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -393,6 +406,7 @@ select
         edxorg_grade.courseruncertificate_grade
      ) as courserungrade_grade
     , edxorg_enrollment.courserungrade_is_passing
+    , edxorg_letter_grade.courserungrade_letter_grade
     , edxorg_enrollment.courserunenrollment_created_on
     , edxorg_enrollment.courseruncertificate_created_on
     , coalesce(
@@ -417,6 +431,9 @@ from edxorg_enrollment
 left join edxorg_grade
     on edxorg_enrollment.user_id = edxorg_grade.user_id
     and edxorg_enrollment.courserun_readable_id = edxorg_grade.courserun_readable_id
+left join edxorg_letter_grade
+    on edxorg_enrollment.user_id = edxorg_letter_grade.user_id
+    and edxorg_enrollment.courserun_readable_id = edxorg_letter_grade.courserun_readable_id
 left join future_run_id_mapping
     on edxorg_enrollment.courserun_readable_id = future_run_id_mapping.edxorg_courserun_readable_id
 left join mitxonline_enrollment
