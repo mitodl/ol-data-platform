@@ -31,7 +31,7 @@ from pyiceberg.catalog.sql import SqlCatalog
 MODEL = "anthropic:claude-haiku-4-5"
 TEXT = "turn one\n---\nturn two"
 TEMPLATE = TextTemplate(template="Summarize: {{conversation_text}}", version="v4")
-PROMPT = ManagedPrompt(name="feedback-summary", template=TEMPLATE, source="opik")
+PROMPT = ManagedPrompt(name="feedback-summary", template=TEMPLATE, source="registry")
 SUMMARIZER = summarize.Summarizer(
     use_case=summarize.summary_use_case(MODEL), prompt=PROMPT, run_id="run-1"
 )
@@ -181,7 +181,7 @@ def test_filter_unsummarized_resubmits_when_the_text_prompt_or_model_changes() -
     edited = ManagedPrompt(
         name="feedback-summary",
         template=TextTemplate(template="Summarize briefly: {{conversation_text}}"),
-        source="opik",
+        source="registry",
     )
     stale_keys = [
         _key("an earlier version of the conversation"),

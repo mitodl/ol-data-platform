@@ -70,7 +70,7 @@ exclude=["ml_tests"]
 ml = [
   "embedding_strategies.yaml",
   "lib/courseware/common_words.txt",
-  "prompts/*.json",
+  "prompts/*.prompt.yaml",
 ]
 
 [tool.uv.sources]

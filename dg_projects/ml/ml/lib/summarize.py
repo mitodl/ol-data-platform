@@ -127,15 +127,15 @@ def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     """
     try:
         prompt = get_prompt(
-            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
+            SUMMARY_PROMPT_NAME, app=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
         )
     except LookupError:
         seed_prompt_environment(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
         prompt = get_prompt(
-            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
+            SUMMARY_PROMPT_NAME, app=OPIK_PROJECT_NAME, default=SUMMARY_DEFAULT
         )
     if (
-        prompt.source == "opik"
+        prompt.source == "registry"
         and prompt.template_hash != SUMMARY_DEFAULT.template_hash
     ):
         logger.warning(

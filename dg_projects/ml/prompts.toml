@@ -3,7 +3,7 @@
 # `ol-llm-prompts export prompts.toml`'s output with the change; it is the
 # embedded default a run falls back to when Opik cannot be reached. See
 # https://github.com/mitodl/ol-llm/blob/main/docs/prompt-promotion.md.
-project = "dagster-ml"
+app = "dagster-ml"
 exports = "ml/prompts"
 
 [prompts]
