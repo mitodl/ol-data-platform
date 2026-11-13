@@ -94,6 +94,9 @@ tables:
   namespace: public
   primary_key:
   - - id
+  # learn_ai_app (QA) excludes it. The production Airbyte connection still
+  # syncs it until the stream's field selection is changed by hand: nothing
+  # applies this list to Airbyte, and `drift` does not compare it.
   excluded_columns:
   - dj_session_key
   modeled: true
