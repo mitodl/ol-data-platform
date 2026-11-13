@@ -5,8 +5,10 @@ models:
 - name: int__mitpe__learning_resources
   description: >
     One row per MIT Professional Education feed item, course or program, with the
-    normalization MIT Learn's legacy mitpe ETL applied. Runs are in
-    int__mitpe__learning_resource_runs; program membership is in
+    feed's labels and text kept and parsed where they have a meaning of their own.
+    MIT Learn's shaping (delivery codes, duration in weeks, empty strings, location
+    only for on-site formats) is in the integrations__learn__mitpe_* views. Runs are
+    in int__mitpe__learning_resource_runs; program membership is in
     int__mitpe__program_courses.
   columns:
   - name: readable_id
@@ -15,13 +17,22 @@ models:
     - not_null
     - unique
   - name: resource_type
-    description: str, course or program. The feed's own label when present, else course
-      if the item grants a Certificate of Completion, else program.
+    description: str, course or program. The feed's own label when present (Program
+      is a program, any other label a course), else course if the item grants a Certificate
+      of Completion, else program.
     tests:
     - not_null
     - accepted_values:
         arguments:
           values: ['course', 'program']
+  - name: source_resource_type
+    description: str, the feed's own type label (e.g. Course, Program), null if the
+      item has none
+  - name: is_resource_type_inferred
+    description: boolean, true when the feed gives no type label, so resource_type
+      comes from the certificate rule
+    tests:
+    - not_null
   - name: title
     description: str, title with surrounding whitespace trimmed and HTML entities
       decoded. Programs reference courses by title, so a duplicate course title links
@@ -44,26 +55,32 @@ models:
     description: array of str, the feed's topic names with HTML entities decoded,
       null if none. Not mapped through the topic crosswalk, matching MIT Learn's legacy
       ETL; MIT Learn keeps only names that are exactly one of its topics.
-  - name: delivery
-    description: str, MIT Learn delivery code derived from the learning format - online,
-      hybrid, in_person or offline. Unrecognized formats are online.
-    tests:
-    - not_null
+  - name: learning_format
+    description: str, the feed's learning format label (e.g. Online, Live Online,
+      On Campus, Blended, In Person), null if none
   - name: location
-    description: str, the item's location for in-person and blended formats, else
-      empty
-    tests:
-    - not_null
+    description: str, the feed's location, null if none. The feed gives one for online
+      formats too.
   - name: duration
-    description: str, the feed's duration text, empty if none
-  - name: min_weeks
-    description: int, lower bound of the duration in weeks. Days count 5 to a week
-      (at least 1) and months 4 weeks. Null when the duration has no leading number
-      or no recognized unit.
-  - name: max_weeks
-    description: int, upper bound of the duration in weeks, same rules as min_weeks
+    description: str, the feed's duration text as given, null if none
+  - name: duration_min
+    description: decimal, the duration's leading number, or the lower end of a range
+      such as "9-12" or "10 to 14". Null when the text doesn't start with a number.
+  - name: duration_max
+    description: decimal, the upper end of the duration's range, else duration_min
+  - name: duration_unit
+    description: str, the unit named right after the number or range, one of hour,
+      half_day, day, week, month or semester, from English, Spanish, French and Italian
+      words. Null when there is no number or the word isn't a known unit (e.g. "Self-paced").
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['hour', 'half_day', 'day', 'week', 'month', 'semester']
+  - name: price_text
+    description: str, the feed's price text as given (e.g. "$3,600"), null if none
   - name: price
-    description: decimal, the item's price in USD, null if none
+    description: decimal, the item's price in USD when price_text is one amount, null
+      otherwise (no price, a range, or text such as "Contact us")
   - name: instructors
     description: array of str, instructor full names, lead instructors first, blanks
       dropped
@@ -71,8 +88,9 @@ models:
 - name: int__mitpe__learning_resource_runs
   description: >
     One row per run of an MIT Professional Education course or program. The feed
-    gives runs as pipe-separated lists aligned by position; a run exists only where
-    all four lists (ids, start, end and enrollment-end dates) have an entry.
+    gives runs as pipe-separated lists (ids, start, end and enrollment-end dates)
+    aligned by position. A run exists wherever any list has an entry, and a list too
+    short to reach it leaves that field null.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -92,15 +110,25 @@ models:
     description: int, 1-based position of the run in the feed's lists
     tests:
     - not_null
+  - name: is_in_all_run_lists
+    description: boolean, true when all four of the feed's run lists reach this position.
+      False means the feed's lists are misaligned and some of this run's fields are
+      missing (MIT Learn's ETL drops such runs).
+    tests:
+    - not_null
   - name: run_id
-    description: str, the feed's run id, possibly empty
+    description: str, the feed's run id, possibly empty, null if the id list doesn't
+      reach this position
   - name: start_on
     description: timestamp with time zone, midnight US Eastern of the start date
+    data_type: timestamp with time zone
   - name: end_on
     description: timestamp with time zone, midnight US Eastern of the end date
+    data_type: timestamp with time zone
   - name: enrollment_end_on
     description: timestamp with time zone, midnight US Eastern of the enrollment end
       date
+    data_type: timestamp with time zone
   - name: is_published
     description: boolean, true when the run has an id and its enrollment end (or,
       without one, its end) has not passed as of the model build. A run with neither
@@ -138,9 +166,10 @@ models:
 unit_tests:
 - name: test_int__mitpe__learning_resources_durations_and_types
   description: >
-    Duration parsing and course/program classification as MIT Learn's legacy
-    parse_resource_duration and parse_resource_type did them. Production data covers
-    only some forms, so the rest are pinned here.
+    The feed's labels are kept and its duration and price are parsed for what they
+    say: a decimal stays a decimal, a half-day is its own unit, an hour is an hour,
+    and a price range has no single price. Course/program classification follows the
+    feed's label, else the certificate rule, and says when it was inferred.
   model: int__mitpe__learning_resources
   given:
   - input: ref('stg__mitpe__api__courses')
@@ -151,7 +180,7 @@ unit_tests:
         \ of Completion|Other", course_duration: "3.5 Days", course_learning_format: "Live\
         \ Online", course_location: "Cambridge"}
     - {course_uuid: c, course_title: c, course_resource_type: "", course_certificates_raw: "",
-      course_duration: "7 half days", course_learning_format: "Blended"}
+      course_duration: "7 half days", course_learning_format: "Blended", course_location: ""}
     - {course_uuid: d, course_title: d, course_resource_type: Program, course_duration: "12\
         \ weeks"}
     - {course_uuid: e, course_title: e, course_resource_type: Course, course_duration: "2\
@@ -161,36 +190,80 @@ unit_tests:
     - {course_uuid: g, course_title: g, course_resource_type: Course, course_duration: "Self-paced"}
     - {course_uuid: h, course_title: h, course_resource_type: Course, course_duration: "10\
         \ to 14 semanas"}
-    - {course_uuid: i, course_title: i, course_resource_type: Course, course_price_raw: "$3,600"}
+    - {course_uuid: i, course_title: i, course_resource_type: Course, course_duration: "",
+      course_price_raw: "$3,600"}
     - {course_uuid: j, course_title: j, course_resource_type: Short Course, course_duration: "2\
         \ semesters", course_price_raw: "Contact us"}
     - {course_uuid: k, course_title: k, course_resource_type: Course, course_duration: "3\
         \ mes/curso"}
+    - {course_uuid: l, course_title: l, course_resource_type: Course, course_duration: "8\
+        \ Hours", course_price_raw: "$1,500-$2,000"}
+    - {course_uuid: m, course_title: m, course_resource_type: Course, course_duration: "5\
+        \ Half-Days", course_price_raw: "$2200"}
+    - {course_uuid: n, course_title: n, course_resource_type: Course, course_duration: "8-week\
+        \ course", course_price_raw: "USD 3600"}
+    - {course_uuid: o, course_title: o, course_resource_type: Course, course_duration: "9\
+        \ – 12 months", course_price_raw: "$2,500.00 per person"}
+    - {course_uuid: p, course_title: p, course_resource_type: Course, course_duration: "3\
+        \ days, online", course_price_raw: "2026 cohort: $3,000"}
   expect:
     rows:
-    - {readable_id: a, resource_type: course, title: "A & B", delivery: in_person,
-      location: "Cambridge", duration: "9-12 Mois", min_weeks: 36, max_weeks: 48,
+    - {readable_id: a, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: "A & B", learning_format: "On Campus", location: "Cambridge", duration: "9-12\
+        \ Mois", duration_min: 9, duration_max: 12, duration_unit: month, price_text: null,
       price: null}
-    - {readable_id: b, resource_type: course, title: b, delivery: online, location: "",
-      duration: "3.5 Days", min_weeks: 1, max_weeks: 1, price: null}
-    - {readable_id: c, resource_type: program, title: c, delivery: hybrid, location: "",
-      duration: "7 half days", min_weeks: 2, max_weeks: 2, price: null}
-    - {readable_id: d, resource_type: program, title: d, delivery: online, location: "",
-      duration: "12 weeks", min_weeks: 12, max_weeks: 12, price: null}
-    - {readable_id: e, resource_type: course, title: e, delivery: online, location: "",
-      duration: "2 days in person+3 live webinars", min_weeks: 1, max_weeks: 1, price: null}
-    - {readable_id: f, resource_type: course, title: f, delivery: online, location: "",
-      duration: "12 meses", min_weeks: 48, max_weeks: 48, price: null}
-    - {readable_id: g, resource_type: course, title: g, delivery: online, location: "",
-      duration: "Self-paced", min_weeks: null, max_weeks: null, price: null}
-    - {readable_id: h, resource_type: course, title: h, delivery: online, location: "",
-      duration: "10 to 14 semanas", min_weeks: 10, max_weeks: 14, price: null}
-    - {readable_id: i, resource_type: course, title: i, delivery: online, location: "",
-      duration: "", min_weeks: null, max_weeks: null, price: 3600}
-    - {readable_id: j, resource_type: course, title: j, delivery: online, location: "",
-      duration: "2 semesters", min_weeks: null, max_weeks: null, price: null}
-    - {readable_id: k, resource_type: course, title: k, delivery: online, location: "",
-      duration: "3 mes/curso", min_weeks: 12, max_weeks: 12, price: null}
+    - {readable_id: b, resource_type: course, source_resource_type: null, is_resource_type_inferred: true,
+      title: b, learning_format: "Live Online", location: "Cambridge", duration: "3.5\
+        \ Days", duration_min: 3.5, duration_max: 3.5, duration_unit: day, price_text: null,
+      price: null}
+    - {readable_id: c, resource_type: program, source_resource_type: null, is_resource_type_inferred: true,
+      title: c, learning_format: "Blended", location: null, duration: "7 half days",
+      duration_min: 7, duration_max: 7, duration_unit: half_day, price_text: null,
+      price: null}
+    - {readable_id: d, resource_type: program, source_resource_type: Program, is_resource_type_inferred: false,
+      title: d, learning_format: null, location: null, duration: "12 weeks", duration_min: 12,
+      duration_max: 12, duration_unit: week, price_text: null, price: null}
+    - {readable_id: e, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: e, learning_format: null, location: null, duration: "2 days in person+3\
+        \ live webinars", duration_min: 2, duration_max: 2, duration_unit: day, price_text: null,
+      price: null}
+    - {readable_id: f, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: f, learning_format: null, location: null, duration: "12 meses", duration_min: 12,
+      duration_max: 12, duration_unit: month, price_text: null, price: null}
+    - {readable_id: g, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: g, learning_format: null, location: null, duration: "Self-paced", duration_min: null,
+      duration_max: null, duration_unit: null, price_text: null, price: null}
+    - {readable_id: h, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: h, learning_format: null, location: null, duration: "10 to 14 semanas",
+      duration_min: 10, duration_max: 14, duration_unit: week, price_text: null, price: null}
+    - {readable_id: i, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: i, learning_format: null, location: null, duration: null, duration_min: null,
+      duration_max: null, duration_unit: null, price_text: "$3,600", price: 3600}
+    - {readable_id: j, resource_type: course, source_resource_type: "Short Course",
+      is_resource_type_inferred: false, title: j, learning_format: null, location: null,
+      duration: "2 semesters", duration_min: 2, duration_max: 2, duration_unit: semester,
+      price_text: "Contact us", price: null}
+    - {readable_id: k, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: k, learning_format: null, location: null, duration: "3 mes/curso", duration_min: 3,
+      duration_max: 3, duration_unit: month, price_text: null, price: null}
+    - {readable_id: l, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: l, learning_format: null, location: null, duration: "8 Hours", duration_min: 8,
+      duration_max: 8, duration_unit: hour, price_text: "$1,500-$2,000", price: null}
+    - {readable_id: m, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: m, learning_format: null, location: null, duration: "5 Half-Days", duration_min: 5,
+      duration_max: 5, duration_unit: half_day, price_text: "$2200", price: 2200}
+    - {readable_id: n, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: n, learning_format: null, location: null, duration: "8-week course",
+      duration_min: 8, duration_max: 8, duration_unit: week, price_text: "USD 3600",
+      price: 3600}
+    - {readable_id: o, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: o, learning_format: null, location: null, duration: "9 – 12 months",
+      duration_min: 9, duration_max: 12, duration_unit: month, price_text: "$2,500.00\
+        \ per person", price: 2500}
+    - {readable_id: p, resource_type: course, source_resource_type: Course, is_resource_type_inferred: false,
+      title: p, learning_format: null, location: null, duration: "3 days, online",
+      duration_min: 3, duration_max: 3, duration_unit: day, price_text: "2026 cohort:\
+        \ $3,000", price: null}
 
 - name: test_int__mitpe__learning_resources_urls_join_like_urljoin
   description: >
@@ -213,9 +286,10 @@ unit_tests:
 
 - name: test_int__mitpe__learning_resource_runs_zip_and_publish
   description: >
-    Runs pair up by position and stop at the shortest list, like zip(). A run is
-    published while its enrollment end (else its end) is in the future, or when it
-    has neither date, and never when its id is empty.
+    Runs pair up by position and run to the longest list; a shorter list leaves its
+    field null and the run out of is_in_all_run_lists. A run is published while its
+    enrollment end (else its end) is in the future, or when it has neither date, and
+    never when its id is empty or missing.
   model: int__mitpe__learning_resource_runs
   given:
   - input: ref('stg__mitpe__api__courses')
@@ -224,14 +298,20 @@ unit_tests:
       course_run_end_dates_raw: "2000-02-01|2099-02-01|2099-02-01||2099-02-01", course_run_enrollment_end_dates_raw: "|2000-01-15|2099-01-15||2099-01-15"}
     - {course_uuid: b, course_run_ids_raw: "r1|r2", course_run_start_dates_raw: "2099-01-01",
       course_run_end_dates_raw: "2099-02-01|2099-02-01", course_run_enrollment_end_dates_raw: "|"}
+    - {course_uuid: c, course_run_ids_raw: "r1", course_run_start_dates_raw: "2099-01-01|2099-03-01",
+      course_run_end_dates_raw: "2099-02-01|2099-04-01", course_run_enrollment_end_dates_raw: "2099-01-01|2099-03-01"}
   expect:
     rows:
-    - {readable_id: a, run_position: 1, run_id: r1, is_published: false}
-    - {readable_id: a, run_position: 2, run_id: r2, is_published: false}
-    - {readable_id: a, run_position: 3, run_id: r3, is_published: true}
-    - {readable_id: a, run_position: 4, run_id: r4, is_published: true}
-    - {readable_id: a, run_position: 5, run_id: "", is_published: false}
-    - {readable_id: b, run_position: 1, run_id: r1, is_published: true}
+    - {readable_id: a, run_position: 1, is_in_all_run_lists: true, run_id: r1, is_published: false}
+    - {readable_id: a, run_position: 2, is_in_all_run_lists: true, run_id: r2, is_published: false}
+    - {readable_id: a, run_position: 3, is_in_all_run_lists: true, run_id: r3, is_published: true}
+    - {readable_id: a, run_position: 4, is_in_all_run_lists: true, run_id: r4, is_published: true}
+    - {readable_id: a, run_position: 5, is_in_all_run_lists: true, run_id: "", is_published: false}
+    - {readable_id: b, run_position: 1, is_in_all_run_lists: true, run_id: r1, is_published: true}
+    - {readable_id: b, run_position: 2, is_in_all_run_lists: false, run_id: r2, is_published: true}
+    - {readable_id: c, run_position: 1, is_in_all_run_lists: true, run_id: r1, is_published: true}
+    - {readable_id: c, run_position: 2, is_in_all_run_lists: false, run_id: null,
+      is_published: false}
 
 - name: test_int__mitpe__program_courses_match_by_title
   description: >

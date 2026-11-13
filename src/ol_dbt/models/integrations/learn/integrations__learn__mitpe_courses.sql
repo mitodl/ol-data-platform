@@ -12,25 +12,11 @@ with resources as (
 
 , published_resources as (
     select distinct readable_id
-    from {{ ref('int__mitpe__learning_resource_runs') }}
-    where is_published
+    from {{ ref('integrations__learn__mitpe_runs') }}
 )
 
 select
-    resources.readable_id
-    , resources.title
-    , resources.url
-    , resources.image_url
-    , resources.image_alt
-    , resources.description
-    , resources.topics
-    , resources.delivery
-    , resources.location
-    , resources.duration
-    , resources.min_weeks
-    , resources.max_weeks
-    , resources.price
-    , resources.instructors
+    {{ learn_mitpe_resource_columns('resources') }}
     , 'mitpe' as etl_source
     , 'mitpe' as platform
     , 'course' as resource_type

@@ -383,3 +383,73 @@ unit_tests:
     - {readable_id: MITx+0.501x, topics: '[Education Policy, Mathematics]', instructors: '[Zed
         Last, Amy First]'}
     - {readable_id: MITx+0.502x, topics: null, instructors: null}
+
+- name: test_integrations__learn__mitpe_courses_applies_learns_rules
+  description: >
+    The MITPE Learn view reproduces MIT Learn's legacy mitpe ETL from the
+    intermediate's raw labels: delivery codes with unknown formats as online, the
+    location only for on-site formats, empty strings for missing text, and
+    parse_resource_duration's weeks (days 5 to a week, at least 1; months 4 weeks;
+    hours and half-days read as Learn reads them), and the price as the price text's
+    digits and dots, so a range's digits run together. Programs are left out, and
+    so are
+    courses with no run in integrations__learn__mitpe_runs.
+  model: integrations__learn__mitpe_courses
+  given:
+  - input: ref('int__mitpe__learning_resources')
+    rows:
+    - {readable_id: a, resource_type: course, learning_format: "On Campus", location: "Cambridge",
+      duration: "9-12 Mois", price_text: "$3,600"}
+    - {readable_id: b, resource_type: course, learning_format: "Live Online", location: "Cambridge",
+      duration: "3.5 Days"}
+    - {readable_id: c, resource_type: course, learning_format: "Blended", location: null,
+      duration: "7 half days"}
+    - {readable_id: d, resource_type: course, learning_format: null, location: null,
+      duration: null}
+    - {readable_id: e, resource_type: course, learning_format: "In Person", location: "Boston",
+      duration: "8 Hours", price_text: "$1,500-$2,000"}
+    - {readable_id: f, resource_type: course, learning_format: "Online", duration: "5\
+        \ Half-Days"}
+    - {readable_id: g, resource_type: program, learning_format: "Online", duration: "12\
+        \ weeks"}
+    - {readable_id: h, resource_type: course, learning_format: "Online", duration: "12\
+        \ weeks"}
+  - input: ref('integrations__learn__mitpe_runs')
+    rows:
+    - {readable_id: a}
+    - {readable_id: b}
+    - {readable_id: c}
+    - {readable_id: d}
+    - {readable_id: e}
+    - {readable_id: f}
+    - {readable_id: g}
+  expect:
+    rows:
+    - {readable_id: a, delivery: in_person, location: "Cambridge", duration: "9-12\
+        \ Mois", min_weeks: 36, max_weeks: 48, price: 3600}
+    - {readable_id: b, delivery: online, location: "", duration: "3.5 Days", min_weeks: 1,
+      max_weeks: 1, price: null}
+    - {readable_id: c, delivery: hybrid, location: "", duration: "7 half days", min_weeks: 2,
+      max_weeks: 2, price: null}
+    - {readable_id: d, delivery: online, location: "", duration: "", min_weeks: null,
+      max_weeks: null, price: null}
+    - {readable_id: e, delivery: in_person, location: "Boston", duration: "8 Hours",
+      min_weeks: 8, max_weeks: 8, price: 15002000}
+    - {readable_id: f, delivery: online, location: "", duration: "5 Half-Days", min_weeks: 1,
+      max_weeks: 1, price: null}
+
+- name: test_integrations__learn__mitpe_runs_drops_runs_learns_zip_never_sees
+  description: >
+    MIT Learn's ETL zips the feed's run lists, so a run that one list is too short
+    to
+    reach never reaches Learn, published or not.
+  model: integrations__learn__mitpe_runs
+  given:
+  - input: ref('int__mitpe__learning_resource_runs')
+    rows:
+    - {readable_id: a, run_position: 1, is_in_all_run_lists: true, run_id: r1, is_published: true}
+    - {readable_id: a, run_position: 2, is_in_all_run_lists: false, run_id: r2, is_published: true}
+    - {readable_id: a, run_position: 3, is_in_all_run_lists: true, run_id: r3, is_published: false}
+  expect:
+    rows:
+    - {readable_id: a, run_id: r1, run_position: 1}
