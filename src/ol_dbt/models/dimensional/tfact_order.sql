@@ -316,11 +316,11 @@ with mitxonline_orders as (
         or owf.order_updated_on >= w.max_updated_on
         or owf.order_updated_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sufk.stored_user_fk is distinct from owf.user_fk
+        or {{ is_distinct_from('sufk.stored_user_fk', 'owf.user_fk') }}
         -- a price or discount rule changed, including every row on the run that adds discount_amount
-        or sufk.stored_line_price is distinct from owf.line_price
-        or sufk.stored_discount_type_fk is distinct from owf.discount_type_fk
-        or sufk.stored_discount_amount is distinct from owf.discount_amount
+        or {{ is_distinct_from('sufk.stored_line_price', 'owf.line_price') }}
+        or {{ is_distinct_from('sufk.stored_discount_type_fk', 'owf.discount_type_fk') }}
+        or {{ is_distinct_from('sufk.stored_discount_amount', 'owf.discount_amount') }}
         or sufk.stored_has_copies
     )
     {% endif %}

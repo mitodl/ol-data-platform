@@ -218,7 +218,7 @@ with mitxonline_grades as (
         -- edxorg has no timestamps; always re-ingest (delete+insert is idempotent)
         or gwf.grade_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sufk.stored_user_fk is distinct from gwf.user_fk
+        or {{ is_distinct_from('sufk.stored_user_fk', 'gwf.user_fk') }}
         or sufk.stored_has_copies
     )
     {% endif %}

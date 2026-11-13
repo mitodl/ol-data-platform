@@ -849,6 +849,23 @@
 
 
 {#
+    is_distinct_from: null-safe inequality. StarRocks has no IS DISTINCT FROM (a
+    syntax error on 4.1.7); its null-safe equality is <=>.
+#}
+{% macro is_distinct_from(left, right) -%}
+    {{ adapter.dispatch('is_distinct_from', 'open_learning')(left, right) }}
+{%- endmacro %}
+
+{% macro default__is_distinct_from(left, right) -%}
+    {{ left }} is distinct from {{ right }}
+{%- endmacro %}
+
+{% macro starrocks__is_distinct_from(left, right) -%}
+    not ({{ left }} <=> {{ right }})
+{%- endmacro %}
+
+
+{#
     array_filter_nonempty: drop NULL and empty-string elements from a varchar array,
     keeping the order of the rest.
 #}
