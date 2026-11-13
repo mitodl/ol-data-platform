@@ -16,7 +16,7 @@ with source as (
         , body as comment_body_string
         , html_body as comment_html_body
         , plain_body as comment_plain_body
-        , "timestamp" as comment_unix_timestamp
+        , {{ adapter.quote("timestamp") }} as comment_unix_timestamp
         , {{ null_if_empty_array('attachments') }} as comment_attachments
         , nullif({{ json_query_string('via', "'$.channel'") }}, 'null') as comment_source_channel
         , nullif({{ json_query_string('via', "'$.source.from.address'") }}, 'null') as comment_source_email

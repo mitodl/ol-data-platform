@@ -8,7 +8,7 @@ with source as (
 , renamed as (
     select
         id as flexiblepricetier_id
-        , "current" as flexiblepricetier_is_current
+        , {{ adapter.quote("current") }} as flexiblepricetier_is_current
         , discount_id
         , courseware_object_id
         , income_threshold_usd as flexiblepricetier_income_threshold_usd

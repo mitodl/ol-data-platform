@@ -36,7 +36,7 @@ with source as (
         , if("deferred" = true, 'deferred', null) as enrollment_status  -- noqa: ST10
 
         , if(email = '(blank)', null, email) as user_email
-        , if("function" = 'No Response', null, "function") as user_job_function  -- noqa: ST10
+        , if({{ adapter.quote("function") }} = 'No Response', null, {{ adapter.quote("function") }}) as user_job_function  -- noqa: ST10
         , if(job_title in ('No Response', '(Blank)'), null, job_title) as user_job_title
         , if(industry in ('No Response', '(blank)'), null, industry) as user_industry
         , if(residential_address = 'NO RESPONSE', null, residential_address) as user_address_street
