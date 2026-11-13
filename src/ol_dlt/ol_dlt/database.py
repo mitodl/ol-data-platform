@@ -117,11 +117,10 @@ class DatabaseTable:
             ``DEFAULT_CHUNK_SIZE``. A batch is held in memory whole, so the run
             pod's limit bounds rows times average row width.
         optional: The source database may lack this table, and the load skips
-            it with a warning rather than failing. For tables a deployment
-            dropped, e.g. QA's mitx edxapp database has none of the
-            ``assessment_ai*`` tables production keeps (empty). The skipped
-            table gets no raw table, and its asset still reports a
-            materialization, without a row count.
+            it with a warning rather than failing. For a table one deployment
+            dropped and another keeps. The skipped table gets no raw table,
+            and its asset still reports a materialization, without a row
+            count.
     """
 
     name: str
