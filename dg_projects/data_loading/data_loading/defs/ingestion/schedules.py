@@ -90,6 +90,9 @@ google_ads_ingest_schedule = dg.ScheduleDefinition(
     cron_schedule="0 10 * * *",
     execution_timezone="Etc/UTC",
     default_status=dg.DefaultScheduleStatus.STOPPED,
+    # Fails a hung run instead of the instance's 2-day limit. A backfill saves
+    # its cursors per batch, so the next run resumes where this one stopped.
+    tags={"dagster/max_runtime": str(4 * 60 * 60)},
 )
 
 # Sloan Executive Education, ahead of the lakehouse's non_airbyte_staging_daily
