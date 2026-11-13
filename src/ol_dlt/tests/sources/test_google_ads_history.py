@@ -48,7 +48,9 @@ def _landing_zone(root: Path, report: str = REPORT) -> Path:
 
 def _rows(root: Path, table: str) -> list[dict[str, Any]]:
     source = history.google_ads_history_source(
-        files=lambda: history.landing_zone_files(fsspec.filesystem("file"), str(root))
+        files=lambda name: history.landing_zone_files(
+            name, fsspec.filesystem("file"), str(root)
+        )
     )
     return list(source.resources[table])
 
@@ -82,3 +84,8 @@ def test_a_changed_report_header_fails_the_load(tmp_path: Path) -> None:
     report = REPORT.replace("Ad group\t", "")
     with pytest.raises(Exception, match="has the header"):
         _rows(_landing_zone(tmp_path, report), history.REPORT_TABLE)
+
+
+def test_a_missing_landing_zone_fails_the_load(tmp_path: Path) -> None:
+    with pytest.raises(Exception, match="No Change history report.csv"):
+        _rows(tmp_path, history.REPORT_TABLE)

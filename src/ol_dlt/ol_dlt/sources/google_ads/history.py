@@ -24,7 +24,6 @@ replaced on every load, so a rerun reloads the files rather than adding rows.
 """
 
 import csv
-import functools
 import io
 import json
 import logging
@@ -54,8 +53,8 @@ REPORT_COLUMNS = ("Date & time", "User", "Campaign", "Ad group", "Changes")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 MASKED_EMAIL = "<email>"
 
-# (course, file name, source URL, content) of every change history file.
-Files = Callable[[], Iterator[tuple[str, str, str, bytes]]]
+# (course, source URL, content) of every file with the given name.
+Files = Callable[[str], Iterator[tuple[str, str, bytes]]]
 
 
 class ChangeHistoryReportHeaderError(Exception):
@@ -104,21 +103,29 @@ def read_api_changes(content: bytes, _url: str) -> Iterator[dict[str, Any]]:
 
 
 def landing_zone_files(
+    name: str,
     fs: Any = None,  # noqa: ANN401
     root: str = LANDING_ZONE,
-) -> Iterator[tuple[str, str, str, bytes]]:
-    """Yield every change history file under ``root``, one folder per course.
+) -> Iterator[tuple[str, str, bytes]]:
+    """Yield each course's file called ``name`` under ``root``.
 
     Args:
+        name: The file name to read from every course folder.
         fs: An fsspec filesystem; defaults to ``s3fs``, which refreshes IRSA
             credentials itself (see ol_dlt.sources.edxorg_s3).
         root: The folder holding one subfolder per course.
+
+    Raises:
+        FileNotFoundError: No course folder holds the file, which would
+            otherwise load nothing and report success.
     """
     fs = fs or s3fs.S3FileSystem()
-    for name in (REPORT_FILE, API_FILE):
-        for path in sorted(fs.glob(f"{root}/*/{name}")):
-            course = path.rstrip("/").split("/")[-2]
-            yield course, name, f"s3://{path}", fs.cat_file(path)
+    paths = sorted(fs.glob(f"{root}/*/{name}"))
+    if not paths:
+        msg = f"No {name} under {root}"
+        raise FileNotFoundError(msg)
+    for path in paths:
+        yield path.rstrip("/").split("/")[-2], f"s3://{path}", fs.cat_file(path)
 
 
 @dlt.source(name="google_ads_history")
@@ -129,13 +136,11 @@ def google_ads_history_source(
     """Load ad_opt_v2's change history files.
 
     Args:
-        files: Returns ``(course, file name, source URL, content)`` for each
-            file; the landing zone by default.
+        files: Returns ``(course, source URL, content)`` for each file with
+            the given name; the landing zone by default.
         table_format: ``native`` or ``iceberg``; defaults to the active profile's.
     """
     resolved_format = table_format or config.active_table_format()
-    # Both tables read from the same listing, so read the files once.
-    all_files = functools.cache(lambda: list(files()))
 
     def _table(name: str, file_name: str, read: Any, key: str) -> Any:  # noqa: ANN401
         @dlt.resource(
@@ -150,9 +155,7 @@ def google_ads_history_source(
             schema_contract=config.JSON_API_SCHEMA_CONTRACT,
         )
         def rows() -> Iterator[dict[str, Any]]:
-            for course, found, url, content in all_files():
-                if found != file_name:
-                    continue
+            for course, url, content in files(file_name):
                 count = 0
                 for row in read(content, url):
                     count += 1

@@ -515,7 +515,7 @@ def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
     assert tags["dagster/max_runtime"] == str(11 * 60 * 60)
 
 
-def test_google_ads_schedule_selects_every_google_ads_table() -> None:
+def test_google_ads_schedule_selects_every_google_ads_api_table() -> None:
     schedule = _REPO.get_schedule_def("google_ads_ingest_daily_schedule")
     scheduled = {
         key.to_user_string()
@@ -524,9 +524,10 @@ def test_google_ads_schedule_selects_every_google_ads_table() -> None:
     google_ads_keys = {
         key.to_user_string()
         for key in _REPO.assets_defs_by_key
-        if key.path[-1].startswith("raw__google_ads__")
+        if key.path[-1].startswith("raw__google_ads__api__")
     }
     assert "ol_warehouse_raw_data/raw__google_ads__api__change_events" in scheduled
+    # The change history files load by hand.
     assert scheduled == google_ads_keys
 
 
