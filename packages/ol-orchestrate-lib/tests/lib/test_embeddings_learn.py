@@ -14,6 +14,7 @@ from ol_orchestrate.lib.embeddings.documents import Document
 from ol_orchestrate.lib.embeddings.learn import (
     LEARN_V1_CONTENT_FILES,
     ContentFileDocument,
+    ContentFilePointMapper,
     chunk_and_embed,
     content_file_point_key,
     point_id,
@@ -25,6 +26,7 @@ from ol_orchestrate.lib.embeddings.models import (
     EmbeddingBatch,
     EmbeddingModelSpec,
 )
+from ol_orchestrate.lib.embeddings.pipeline import chunk_documents
 from pydantic_ai.embeddings.result import EmbedInputType
 from qdrant_client import models
 
@@ -115,6 +117,8 @@ def _learn_document(document: ContentFileDocument) -> dict[str, Any]:
 
 def _content_file(**overrides: Any) -> ContentFileDocument:
     fields: dict[str, Any] = {
+        "etl_source": "mitxonline",
+        "source_path": "course/html/intro.xml",
         "key": f"{RUN}/block-v1:MITxT+18.01.1x+3T2026+type@html+block@intro",
         "content": PLAIN_TEXT,
         "resource_readable_id": "course-v1:MITxT+18.01.1x",
@@ -221,6 +225,30 @@ def test_chunk_and_embed_matches_learn(document: ContentFileDocument) -> None:
     assert embedder.calls == [
         list(dict.fromkeys(chunk for _, chunk in expected_chunks(document)))
     ]
+
+
+def test_a_content_file_is_keyed_by_its_source_path() -> None:
+    document = _content_file().to_document()
+
+    assert document.doc_key == f"mitxonline/{RUN}/course/html/intro.xml"
+    assert _content_file(run_readable_id=None).to_document().doc_key == (
+        "mitxonline//course/html/intro.xml"
+    )
+
+
+def test_a_learn_key_change_moves_the_point_id_not_the_doc_key() -> None:
+    """Learn's key is the point id's input alone, so changing it re-keys no chunk."""
+    before, after = (
+        _content_file(key=key).to_document()
+        for key in ("block-v1:a+type@html+block@b:c", "block-v1:a+type@html+block@b_c")
+    )
+    mapper = ContentFilePointMapper()
+    ((_, before_row),) = chunk_documents([before], LEARN_V1_CONTENT_FILES.chunker)[:1]
+    ((_, after_row),) = chunk_documents([after], LEARN_V1_CONTENT_FILES.chunker)[:1]
+
+    assert before.doc_key == after.doc_key
+    assert before_row.chunk_key == after_row.chunk_key
+    assert mapper.point_id(before, before_row) != mapper.point_id(after, after_row)
 
 
 def _learn_chunks(text: str, *, markdown: bool) -> list[tuple[int, str]]:

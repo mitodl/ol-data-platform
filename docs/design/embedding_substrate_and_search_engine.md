@@ -90,10 +90,10 @@ All in the `integrations` layer's schema, Dagster-written (the embedding call is
 
 | column | notes |
 |---|---|
-| `doc_key` | Learn's point key string, so ids can be compared with Qdrant point by point: `{platform}.{readable_id}`, `{platform}.{resource_readable_id}.{run_readable_id}.{key}`, `{platform}.{readable_id}.course_metadata`, topic uuid (`docs/learn_embedding_config.md`, "Point ids") |
+| `doc_key` | the document's identity in its source, not in a consumer: for a content file `{etl_source}/{run_readable_id}/{source_path}`, where the source path is the file's path in the Open edX course export or the S3 prefix of its OCW `data.json` (`content_file_doc_key`). A topic, which is a Learn entity, keeps Learn's `topic_uuid`. Learn's point ids are not the key but a projection of it, the `point_id` column of the chunk tables, computed by `ContentFilePointMapper` (`docs/learn_embedding_config.md`, "Point ids"), so parity with Qdrant is still checked point by point and a change to Learn's key format (e.g. #3323's for colon url_names) moves `point_id` alone |
 | `doc_kind` | `learning_resource`, `content_file`, `resource_metadata`, `topic`, `feedback_conversation` |
 | `builder_id` | which rendering produced `text` (e.g. `learn_resource_markdown_v1`, `content_file_raw_v1`) |
-| `text` | the embedding input, after visibility rules; for content files this is `integrations__learn__content_files.content`, never an earlier layer (#2812) |
+| `text` | the embedding input, after visibility rules; for content files this is `integrations__learn__content_files.content` (#2812), so the corpus is the runs Learn lists. Because the key is the source path and not Learn's, widening the corpus to an earlier layer would add documents without re-keying the ones stored |
 | `text_checksum` | md5 of `text`; Learn's content-file `checksum` where the builder is `content_file_raw_v1`, so parity is checkable |
 | `source_relation`, `source_key` | the dbt model and row this came from |
 | `etl_source`, `platform_code` | partition columns |
@@ -107,11 +107,12 @@ This is a dbt model per `doc_kind` (`int__embedding__learn_content_files` etc.) 
 |---|---|
 | `chunk_key` | `uuid5(doc_key || chunker_id || chunk_number)` |
 | `doc_key`, `doc_kind` | |
+| `point_id` | the chunk's Qdrant point id in Learn's collection, the projection the parity checks and the Qdrant projection join on |
 | `chunker_id` | derived from the chunker's parameters, e.g. `token:cl100k_base:512:51:md4` (Learn's content files), `token:cl100k_base:1024:100`, `whole:cl100k_base:8191` |
 | `chunk_number` | gaps allowed, as Learn's are |
 | `chunk_text`, `chunk_checksum` | |
 
-Chunking is cheap and deterministic, so it is recomputed when `text_checksum` changes and never when it does not. A chunker is a pydantic model of its parameters, and `chunker_id` is built from them, so changing a parameter is a new id rather than a silent change to existing rows.
+Chunking is cheap and deterministic, so it is recomputed when `text_checksum` changes and never when it does not. Re-keying is the same: a change to the document key moves the chunk asset's code version, every partition is re-chunked, and the vector run reuses each stored vector by `(vector_space, input_checksum)`, so it sends no text to a model. A chunker is a pydantic model of its parameters, and `chunker_id` is built from them, so changing a parameter is a new id rather than a silent change to existing rows.
 
 `embedding_vectors`: one row per chunk per strategy.
 
@@ -125,7 +126,7 @@ Chunking is cheap and deterministic, so it is recomputed when `text_checksum` ch
 | `input_checksum` | MD5 of the exact text sent to the model: the chunk after the strategy's context template. A mismatch with the current text means re-embed |
 | `embedded_at`, `run_id` | `run_id` is the Dagster run, added by the asset |
 
-Upsert key `(chunk_key, strategy_id)`. The key is the strategy and not the model because a context template changes the vector without changing the model or the chunk. A new strategy adds rows; it never overwrites (the mistake recorded in `tk-feedback-embeddings-the-per-run-model-dim-overri-1b99d9`).
+Upsert key `(chunk_key, strategy_id)`. A partition's vector run drops the stored rows of serving and candidate strategies whose chunk is no longer in the partition, so re-keying chunks leaves them no orphan vectors; a retired strategy keeps its rows as they are. The key is the strategy and not the model because a context template changes the vector without changing the model or the chunk. A new strategy adds rows; it never overwrites (the mistake recorded in `tk-feedback-embeddings-the-per-run-model-dim-overri-1b99d9`).
 
 Embedding cost is bounded by the input checksum instead of a separate cache table. Before calling the model, the asset looks up the vectors already stored for `(input_checksum, vector_space)` and sends only the texts with none. The same OLX file appears in every run of a course and Learn embeds it once per run; the platform pays once per distinct text, and two strategies that send the same text into the same space share the vector. A model is a space of its own unless its spec declares one, so vectors of two providers are mixed only where a strategy says they are the same.
 
@@ -165,7 +166,7 @@ Embedding cost is bounded by the input checksum instead of a separate cache tabl
 
 - `embedding_documents` and `embedding_chunks`: dbt for documents; a Python asset per `doc_kind` for chunks, partitioned by `etl_source` (content files additionally by course run, as the Cohort 5 task already says), with `code_version` tied to the chunker parameters.
 - `embedding_vectors`: partitioned by `(strategy_id, etl_source)` with `strategy_id` a dynamic partition so a new strategy is a YAML row, not a code change. Reads chunks, passes the stored vectors for the strategy's model as `known_vectors`, embeds the rest through `EmbeddingsResource`, writes with the Iceberg upsert.
-- `qdrant_collection_projection`: partitioned by strategy, for strategies with `role in (serving, candidate)` and a collection set. Reads vectors plus the payload view, builds `PointStruct`s with Learn's UUID5 ids and `(dense vector name, sparse vector name)` from the registry, upserts in Learn's batch sizes, and deletes points whose `doc_key` left the documents table, _except_ for `QDRANT_RETAINED_SOURCES` where Learn keeps points after unpublish (`learn_embedding_config.md`, "When Learn embeds"). Asset check: point count per collection within 1% of the vector row count for that strategy.
+- `qdrant_collection_projection`: partitioned by strategy, for strategies with `role in (serving, candidate)` and a collection set. Reads vectors plus the payload view, builds `PointStruct`s with Learn's UUID5 ids and `(dense vector name, sparse vector name)` from the registry, upserts in Learn's batch sizes, and deletes the point ids it projected last time that are not in this run's desired set, _except_ for `QDRANT_RETAINED_SOURCES` where Learn keeps points after unpublish (`learn_embedding_config.md`, "When Learn embeds"). It records the ids it projected in its own table, `qdrant_projected_points` (`strategy_id`, `etl_source`, `point_id`, `projected_at`), replaced for the strategy once the upsert and delete succeed, so a failed run deletes the same ids on the next one. The chunk rows are not the record: a Learn-key change keeps a chunk's `doc_key` and changes its `point_id`, and a source-path move changes the `doc_key` and can keep the `point_id`, so a delete rule read from the current chunk rows either leaves the old point live or deletes a point that is still wanted. Asset check: point count per collection within 1% of the vector row count for that strategy.
 - Payload: for `content_files` and `topics` the payload fields are all in the integrations models or derivable (the missing ones, `summary`, `flashcards`, `run_title`, `course_number`, `content_feature_type`, `platform`/`offered_by` objects, are listed in `learn_embedding_config.md`); a `payload_builder` per `doc_kind` is part of the strategy's builder. For `resources` the payload stays Learn's until open decision 2 is resolved.
 
 ### Costs and sizes

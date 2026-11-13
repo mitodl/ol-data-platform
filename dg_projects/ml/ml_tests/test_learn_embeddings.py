@@ -27,6 +27,7 @@ from dagster import (
     materialize,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
+from ml.assets import learn_embeddings as assets
 from ml.assets.learn_embedding_checks import (
     check_result,
     content_file_vectors_match_learn,
@@ -197,6 +198,11 @@ def fake_embeddings() -> FakeEmbeddings:
 
 
 # ------------------------------------------------------------------------ fixtures
+def source_path(key: str) -> str:
+    """Return an Open edX export path for a test file, unlike its Learn key."""
+    return f"course/html/{key.replace(':', '_')}.xml"
+
+
 def content_files(**contents: str | None) -> pl.DataFrame:
     return pl.DataFrame(
         [
@@ -204,6 +210,7 @@ def content_files(**contents: str | None) -> pl.DataFrame:
                 "etl_source": "mitxonline",
                 "run_readable_id": RUN,
                 "key": key,
+                "source_path": source_path(key),
                 "content": content,
                 "checksum": md5_hex(content) if content else None,
                 "file_type": None,
@@ -298,6 +305,7 @@ def test_strategy_file_ships_with_the_package():
 
 # -------------------------------------------------------------------- chunk keys
 def test_content_file_chunks_carry_learns_point_ids(tables):
+    """The document is keyed by the export path, the point id by Learn's key."""
     load_sources(tables, **{"block-v1:a": "Limits and derivatives.", "empty": None})
 
     result = build_content_files(tables)
@@ -306,7 +314,7 @@ def test_content_file_chunks_carry_learns_point_ids(tables):
     chunks = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]]
     assert chunks.height == 1
     row = chunks.row(0, named=True)
-    doc_key = f"mitxonline.{RESOURCE}.{RUN}.block-v1:a"
+    doc_key = f"mitxonline/{RUN}/course/html/block-v1_a.xml"
     assert row["doc_key"] == doc_key
     assert row["point_id"] == learn_point_id(
         "mitxonline", RESOURCE, RUN, "block-v1:a", "0"
@@ -350,10 +358,13 @@ def test_ocw_chunks_take_the_course_as_resource(tables):
     run = "3a6b5c0f1e2d4c5b8a7f6e5d4c3b2a10"  # pragma: allowlist secret
     course = "18.01+fall_2006"
     key = "courses/18-01-single-variable-calculus-fall-2006/resources/notes/"
+    # The OCW model has no source_path: its key is the S3 prefix of data.json.
     tables["integrations__learn__ocw_content_files"] = content_files(
         **{key: "Lecture notes."}
     ).with_columns(
-        pl.lit("ocw").alias("etl_source"), pl.lit(run).alias("run_readable_id")
+        pl.lit("ocw").alias("etl_source"),
+        pl.lit(run).alias("run_readable_id"),
+        pl.lit(None, pl.String).alias("source_path"),
     )
     tables["integrations__learn__ocw_courses"] = pl.DataFrame(
         [{"readable_id": course, "run_id": run}]
@@ -371,6 +382,7 @@ def test_ocw_chunks_take_the_course_as_resource(tables):
     assert result.success
     row = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].row(0, named=True)
     assert row["point_id"] == learn_point_id("ocw", course, run, key, "0")
+    assert row["doc_key"] == f"ocw/{run}/{key}"
     assert row["source_relation"] == "integrations__learn__ocw_content_files"
 
 
@@ -442,6 +454,20 @@ def test_a_platform_change_moves_the_text_version(tables):
     load_xpro(tables, "simplilearn")
 
     after = content_file_text_versions("xpro")["text_version"].to_list()
+
+    assert len(before) == len(after) == 1
+    assert before != after
+
+
+def test_a_source_path_change_moves_the_text_version(tables):
+    """A file that keeps its Learn key and text but moves in the export re-keys."""
+    load_sources(tables, **{"block-v1:a": "Text."})
+    before = content_file_text_versions("mitxonline")["text_version"].to_list()
+    tables["integrations__learn__content_files"] = tables[
+        "integrations__learn__content_files"
+    ].with_columns(pl.lit("course/html/moved.xml").alias("source_path"))
+
+    after = content_file_text_versions("mitxonline")["text_version"].to_list()
 
     assert len(before) == len(after) == 1
     assert before != after
@@ -715,6 +741,116 @@ def test_candidate_vectors_survive_a_serving_run(tables):
         "exp_candidate",
         "learn_v1_content_files",
     ]
+
+
+def register_strategy(monkeypatch, strategy_id: str, role: str) -> None:
+    """Add a copy of the serving content-file strategy under another id and role."""
+    monkeypatch.setitem(
+        strategies(),
+        strategy_id,
+        strategies()["learn_v1_content_files"].model_copy(
+            update={"strategy_id": strategy_id, "role": role}
+        ),
+    )
+
+
+def test_a_candidate_vector_of_a_removed_file_is_dropped(tables, monkeypatch):
+    register_strategy(monkeypatch, "exp_candidate", "candidate")
+    load_sources(tables, **{"block-v1:a": "Text.", "block-v1:b": "Gone soon."})
+    dagster_instance = instance()
+    build_content_files(tables, dagster_instance)
+    candidate = tables[CONTENT_FILE_VECTORS_KEY.path[-1]].with_columns(
+        pl.lit("exp_candidate").alias("strategy_id")
+    )
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = pl.concat(
+        [tables[CONTENT_FILE_VECTORS_KEY.path[-1]], candidate]
+    )
+
+    load_sources(tables, **{"block-v1:a": "Text."})
+    assert build_content_files(tables, dagster_instance).success
+
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert set(vectors["input_checksum"]) == {md5_hex("Text.")}
+    assert sorted(vectors["strategy_id"]) == [
+        "exp_candidate",
+        "learn_v1_content_files",
+    ]
+
+
+def test_rekeying_from_learns_doc_key_embeds_nothing(tables, calls, monkeypatch):
+    """Chunks stored under Learn's point key move to the source key for free.
+
+    The partition as it was before the re-key: chunks keyed by
+    ``{platform}.{resource}.{run}.{key}``, with a serving and a candidate vector
+    each. Re-chunking gives every chunk a new key, the vector run finds each text
+    stored, and no row is left under an old key.
+    """
+    register_strategy(monkeypatch, "exp_candidate", "candidate")
+    texts = {"block-v1:a": "First file.", "block-v1:b": "Second."}
+    load_sources(tables, **texts)
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    chunker_id = LEARN_V1_CONTENT_FILES.chunker.chunker_id
+    old_keys = {
+        chunk_key(f"mitxonline/{RUN}/{source_path(key)}", chunker_id, 0): chunk_key(
+            f"mitxonline.{RESOURCE}.{RUN}.{key}", chunker_id, 0
+        )
+        for key in texts
+    }
+    new_vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    old_vectors = new_vectors.with_columns(pl.col("chunk_key").replace(old_keys))
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = pl.concat(
+        [
+            old_vectors,
+            old_vectors.with_columns(pl.lit("exp_candidate").alias("strategy_id")),
+        ]
+    )
+    tables[CONTENT_FILE_CHUNKS_KEY.path[-1]] = tables[
+        CONTENT_FILE_CHUNKS_KEY.path[-1]
+    ].with_columns(pl.col("chunk_key").replace(old_keys))
+    calls.clear()
+
+    assert build_content_files(tables, dagster_instance).success
+
+    assert calls == []
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert set(vectors["chunk_key"]) == set(old_keys)
+    assert vectors["strategy_id"].to_list() == ["learn_v1_content_files"] * 2
+    assert (
+        vectors.sort("input_checksum")["vector"].to_list()
+        == new_vectors.sort("input_checksum")["vector"].to_list()
+    )
+
+
+def test_a_retired_strategy_keeps_its_vectors(tables, monkeypatch):
+    register_strategy(monkeypatch, "exp_retired", "retired")
+    load_sources(tables, **{"block-v1:a": "Text."})
+    dagster_instance = instance()
+    build_content_files(tables, dagster_instance)
+    retired = tables[CONTENT_FILE_VECTORS_KEY.path[-1]].with_columns(
+        pl.lit("exp_retired").alias("strategy_id"),
+        pl.lit("chunk-under-an-old-key").alias("chunk_key"),
+    )
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = pl.concat(
+        [tables[CONTENT_FILE_VECTORS_KEY.path[-1]], retired]
+    )
+
+    assert build_content_files(tables, dagster_instance).success
+
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert vectors.filter(pl.col("strategy_id") == "exp_retired").equals(retired)
+
+
+def test_the_key_scheme_moves_every_text_version(tables, monkeypatch):
+    """OCW's source path is its key, so only the scheme moves its version."""
+    load_sources(tables, **{"block-v1:a": "Text."})
+    before = content_file_text_versions("mitxonline")["text_version"].to_list()
+    monkeypatch.setattr(assets, "CONTENT_FILE_DOC_KEY_VERSION", "next")
+
+    after = content_file_text_versions("mitxonline")["text_version"].to_list()
+
+    assert len(before) == len(after) == 1
+    assert before != after
 
 
 # ------------------------------------------------------------------------ sensor
