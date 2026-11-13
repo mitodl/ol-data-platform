@@ -1138,14 +1138,10 @@ wheels = [
 [[package]]
 name = "dbt-starrocks"
 version = "1.12.2"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/blarghmatey/dbt-starrocks?rev=bb06a19b6030fe89a5dd889001c4e8f888e9e299#bb06a19b6030fe89a5dd889001c4e8f888e9e299" }
 dependencies = [
     { name = "dbt-core" },
     { name = "mysql-connector-python" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/f4/d45973727911b22e64660e30428a9842c2748e112255743ce52e4ba00876/dbt_starrocks-1.12.2.tar.gz", hash = "sha256:eccd2272fe1a2486382b832b737daea3773f08e98ceb160ad1f26d7c6ccf5d10", size = 36781, upload-time = "2026-09-15T17:33:00.359Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/72/5163d68d8bfff8e25d40fa67756179f17949e405b937a1de2be388e5b0a7/dbt_starrocks-1.12.2-py3-none-any.whl", hash = "sha256:5a73b1e3ec501e3c1cfcf3795e11ecb14b1f3ef2cb4c735753f37e2c60282f9e", size = 49821, upload-time = "2026-09-15T17:32:59.139Z" },
 ]
 
 [[package]]
@@ -3026,7 +3022,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.42" },
     { name = "cyclopts", specifier = "~=5.4.0" },
     { name = "dbt-duckdb", specifier = ">=1.10.0" },
-    { name = "dbt-starrocks", specifier = ">=1.9.0" },
+    { name = "dbt-starrocks", git = "https://github.com/blarghmatey/dbt-starrocks?rev=bb06a19b6030fe89a5dd889001c4e8f888e9e299" },
     { name = "dbt-trino", specifier = ">=1.10.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },

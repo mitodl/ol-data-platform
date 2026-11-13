@@ -86,6 +86,10 @@ dev = [
 [tool.uv.sources]
 ol-dbt-cli = {workspace = true}
 ol-orchestrate-lib = { workspace = true }
+# dbt-starrocks 1.12.2 plus https://github.com/StarRocks/dbt-starrocks/pull/138,
+# which passes openid_token_file to mysql-connector-python so the starrocks_qa
+# target can log in through Keycloak. Drop this once a release carries it.
+dbt-starrocks = { git = "https://github.com/blarghmatey/dbt-starrocks", rev = "bb06a19b6030fe89a5dd889001c4e8f888e9e299" }  # pragma: allowlist secret
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
 # and is managed as a workspace member package
