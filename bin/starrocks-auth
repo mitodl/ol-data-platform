@@ -40,7 +40,7 @@ NLB is internal to the data VPC.
 
   # Shell session with OIDC token exported (e.g. for DBeaver / DataGrip via JDBC)
   eval "$(starrocks-auth --env qa --port-forward --output env)"
-  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST,
+  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST, STARROCKS_<ENV>_HOST,
          STARROCKS_ID_TOKEN_FILE and STARROCKS_<ENV>_ID_TOKEN_FILE
 
   Both token-file variables name the id_token written to
@@ -91,8 +91,9 @@ StarRocks has two disjoint authentication paths:
        it uses HTTP Basic Auth exclusively.
 
   - Native-auth service accounts (dbt, Vault dynamic users): use --mode vault.
-    dbt profiles must reference STARROCKS_USER / STARROCKS_PASSWORD env vars,
-    not an OIDC token. Arrow Flight SQL also only supports native-password auth.
+    Their dbt profiles (e.g. starrocks_qa_vault) reference STARROCKS_USER /
+    STARROCKS_PASSWORD, not an OIDC token; starrocks_qa is the OIDC target for
+    humans. Arrow Flight SQL also only supports native-password auth.
 """
 
 import argparse
@@ -369,7 +370,10 @@ def _try_refresh(
             req, timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS
         ) as resp:
             token_response = json.loads(resp.read())
-    except (urllib.error.HTTPError, urllib.error.URLError):
+    # OSError covers HTTPError and URLError, and also the bare TimeoutError or
+    # ConnectionResetError that resp.read() raises unwrapped. Any of them means
+    # "no silent refresh", and the caller falls back to a browser login.
+    except (OSError, json.JSONDecodeError):
         return None
 
     access_token = token_response["access_token"]
@@ -678,12 +682,21 @@ def _id_token_env_var(env_name: str) -> str:
     return f"STARROCKS_{env_name.upper()}_ID_TOKEN_FILE"
 
 
+def _host_env_var(env_name: str) -> str:
+    """Name the variable that carries one environment's host, like the token's."""
+    return f"STARROCKS_{env_name.upper()}_HOST"
+
+
+def _token_seconds_left(token: str) -> float:
+    return _decode_jwt_payload(token)["exp"] - time.time()
+
+
 def _cached_id_token_seconds_left(env_name: str) -> float:
     cached = _load_cache(env_name)
     id_token = cached.get("id_token") if cached else None
     if not id_token:
         return 0.0
-    return _decode_jwt_payload(id_token)["exp"] - time.time()
+    return _token_seconds_left(id_token)
 
 
 def _ensure_fresh_id_token(issuer: str, env_name: str) -> None:
@@ -737,27 +750,32 @@ def _keep_id_token_file_fresh(issuer: str, env_name: str) -> None:
     token and dbt's next connection after it expires fails.
     """
 
+    token_file = _id_token_file_path(env_name)
+
     def refresh_once() -> bool:
-        cached = _load_cache(env_name) or {}
-        refresh_token = cached.get("refresh_token")
-        if not (
-            refresh_token
-            and cached.get("refresh_expires_at", 0) > time.time()
-            and _try_refresh(issuer, env_name, refresh_token)
-            and _cached_id_token_seconds_left(env_name) > 0
-        ):
-            return False
+        # Judge by the file dbt reads, not the cache: another starrocks-auth run
+        # (e.g. --output mysql) can refresh the cache without rewriting the file.
+        if _token_seconds_left(token_file.read_text()) >= _ID_TOKEN_MIN_SECONDS:
+            return True
+        if _cached_id_token_seconds_left(env_name) < _ID_TOKEN_MIN_SECONDS:
+            cached = _load_cache(env_name) or {}
+            refresh_token = cached.get("refresh_token")
+            if not (
+                refresh_token
+                and cached.get("refresh_expires_at", 0) > time.time()
+                and _try_refresh(issuer, env_name, refresh_token)
+                and _cached_id_token_seconds_left(env_name) > 0
+            ):
+                return False
         _write_id_token_file(env_name)
         return True
 
     warned = False
     while True:
         time.sleep(_ID_TOKEN_REFRESH_CHECK_SECONDS)
-        if _cached_id_token_seconds_left(env_name) >= _ID_TOKEN_MIN_SECONDS:
-            continue
         # A daemon thread that dies takes every later refresh with it, so a
-        # failed attempt (a reset connection, a truncated response) is reported
-        # and retried on the next tick instead.
+        # failed attempt (a reset connection, a truncated response, a missing
+        # file) is reported and retried on the next tick instead.
         try:
             refreshed = refresh_once()
             reason = "the refresh token was refused or has expired"
@@ -789,6 +807,7 @@ def _output_env(  # noqa: PLR0913
     # still runs as command substitution when eval'd.
     print(f"export STARROCKS_USER={shlex.quote(username)}")  # noqa: T201
     print(f"export STARROCKS_HOST={shlex.quote(host)}")  # noqa: T201
+    print(f"export {_host_env_var(env_name)}={shlex.quote(host)}")  # noqa: T201
     if password is not None:
         # Vault dynamic credentials — native-password auth (dbt / service accounts)
         print(f"export STARROCKS_PASSWORD={shlex.quote(password)}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
@@ -814,14 +833,19 @@ def _output_exec(  # noqa: PLR0913
 ) -> None:
     if not cmd:
         sys.exit("--output exec requires a command after --")
-    # Drop every environment's token path inherited from an earlier `eval`, so
-    # the child sees only the token for the environment this run logged in to.
+    # Drop every environment's token path and host inherited from an earlier
+    # `eval`, so the child sees only those of the environment this run logged
+    # in to.
     env = {
         key: value
         for key, value in os.environ.items()
-        if not re.fullmatch(r"STARROCKS_\w*ID_TOKEN_FILE", key)
+        if not re.fullmatch(r"STARROCKS_(\w*ID_TOKEN_FILE|\w+_HOST)", key)
     }
-    env |= {"STARROCKS_USER": username, "STARROCKS_HOST": host}
+    env |= {
+        "STARROCKS_USER": username,
+        "STARROCKS_HOST": host,
+        _host_env_var(env_name): host,
+    }
     if password is not None:
         env["STARROCKS_PASSWORD"] = password
     else:

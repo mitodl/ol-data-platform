@@ -89,16 +89,17 @@ open_learning:
         s3_secret_access_key: '{{ env_var("AWS_SECRET_ACCESS_KEY", "") }}'
     # QA as yourself, through your Keycloak login:
     #   bin/starrocks-auth --env qa --port-forward --output exec -- dbt ... --target starrocks_qa
-    # The helper sets STARROCKS_USER, STARROCKS_HOST and STARROCKS_QA_ID_TOKEN_FILE,
-    # and keeps the token file fresh while dbt runs. The token variable is
-    # QA's own, so a production login can't be used here by mistake.
+    # The helper sets STARROCKS_USER, STARROCKS_QA_HOST and STARROCKS_QA_ID_TOKEN_FILE,
+    # and keeps the token file fresh while dbt runs. The host and token
+    # variables are QA's own, so a production login can't be used here by
+    # mistake.
     # The OIDC plugin sends the token only over TLS, which the QA FE serves.
     # use_pure: the C extension's OIDC plugin aborts dbt (malloc(): unaligned
     # tcache chunk detected) when threads log in concurrently; the pure-Python
     # plugin does not.
     starrocks_qa:
       type: starrocks
-      host: '{{ env_var("DBT_STARROCKS_HOST", env_var("STARROCKS_HOST", "lakehouse.qa.starrocks.ol.mit.edu"))
+      host: '{{ env_var("DBT_STARROCKS_HOST", env_var("STARROCKS_QA_HOST", "lakehouse.qa.starrocks.ol.mit.edu"))
         }}'
       port: 9030
       database: default_catalog
