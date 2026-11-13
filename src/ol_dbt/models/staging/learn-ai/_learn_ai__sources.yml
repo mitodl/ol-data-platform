@@ -53,8 +53,6 @@ sources:
     - name: object_id
       description: str, course ID, video transcript asset ID, or edX module ID depending
         on the agent type.
-    - name: dj_session_key
-      description: str, Django session key for the chat session.
     - name: created_at
       description: timestamp, date and time when the record was created.
     - name: updated_at
