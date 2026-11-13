@@ -759,7 +759,7 @@ class TestKeysetTables:
         assert committed.read_text() == expected, "Run `ol-dbt inventory keysets --write`."
 
     def test_the_real_inventory_selects_bucket_1(self) -> None:
-        """124 tables in ten units, the count the 826b18 decision doc measured."""
+        """The 124 tables the 826b18 decision doc measured, plus courses_paidcourserun."""
         selected = keyset_tables(load_units(REAL_INVENTORY))
         assert sorted(selected) == [
             "learn_ai/app_postgres",
@@ -773,7 +773,7 @@ class TestKeysetTables:
             "xpro/app_postgres",
             "xpro/mysql",
         ]
-        assert sum(len(rows) for rows in selected.values()) == 124  # noqa: PLR2004
+        assert sum(len(rows) for rows in selected.values()) == 125  # noqa: PLR2004
 
     def test_learner_activity_tables_get_no_keyset(self) -> None:
         units = load_units(REAL_INVENTORY)

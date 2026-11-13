@@ -264,6 +264,11 @@ models:
           severity: warn
   - name: line_price
     description: Price of the resolved order line, used as unit_price downstream
+  - name: deferred_from_courserun_readable_id
+    description: The course run the resolved order was bought for, when a deferral
+      moved the order to this enrollment's run. Null otherwise. Models that key orders
+      on the line's run, e.g. marts__combined_course_enrollment_detail and marts__combined__orders,
+      hold the order under this run and not the enrollment's.
   - name: program_order_id
     description: Order ID of the program purchase that covered this enrollment. Null
       when no program purchase covered it. For xPRO, this is order_id when the resolved
@@ -3089,9 +3094,281 @@ unit_tests:
   - input: ref('int__mitxonline__program_course_run_orders')
     rows:
     - {line_id: 201, program_order_id: 8500}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows: []
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows: []
   expect:
     rows:
     - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001, program_discount_fk: "D_B2B"}
     - {enrollment_key: "XPRO_COURSERUN", program_order_id: null, program_discount_fk: null}
     - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500, program_discount_fk: null}
     - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null, program_discount_fk: null}
+- name: test_tfact_enrollment_order_moves_a_deferred_order
+  description: >
+    A deferral moves the paid course run record to the new run and leaves the order's
+    line on the old one. The order follows the record, so the deferred-to enrollment
+    holds it and the deferred-from enrollment, audit in the app, does not. An enrollment
+    the app itself kept verified keeps the order as well. tfact_enrollment's mode
+    does not
+    decide this: SECOND_ORDER is verified there by a second order, is audit in the
+    app, and
+    loses the moved order even though it is the newer one. An order that was never
+    deferred
+    stays on its enrollment.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "DEFERRED_FROM", enrollment_id: "1", enrollment_type: "course",
+      order_id: null, user_fk: "U1", courserun_fk: "CR1", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "audit"}
+    - {enrollment_key: "DEFERRED_TO", enrollment_id: "2", enrollment_type: "course",
+      order_id: null, user_fk: "U1", courserun_fk: "CR2", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "NOT_DEFERRED", enrollment_id: "3", enrollment_type: "course",
+      order_id: null, user_fk: "U2", courserun_fk: "CR1", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "LEFT_VERIFIED", enrollment_id: "4", enrollment_type: "course",
+      order_id: null, user_fk: "U3", courserun_fk: "CR1", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "LEFT_VERIFIED_TO", enrollment_id: "5", enrollment_type: "course",
+      order_id: null, user_fk: "U3", courserun_fk: "CR2", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "SECOND_ORDER", enrollment_id: "6", enrollment_type: "course",
+      order_id: null, user_fk: "U4", courserun_fk: "CR1", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "SECOND_ORDER_TO", enrollment_id: "7", enrollment_type: "course",
+      order_id: null, user_fk: "U4", courserun_fk: "CR2", program_fk: null, platform_fk: "P_MITXONLINE",
+      platform: "mitxonline", enrollment_mode: "verified"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_CR1", product_type: "course run", courserun_fk: "CR1", program_fk: null,
+      platform_fk: "P_MITXONLINE", is_current: true}
+    - {product_pk: "PROD_CR2", product_type: "course run", courserun_fk: "CR2", program_fk: null,
+      platform_fk: "P_MITXONLINE", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK1", order_id: 9001, line_id: "1", user_fk: "U1", product_fk: "PROD_CR1",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK2", order_id: 9002, line_id: "2", user_fk: "U2", product_fk: "PROD_CR1",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK3", order_id: 9003, line_id: "3", user_fk: "U3", product_fk: "PROD_CR1",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK4", order_id: 9004, line_id: "4", user_fk: "U4", product_fk: "PROD_CR1",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled",
+      order_updated_on: "2024-03-01"}
+    - {order_key: "OK5", order_id: 9005, line_id: "5", user_fk: "U4", product_fk: "PROD_CR1",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled",
+      order_updated_on: "2024-01-01"}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "CR1", source_id: 101, courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      platform: "mitxonline", is_current: true}
+    - {courserun_pk: "CR2", source_id: 102, courserun_readable_id: "course-v1:MITxT+14.100x+2T2024",
+      platform: "mitxonline", is_current: true}
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows:
+    - {order_id: 9001, courserun_id: 101}
+    - {order_id: 9003, courserun_id: 101}
+    - {order_id: 9004, courserun_id: 101}
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 9001, line_id: 1, courserun_id: 101}
+    - {order_id: 9002, line_id: 2, courserun_id: 101}
+    - {order_id: 9003, line_id: 3, courserun_id: 101}
+    - {order_id: 9004, line_id: 4, courserun_id: 101}
+    - {order_id: 9005, line_id: 5, courserun_id: 101}
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows:
+    - {courserunenrollment_id: 1, courserunenrollment_enrollment_mode: audit}
+    - {courserunenrollment_id: 2, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 3, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 4, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 5, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 6, courserunenrollment_enrollment_mode: audit}
+    - {courserunenrollment_id: 7, courserunenrollment_enrollment_mode: verified}
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows:
+    - {order_id: 9001, courserun_id: 102}
+    - {order_id: 9002, courserun_id: 101}
+    - {order_id: 9003, courserun_id: 102}
+    - {order_id: 9004, courserun_id: 102}
+    - {order_id: 9005, courserun_id: 101}
+  expect:
+    rows:
+    - {enrollment_key: "DEFERRED_TO", order_id: 9001, order_state: "fulfilled", deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+    - {enrollment_key: "NOT_DEFERRED", order_id: 9002, order_state: "fulfilled", deferred_from_courserun_readable_id: null}
+    - {enrollment_key: "LEFT_VERIFIED", order_id: 9003, order_state: "fulfilled",
+      deferred_from_courserun_readable_id: null}
+    - {enrollment_key: "LEFT_VERIFIED_TO", order_id: 9003, order_state: "fulfilled",
+      deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+    - {enrollment_key: "SECOND_ORDER", order_id: 9005, order_state: "fulfilled", deferred_from_courserun_readable_id: null}
+    - {enrollment_key: "SECOND_ORDER_TO", order_id: 9004, order_state: "fulfilled",
+      deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+- name: test_tfact_enrollment_order_takes_a_deferred_order_from_the_moved_line
+  description: >
+    On a two-course order, deferring one course leaves the other line paying for its
+    own
+    run, so the deferred enrollment takes the line that moved and not the other line.
+    When
+    both lines move, each enrollment takes the line for its own course. A forced deferral
+    to another course still takes the moved line.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "A_NEW", order_id: null, user_fk: "U1", courserun_fk: "A2",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "B_OWN", order_id: null, user_fk: "U1", courserun_fk: "B1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "X_NEW", order_id: null, user_fk: "U2", courserun_fk: "X2",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "F_NEW", order_id: null, user_fk: "U3", courserun_fk: "Z1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "G_OWN", order_id: null, user_fk: "U3", courserun_fk: "G1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "Y_NEW", order_id: null, user_fk: "U2", courserun_fk: "Y2",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_A1", product_type: "course run", courserun_fk: "A1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_B1", product_type: "course run", courserun_fk: "B1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_X1", product_type: "course run", courserun_fk: "X1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_F1", product_type: "course run", courserun_fk: "F1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_G1", product_type: "course run", courserun_fk: "G1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_Y1", product_type: "course run", courserun_fk: "Y1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK10", order_id: 9100, line_id: "10", user_fk: "U1", product_fk: "PROD_A1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 100}
+    - {order_key: "OK20", order_id: 9100, line_id: "20", user_fk: "U1", product_fk: "PROD_B1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 200}
+    - {order_key: "OK30", order_id: 9200, line_id: "30", user_fk: "U2", product_fk: "PROD_X1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 300}
+    - {order_key: "OK40", order_id: 9200, line_id: "40", user_fk: "U2", product_fk: "PROD_Y1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 400}
+    - {order_key: "OK50", order_id: 9300, line_id: "50", user_fk: "U3", product_fk: "PROD_F1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 500}
+    - {order_key: "OK60", order_id: 9300, line_id: "60", user_fk: "U3", product_fk: "PROD_G1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", line_price: 600}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "A1", source_id: 1, course_fk: "CA", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "A2", source_id: 2, course_fk: "CA", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "B1", source_id: 3, course_fk: "CB", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "X1", source_id: 4, course_fk: "CX", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "X2", source_id: 5, course_fk: "CX", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "Y1", source_id: 6, course_fk: "CY", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "Y2", source_id: 7, course_fk: "CY", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "F1", source_id: 8, course_fk: "CF", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "Z1", source_id: 9, course_fk: "CZ", platform: "mitxonline",
+      is_current: true}
+    - {courserun_pk: "G1", source_id: 10, course_fk: "CG", platform: "mitxonline",
+      is_current: true}
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows:
+    - {order_id: 9100, courserun_id: 1}
+    - {order_id: 9200, courserun_id: 4}
+    - {order_id: 9200, courserun_id: 6}
+    - {order_id: 9300, courserun_id: 8}
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 9100, line_id: 10, courserun_id: 1}
+    - {order_id: 9100, line_id: 20, courserun_id: 3}
+    - {order_id: 9200, line_id: 30, courserun_id: 4}
+    - {order_id: 9200, line_id: 40, courserun_id: 6}
+    - {order_id: 9300, line_id: 50, courserun_id: 8}
+    - {order_id: 9300, line_id: 60, courserun_id: 10}
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows:
+    - {order_id: 9100, courserun_id: 2}
+    - {order_id: 9100, courserun_id: 3}
+    - {order_id: 9200, courserun_id: 5}
+    - {order_id: 9200, courserun_id: 7}
+    - {order_id: 9300, courserun_id: 9}
+    - {order_id: 9300, courserun_id: 10}
+  expect:
+    rows:
+    - {enrollment_key: "A_NEW", order_fk: "OK10", line_price: 100}
+    - {enrollment_key: "B_OWN", order_fk: "OK20", line_price: 200}
+    - {enrollment_key: "X_NEW", order_fk: "OK30", line_price: 300}
+    - {enrollment_key: "Y_NEW", order_fk: "OK40", line_price: 400}
+    - {enrollment_key: "F_NEW", order_fk: "OK50", line_price: 500}
+    - {enrollment_key: "G_OWN", order_fk: "OK60", line_price: 600}
+- name: test_tfact_enrollment_order_finds_a_deferred_origin_without_a_product_run
+  description: >
+    dim_product has no run for some products whose run exists. A moved order on one
+    of
+    those still reports the run it was bought for, because that comes from the moved
+    line.
+    An order on its own run, also with no product run, resolves with no origin.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "MOVED", order_id: null, user_fk: "U1", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "OWN_RUN", order_id: null, user_fk: "U2", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_NO_RUN", product_type: "course run", courserun_fk: null,
+      program_fk: null, platform_fk: "P_MXO", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK1", order_id: 9001, line_id: "1", user_fk: "U1", product_fk: "PROD_NO_RUN",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK2", order_id: 9002, line_id: "2", user_fk: "U2", product_fk: "PROD_NO_RUN",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled"}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "CR1", source_id: 101, courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      platform: "mitxonline", is_current: true}
+    - {courserun_pk: "CR2", source_id: 102, courserun_readable_id: "course-v1:MITxT+14.100x+2T2024",
+      platform: "mitxonline", is_current: true}
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows:
+    - {order_id: 9001, courserun_id: 101}
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 9001, line_id: 1, courserun_id: 101}
+    - {order_id: 9002, line_id: 2, courserun_id: 101}
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows:
+    - {order_id: 9001, courserun_id: 102}
+    - {order_id: 9002, courserun_id: 101}
+  expect:
+    rows:
+    - {enrollment_key: "MOVED", order_id: 9001, deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+    - {enrollment_key: "OWN_RUN", order_id: 9002, deferred_from_courserun_readable_id: null}

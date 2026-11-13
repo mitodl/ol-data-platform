@@ -207,6 +207,10 @@
         "key": "id"
       },
       {
+        "table": "courses_paidcourserun",
+        "key": "id"
+      },
+      {
         "table": "courses_programcertificate",
         "key": "id"
       },
