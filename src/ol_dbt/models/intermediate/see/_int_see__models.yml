@@ -3,8 +3,12 @@ version: 2
 
 models:
 - name: int__see__course_runs
-  description: One row per Sloan Executive Education course offering, normalized as
-    MIT Learn's legacy Sloan ETL normalized a run (transform_run in learning_resources/etl/sloan.py).
+  description: >
+    One row per Sloan Executive Education course offering, with Sloan's labels, codes
+    and text kept and the duration and time commitment parsed for what they say. MIT
+    Learn's shaping of a run (transform_run in learning_resources/etl/sloan.py) is
+    in
+    integrations__learn__see_runs.
   columns:
   - name: readable_id
     description: str, the offering's course id
@@ -17,48 +21,76 @@ models:
   - name: run_api_position
     description: bigint, zero-based position of the offering in the API response
   - name: title
-    description: str, the course title
+    description: str, the course title, null if Sloan has no such course
   - name: url
     description: str, the course URL
   - name: start_on
     description: timestamp with time zone, midnight US Eastern of the start date
+    data_type: timestamp with time zone
   - name: end_on
     description: timestamp with time zone, midnight US Eastern of the end date
-  - name: delivery
-    description: str, MIT Learn delivery code (see the learn_delivery macro)
-  - name: availability
-    description: str, anytime for an online on-demand offering, else dated
-  - name: pace
-    description: str, self_paced for an online on-demand offering, else instructor_paced
+    data_type: timestamp with time zone
+  - name: delivery_label
+    description: str, Sloan's delivery label (e.g. Online, In Person, Blended)
+  - name: format_label
+    description: str, Sloan's format label (e.g. Synchronous, Asynchronous (Date based),
+      Asynchronous (On-Demand)), null if none
+  - name: is_on_demand
+    description: bool, true for an online offering whose format is Asynchronous (On-Demand)
+    tests:
+    - not_null
   - name: is_synchronous
-    description: bool, whether the offering has a synchronous format
+    description: bool, whether the offering has a synchronous format. In-person and
+      blended offerings do; otherwise a format that isn't asynchronous does.
   - name: is_asynchronous
-    description: bool, whether the offering has an asynchronous format
-  - name: format
-    description: array(str), synchronous and/or asynchronous, synchronous first
+    description: bool, whether the offering has an asynchronous format. Blended offerings
+      do, in-person ones don't; otherwise an asynchronous format does.
   - name: location
-    description: str, the offering's location, empty for online offerings
+    description: str, the offering's location as Sloan gives it, null if none. Sloan
+      gives one for online offerings too.
   - name: price
     description: decimal(12,2), the offering's price
   - name: currency
-    description: str, ISO 4217 code of the price, USD when Sloan gives none or an
-      unknown code
+    description: str, Sloan's currency code for the price as given, null if none
+  - name: is_known_currency
+    description: bool, true when currency is an ISO 4217 code (iso_4217_currencies),
+      false when it is missing or unknown
+    tests:
+    - not_null
   - name: instructors
     description: array(str), faculty full names
   - name: continuing_ed_credits
     description: str, decimal continuing-education credits
   - name: duration
-    description: str, free-text duration, empty when Sloan gives none
-  - name: min_weeks
-    description: int, lower bound of the duration in weeks
-  - name: max_weeks
-    description: int, upper bound of the duration in weeks
+    description: str, free-text duration as Sloan gives it, null if none
+  - name: duration_min
+    description: decimal, the duration's leading number, or the lower end of a range
+      such as "9-12". Null when the text doesn't start with a number.
+  - name: duration_max
+    description: decimal, the upper end of the duration's range, else duration_min
+  - name: duration_unit
+    description: str, the unit named right after the number or range, one of hour,
+      half_day, day, week, month or semester. Null when there is no number or the
+      word isn't a known unit.
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['hour', 'half_day', 'day', 'week', 'month', 'semester']
   - name: time_commitment
-    description: str, free-text time commitment, empty when Sloan gives none
-  - name: min_weekly_hours
-    description: int, first number of the time commitment
-  - name: max_weekly_hours
-    description: int, number after the first run of non-digits, else the first
+    description: str, free-text time commitment as Sloan gives it, null if none
+  - name: time_commitment_min_hours
+    description: decimal, the hours at the start of the time commitment, or the lower
+      end of a range such as "6-8 hours/week". Null when it doesn't start with a number
+      of hours (e.g. "3 one-week modules").
+  - name: time_commitment_max_hours
+    description: decimal, the upper end of the hours range, else time_commitment_min_hours
+  - name: time_commitment_hours_per
+    description: str, week or day when the hours are followed by "/week", "/day" or
+      "per week|day", else null (e.g. "6 hours", "8 hours, 5 days/week")
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['week', 'day']
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -67,12 +99,10 @@ models:
         - run_id
 - name: int__see__courses
   description: >
-    One row per Sloan Executive Education course MIT Learn's legacy Sloan ETL would
-    load (transform_courses), i.e. a course with a URL and at least one offering.
-  config:
-    meta:
-      qa_branches:
-      - mitlearn/app_postgres
+    One row per Sloan Executive Education course, including those MIT Learn's legacy
+    Sloan ETL skipped (no URL, or no offerings), which has_url and has_offerings mark.
+    MIT Learn's shaping of a course (transform_course) is in
+    integrations__learn__see_courses.
   columns:
   - name: readable_id
     description: str, Sloan's Salesforce course id
@@ -87,19 +117,145 @@ models:
     description: str, absolute URL of the course page
   - name: image_url
     description: str, absolute URL of the course image
-  - name: image_alt
-    description: str, the course title, which MIT Learn used as alt text
   - name: sloan_certification_type
     description: str, Sloan's certificate track; MIT Learn does not read it
   - name: updated_on
     description: str, ISO 8601 time Sloan last modified the course
-  - name: topics
-    description: array(str), MIT Learn topic names the Sloan topic resolves to
-  - name: delivery
-    description: array(str), distinct delivery codes of the course's runs
-  - name: pace
-    description: array(str), distinct pace codes of the course's runs
-  - name: format
-    description: array(str), distinct format codes of the course's runs
-  - name: continuing_ed_credits
-    description: str, credits of the course's first offering in API order
+  - name: topic_raw
+    description: >
+      str, Sloan's "Category: Topic" label as given (e.g. "Technology: AI/Machine
+      Learning"), null if none
+  - name: topic
+    description: str, the part of topic_raw after its last colon, trimmed, null if
+      none
+  - name: has_url
+    description: bool, true when the course has a non-empty URL
+    tests:
+    - not_null
+  - name: has_offerings
+    description: bool, true when Sloan lists at least one offering of the course
+    tests:
+    - not_null
+
+unit_tests:
+- name: test_int__see__course_runs_keeps_labels_and_parses_text
+  description: >
+    The offering keeps Sloan's delivery and format labels, location and currency code,
+    with a flag for an unknown code. The duration keeps its own unit, so "6 hours/day"
+    is 6 hours, not weeks. The time commitment's hours and period are read only when
+    the text names them, so "8 hours, 5 days/week" is 8 hours with no period rather
+    than 8 to 5, and "3 one-week modules" has no hours. A hyphen before the unit
+    ("3-day"), punctuation after it ("6 weeks, live online", "6 days(on campus)")
+    and
+    an en dash in a range ("6–8 weeks", "6–8 hours/week") all parse. An offering whose
+    course Sloan doesn't list is kept.
+  model: int__see__course_runs
+  given:
+  - input: ref('stg__see__api__course_offerings')
+    rows:
+    - {course_id: c1, courseoffering_title: r1, courseoffering_delivery: Online, courseoffering_format: Synchronous,
+      courseoffering_location: Boston, courseoffering_currency: CHF, courseoffering_duration: "6\
+        \ hours/day", courseoffering_time_commitment: "8 hours, 5 days/week"}
+    - {course_id: c1, courseoffering_title: r2, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: '', courseoffering_currency: ZZZ,
+      courseoffering_duration: "30 Days", courseoffering_time_commitment: "5 - 7 Hours/week"}
+    - {course_id: c1, courseoffering_title: r3, courseoffering_delivery: Blended,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: null,
+      courseoffering_duration: "3 Months", courseoffering_time_commitment: "3 one-week\
+        \ modules"}
+    - {course_id: c2, courseoffering_title: r4, courseoffering_delivery: Online, courseoffering_format: Asynchronous
+        (On-Demand), courseoffering_currency: '', courseoffering_duration: '', courseoffering_time_commitment: "4\
+        \ hours/ day + 1-2 hours on team project assignment"}
+    - {course_id: c1, courseoffering_title: r5, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "3-day", courseoffering_time_commitment: "6–8 hours/week"}
+    - {course_id: c1, courseoffering_title: r6, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6 weeks, live online", courseoffering_time_commitment: "4\
+        \ – 6 hours per week"}
+    - {course_id: c1, courseoffering_title: r7, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6–8 weeks", courseoffering_time_commitment: null}
+    - {course_id: c1, courseoffering_title: r8, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6 days(on campus)", courseoffering_time_commitment: null}
+  - input: ref('stg__see__api__courses')
+    rows:
+    - {course_id: c1, course_title: Course one, course_url: 'https://executive.mit.edu/c1'}
+  - input: ref('iso_4217_currencies')
+    rows:
+    - {currency_code: CHF, currency_name: Swiss Franc}
+    - {currency_code: USD, currency_name: US Dollar}
+  expect:
+    rows:
+    - {readable_id: c1, run_id: r1, title: Course one, delivery_label: Online, format_label: Synchronous,
+      is_on_demand: false, is_synchronous: true, is_asynchronous: false, location: Boston,
+      currency: CHF, is_known_currency: true, duration: "6 hours/day", duration_min: 6,
+      duration_max: 6, duration_unit: hour, time_commitment: "8 hours, 5 days/week",
+      time_commitment_min_hours: 8, time_commitment_max_hours: 8, time_commitment_hours_per: null}
+    - {readable_id: c1, run_id: r2, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: ZZZ, is_known_currency: false, duration: "30 Days",
+      duration_min: 30, duration_max: 30, duration_unit: day, time_commitment: "5\
+        \ - 7 Hours/week", time_commitment_min_hours: 5, time_commitment_max_hours: 7,
+      time_commitment_hours_per: week}
+    - {readable_id: c1, run_id: r3, title: Course one, delivery_label: Blended, format_label: null,
+      is_on_demand: false, is_synchronous: true, is_asynchronous: true, location: null,
+      currency: null, is_known_currency: false, duration: "3 Months", duration_min: 3,
+      duration_max: 3, duration_unit: month, time_commitment: "3 one-week modules",
+      time_commitment_min_hours: null, time_commitment_max_hours: null, time_commitment_hours_per: null}
+    - {readable_id: c2, run_id: r4, title: null, delivery_label: Online, format_label: Asynchronous
+        (On-Demand), is_on_demand: true, is_synchronous: false, is_asynchronous: true,
+      location: null, currency: null, is_known_currency: false, duration: null, duration_min: null,
+      duration_max: null, duration_unit: null, time_commitment: "4 hours/ day + 1-2\
+        \ hours on team project assignment", time_commitment_min_hours: 4, time_commitment_max_hours: 4,
+      time_commitment_hours_per: day}
+    - {readable_id: c1, run_id: r5, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "3-day", duration_min: 3,
+      duration_max: 3, duration_unit: day, time_commitment: "6–8 hours/week", time_commitment_min_hours: 6,
+      time_commitment_max_hours: 8, time_commitment_hours_per: week}
+    - {readable_id: c1, run_id: r6, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6 weeks,\
+        \ live online", duration_min: 6, duration_max: 6, duration_unit: week, time_commitment: "4\
+        \ – 6 hours per week", time_commitment_min_hours: 4, time_commitment_max_hours: 6,
+      time_commitment_hours_per: week}
+    - {readable_id: c1, run_id: r7, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6–8 weeks",
+      duration_min: 6, duration_max: 8, duration_unit: week, time_commitment: null,
+      time_commitment_min_hours: null, time_commitment_max_hours: null, time_commitment_hours_per: null}
+    - {readable_id: c1, run_id: r8, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6 days(on\
+        \ campus)", duration_min: 6, duration_max: 6, duration_unit: day, time_commitment: null,
+      time_commitment_min_hours: null, time_commitment_max_hours: null, time_commitment_hours_per: null}
+
+- name: test_int__see__courses_keeps_every_course
+  description: >
+    A course with no URL or no offerings stays, flagged. The topic is the part of
+    Sloan's label after the last colon, with the label kept as given.
+  model: int__see__courses
+  given:
+  - input: ref('stg__see__api__courses')
+    rows:
+    - {course_id: c1, course_url: 'https://executive.mit.edu/c1', course_topic_raw: "Business:\
+        \ Other Business"}
+    - {course_id: c2, course_url: null, course_topic_raw: null}
+    - {course_id: c3, course_url: '', course_topic_raw: "Technology: AI/Machine Learning"}
+    - {course_id: c4, course_url: 'https://executive.mit.edu/c4', course_topic_raw: "A:\
+        \ B: C "}
+  - input: ref('stg__see__api__course_offerings')
+    rows:
+    - {course_id: c1, courseoffering_title: r1}
+    - {course_id: c1, courseoffering_title: r2}
+    - {course_id: c3, courseoffering_title: r3}
+  expect:
+    rows:
+    - {readable_id: c1, topic_raw: "Business: Other Business", topic: Other Business,
+      has_url: true, has_offerings: true}
+    - {readable_id: c2, topic_raw: null, topic: null, has_url: false, has_offerings: false}
+    - {readable_id: c3, topic_raw: "Technology: AI/Machine Learning", topic: AI/Machine
+        Learning, has_url: false, has_offerings: true}
+    - {readable_id: c4, topic_raw: "A: B: C ", topic: C, has_url: true, has_offerings: false}
