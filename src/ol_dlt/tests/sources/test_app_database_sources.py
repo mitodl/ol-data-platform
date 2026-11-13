@@ -147,6 +147,16 @@ def test_password_hash_is_excluded(spec: DatabaseSourceSpec, table_name: str) ->
     assert "password" in users.excluded_columns
 
 
+def test_learn_ai_session_key_is_excluded() -> None:
+    """Learn AI gives an anonymous chat to whoever presents its Django session key."""
+    chatsession = next(
+        table
+        for table in learn_ai_app.LEARN_AI_APP_SPEC.tables
+        if table.name == "ai_chatbots_userchatsession"
+    )
+    assert "dj_session_key" in chatsession.excluded_columns
+
+
 @pytest.mark.parametrize(PARAMS, SOURCES)
 def test_only_the_retired_ai_grading_tables_are_optional(
     build_source: Callable[[], Any],
