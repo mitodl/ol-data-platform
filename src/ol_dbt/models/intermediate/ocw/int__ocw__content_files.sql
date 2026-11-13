@@ -63,6 +63,7 @@ with content as (
         , coalesce(coursecontent_video_transcript_resources, 'null') not in ('null', '""', '{}', 'false', '0')
         and {{ try_parse_json_array('coursecontent_video_transcript_resources') }} is null
             as has_unreadable_transcripts
+        , {{ try_parse_json_array('coursecontent_video_transcript_resources') }} as video_transcript_entries
     from content
     where coursecontent_kind = 'resource'
 )
@@ -79,9 +80,12 @@ with content as (
         , {{ json_extract_scalar('transcript.element', "'$.file'") }} as transcript_file
         , {{ json_extract_scalar('transcript.element', "'$.language'") }} as transcript_language
     from resources
-    cross join
-        unnest({{ try_parse_json_array('resources.coursecontent_video_transcript_resources') }})  -- noqa: PRS
-        with ordinality as transcript (element, idx)
+    cross join {{ unnest_with_ordinality(
+        'resources.video_transcript_entries'
+        , 'transcript'
+        , 'element'
+        , 'idx'
+    ) }}  -- noqa: PRS
     where
         resources.is_video
         and resources.is_current_format

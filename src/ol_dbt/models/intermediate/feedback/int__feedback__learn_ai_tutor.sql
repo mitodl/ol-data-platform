@@ -39,26 +39,31 @@ with chatbot as (
     from {{ ref('int__learn_ai__tutorbot') }}
 )
 
+, tutorbot_history as (
+    select
+        *
+        , {{ json_extract_json_array('chat_json', "'$.chat_history'") }} as chat_history
+    from tutorbot
+)
+
 , tutorbot_flatten as (
     select
-        tutorbot.tutorbotoutput_id
-        , tutorbot.chatsession_thread_id
-        , tutorbot.chatsession_agent
-        , tutorbot.chatsession_title
-        , tutorbot.edx_module_id
-        , tutorbot.courserun_readable_id
-        , tutorbot.user_global_id
-        , tutorbot.chatsession_created_on
-        , tutorbot.chatsession_updated_on
+        tutorbot_history.tutorbotoutput_id
+        , tutorbot_history.chatsession_thread_id
+        , tutorbot_history.chatsession_agent
+        , tutorbot_history.chatsession_title
+        , tutorbot_history.edx_module_id
+        , tutorbot_history.courserun_readable_id
+        , tutorbot_history.user_global_id
+        , tutorbot_history.chatsession_created_on
+        , tutorbot_history.chatsession_updated_on
         , t.idx as message_index  -- noqa: RF01
         , case
             when {{ json_extract_scalar('t.element', "'$.type'") }} = 'HumanMessage'  -- noqa: RF01
                 then {{ json_extract_scalar('t.element', "'$.content'") }}  -- noqa: RF01
         end as human_message
-    from tutorbot
-    cross join
-        unnest({{ json_extract_json_array('tutorbot.chat_json', "'$.chat_history'") }})  -- noqa: PRS
-        with ordinality as t(element, idx)
+    from tutorbot_history
+    cross join {{ unnest_with_ordinality('tutorbot_history.chat_history', 't', 'element', 'idx') }}  -- noqa: PRS
 )
 
 , tutorbot_deduplicated as (
