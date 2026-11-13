@@ -17,7 +17,7 @@ with source as (
         , html_body as comment_html_body
         , plain_body as comment_plain_body
         , "timestamp" as comment_unix_timestamp
-        , nullif(attachments, array[]) as comment_attachments
+        , {{ null_if_empty_array('attachments') }} as comment_attachments
         , nullif({{ json_query_string('via', "'$.channel'") }}, 'null') as comment_source_channel
         , nullif({{ json_query_string('via', "'$.source.from.address'") }}, 'null') as comment_source_email
         , nullif({{ json_query_string('via', "'$.source.rel'") }}, 'null') as comment_source_rel

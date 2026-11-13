@@ -33,11 +33,11 @@ with source as (
         , due_at as ticket_due_at
         , custom_fields as ticket_custom_fields
         , generated_timestamp as ticket_unix_timestamp
-        , nullif(tags, array[]) as ticket_tags
-        , nullif(email_cc_ids, array[]) as ticket_email_cc_user_ids
-        , nullif(follower_ids, array[]) as ticket_follower_user_ids
-        , nullif(collaborator_ids, array[]) as ticket_collaborator_user_ids
-        , nullif(sharing_agreement_ids, array[]) as sharing_agreement_ids
+        , {{ null_if_empty_array('tags') }} as ticket_tags
+        , {{ null_if_empty_array('email_cc_ids') }} as ticket_email_cc_user_ids
+        , {{ null_if_empty_array('follower_ids') }} as ticket_follower_user_ids
+        , {{ null_if_empty_array('collaborator_ids') }} as ticket_collaborator_user_ids
+        , {{ null_if_empty_array('sharing_agreement_ids') }} as sharing_agreement_ids
         , nullif({{ json_query_string('satisfaction_rating', "'$.score'") }}, 'null')
             as ticket_satisfaction_rating_score
         , nullif({{ json_query_string('satisfaction_rating', "'$.comment'") }}, 'null')

@@ -849,6 +849,16 @@
 
 
 {#
+    null_if_empty_array: the array, or null when it has no elements. Replaces
+    Trino's nullif(x, array[]), which StarRocks cannot parse, for an array of any
+    element type.
+#}
+{% macro null_if_empty_array(array_expr) -%}
+    case when {{ array_length(array_expr) }} = 0 then null else {{ array_expr }} end
+{%- endmacro %}
+
+
+{#
     array_filter_nonempty: drop NULL and empty-string elements from a varchar array,
     keeping the order of the rest.
 #}
