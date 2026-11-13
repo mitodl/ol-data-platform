@@ -4,19 +4,17 @@ version: 2
 models:
 - name: int__openedx__content_files
   description: >
-    One row per file of an MITx Online or xPRO course run that MIT Learn loads as
-    a
-    ContentFile, derived as Learn's process_olx_path does: OLX block XML from
-    course_xml_blocks plus the document and transcript text the openedx location
-    extracts. Files with no text are skipped, as Learn skips them; a failed
-    extraction keeps its row with null content. Files Learn's excluded_olx_paths
-    drops (staff-only, unreachable tabs and about pages, course settings, asset
-    manifests, unreferenced static files) are dropped, and
-    a run the exclusion check has not covered yet has no rows.
+    One row per file of an MITx Online or xPRO course run's export that has text
+    to read: OLX block XML from course_xml_blocks plus the documents and
+    transcripts the openedx location extracts, including files whose extraction
+    failed or found no text. Each carries the key, title and video MIT Learn's
+    process_olx_path derives for it, and the flags of Learn's excluded_olx_paths.
+    Which files become Learn ContentFiles, and which of two that share a key,
+    is decided in integrations__learn__content_files.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: [source_system, courserun_readable_id, edx_module_id]
+        column_list: [source_system, courserun_readable_id, source_path]
   columns:
   - name: courserun_readable_id
     description: str, course run ID
@@ -26,43 +24,64 @@ models:
     description: str, mitxonline or xpro
     tests:
     - not_null
-  - name: edx_module_id
-    description: str, the module id Learn derives from the file's path (get_edx_module_id),
-      and its ContentFile key
-    tests:
-    - not_null
   - name: source_path
     description: str, path within the course export, e.g. course/static/handout.pdf
     tests:
     - not_null
   - name: file_extension
     description: str, lower-cased file extension with its dot
+  - name: edx_module_id
+    description: str, the module id MIT Learn keys the file's ContentFile by (OlxArchive.key
+      from the exclusions asset, else get_edx_module_id's rule on the file's path).
+      Two files can share one, e.g. foo bar.pdf and foo_bar.pdf.
+    tests:
+    - not_null
+  - name: shares_edx_module_id
+    description: boolean, true when another file of the run has the same edx_module_id.
+      Learn keeps one ContentFile per key. An html block's pointer (html/x.xml) and
+      body (html/x.html) share one, as do foo bar.pdf and foo_bar.pdf.
+    tests:
+    - not_null
   - name: title
     description: str, the title Learn's get_title_for_content gives the file
-  - name: url
-    description: str, the LMS jump URL or asset URL Learn's get_url_from_module_id
-      gives
+  - name: video_url_name
+    description: str, for a transcript, the url_name of the video block that names
+      it; else null
   - name: content
-    description: str, the file's text; null for a failed extraction
+    description: str, the file's text; null for a failed or empty extraction
   - name: extraction_status
-    description: str, extracted or failed
+    description: str, extracted, empty or failed for a static file; extracted for
+      a block
     tests:
     - not_null
   - name: extracted_at
     description: str, ISO 8601 time the text was extracted
   - name: release_date
     description: str, ISO 8601 UTC time (YYYY-MM-DDTHH:MM:SS.ffffffZ) MIT Learn releases
-      the file to learners, from the OLX start dates on its path down from the course;
-      for a key two files share, the later of their dates. Null when Learn leaves
-      the file undated, and for a run whose exclusions were written before the asset
-      dated files.
+      the file to learners, from the OLX start dates on its path down from the course.
+      Null when Learn leaves the file undated, for a run not yet checked, and for
+      a run whose exclusions were written before the asset dated files.
+  - name: is_exclusion_checked
+    description: boolean, true when the exclusions asset ran over the export this
+      run's blocks came from, so is_excluded is known
+    tests:
+    - not_null
+  - name: is_excluded
+    description: boolean, true when Learn's excluded_olx_paths drops the file; null
+      when is_exclusion_checked is false
+  - name: exclusion_reason
+    description: str, why the file is excluded (staff_only, unreachable_tab, about_page,
+      course_settings, non_content, legacy_announcements, unreferenced_static); null
+      when it is not
 
 unit_tests:
 - name: test_int__openedx__content_files_matches_learn_derivations
   description: >
-    Keys, titles and URLs as MIT Learn derives them, each case checked against
-    Learn's content files for course-v1:MITxT+7.05x+2T2026 and
-    course-v1:xPRO+SysEngx1+R28 on 2026-10-02, and the exclusion filter.
+    Keys and titles as MIT Learn derives them, each case checked against Learn's
+    content files for course-v1:MITxT+7.05x+2T2026 and
+    course-v1:xPRO+SysEngx1+R28 on 2026-10-02. Every file of a Learn source's
+    export has a row, excluded, empty, failed or sharing a key; a run the
+    exclusions check has not covered has its files with the flags unknown.
   model: int__openedx__content_files
   given:
   - input: ref('stg__openedx__s3__course_xml_blocks')
@@ -73,8 +92,7 @@ unit_tests:
       coursestructure_xml_block_attributes: '{"url_name": "0123456789abcdef0123456789abcdef"}',
       coursestructure_xml_raw_xml: '<video display_name="Intro Video"><transcript
         language="en" src="intro clip-en.srt"/></video>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
-    # A pointer file: attributes only. It shares its key with html/abcd.html,
-    # and the .html wins.
+    # A pointer file: attributes only. It shares its key with html/abcd.html.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
       coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: html,
       coursestructure_xml_block_display_name: Welcome, coursestructure_xml_block_path: course/html/abcd.xml,
@@ -154,9 +172,8 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
       content_file_path: static/intro clip-en.srt, content_file_extension: .srt, content_file_text: Hi
         there, content_file_extraction_status: extracted}
-  # Only the excluded rows and one row per checked run matter to the model.
-  # R2 was never checked and R3 was checked against an older export, so their
-  # chapters are held back.
+  # A file of a checked run with no row of its own is not excluded. R2 was
+  # never checked and R3 was checked against an older export.
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -167,28 +184,66 @@ unit_tests:
       content_file_is_excluded: true}
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
       content_file_course_xml_version: v1, content_file_path: problem/staff_check.xml,
-      content_file_is_excluded: true}
+      content_file_is_excluded: true, content_file_exclusion_reason: staff_only}
     - {courserun_readable_id: "course-v1:X+Y+R3", content_file_source_system: xpro,
       content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
       content_file_is_excluded: false}
   expect:
     rows:
-    - {edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
-      title: Intro Video, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/0123456789abcdef0123456789abcdef"}
-    - {edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd", title: Welcome, url: null}
-    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", title: Week 1,
-      url: null}
-    - {edx_module_id: "block-v1:X+Y+R1+type@course+block@course", title: Course, url: null}
-    - {edx_module_id: "block-v1:X+Y+R1+type@course+block@R1", title: Test Course,
-      url: null}
-    - {edx_module_id: "block-v1:X+Y+R1+type@tabs+block@5244487e", title: 5244487E,
-      url: null}
-    - {edx_module_id: "block-v1:X+Y+R1+type@vertical+block@peer_unit", title: Peer
-        Unit, url: null}
-    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf", title: Dash
-        2010, url: "https://courses.xpro.mit.edu/asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf"}
-    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt", title: Intro
-        Video, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/0123456789abcdef0123456789abcdef"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/video/0123456789abcdef0123456789abcdef.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
+      shares_edx_module_id: false, title: "Intro Video", is_exclusion_checked: true,
+      is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/html/abcd.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd", shares_edx_module_id: true,
+      title: "Abcd", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/chapter/week_1.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", shares_edx_module_id: false,
+      title: "Week 1", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/vertical/empty_unit.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@vertical+block@empty_unit", shares_edx_module_id: false,
+      title: "Empty Unit", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/vertical/peer_unit.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@vertical+block@peer_unit", shares_edx_module_id: false,
+      title: "Peer Unit", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/problem/staff_check.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@problem+block@staff_check", shares_edx_module_id: false,
+      title: "Staff Check", is_exclusion_checked: true, is_excluded: true, exclusion_reason: staff_only}
+    - {courserun_readable_id: "course-v1:X+Y+R2", source_path: "course/chapter/week_1.xml",
+      edx_module_id: "block-v1:X+Y+R2+type@chapter+block@week_1", shares_edx_module_id: false,
+      title: "Unchecked", is_exclusion_checked: false, is_excluded: null, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R3", source_path: "course/chapter/week_1.xml",
+      edx_module_id: "block-v1:X+Y+R3+type@chapter+block@week_1", shares_edx_module_id: false,
+      title: "Stale", is_exclusion_checked: false, is_excluded: null, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/course.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@course+block@course", shares_edx_module_id: false,
+      title: "Course", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/course/R1.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@course+block@R1", shares_edx_module_id: false,
+      title: "Test Course", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/html/abcd.html",
+      edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd", shares_edx_module_id: true,
+      title: "Welcome", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/tabs/5244487e.html",
+      edx_module_id: "block-v1:X+Y+R1+type@tabs+block@5244487e", shares_edx_module_id: false,
+      title: "5244487E", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/about/effort.html",
+      edx_module_id: "block-v1:X+Y+R1+type@about+block@effort", shares_edx_module_id: false,
+      title: "Effort", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/static/Dash\
+        \ 2010.pdf", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf",
+      shares_edx_module_id: false, title: "Dash 2010", is_exclusion_checked: true,
+      is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/policies/assets.json",
+      edx_module_id: "block-v1:X+Y+R1+type@policies+block@assets", shares_edx_module_id: false,
+      title: "Assets", is_exclusion_checked: true, is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/static/answer_key.pdf",
+      edx_module_id: "asset-v1:X+Y+R1+type@asset+block@answer_key.pdf", shares_edx_module_id: false,
+      title: "Answer Key", is_exclusion_checked: true, is_excluded: true, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/static/intro\
+        \ clip-en.srt", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt",
+      shares_edx_module_id: false, title: "Intro Video", is_exclusion_checked: true,
+      is_excluded: false, exclusion_reason: null}
 
 - name: test_int__openedx__content_files_xml_text_as_tika_reads_it
   description: >
@@ -233,9 +288,9 @@ unit_tests:
 
 - name: test_int__openedx__content_files_release_date
   description: >
-    release_date comes from the file's exclusion row. As in Learn's key_dates, a key
-    that two files share takes the later of their dates, counting a file that is
-    dropped for having no text, and an undated twin does not clear it.
+    release_date comes from the file's own exclusion row, also for a file with no
+    text and for two files that share a key (integrations__learn__content_files
+    gives the key the later date, as Learn's key_dates does).
   model: int__openedx__content_files
   given:
   - input: ref('stg__openedx__s3__course_xml_blocks')
@@ -280,18 +335,24 @@ unit_tests:
       content_file_release_date: null}
   expect:
     rows:
-    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", release_date: "2031-01-01T00:00:00.000000Z"}
-    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_2", release_date: null}
-    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf", release_date: "2032-06-01T12:00:00.000000Z"}
-    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@slides.pdf", release_date: null}
+    - {source_path: course/chapter/week_1.xml, edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1",
+      release_date: "2031-01-01T00:00:00.000000Z"}
+    - {source_path: course/chapter/week_2.xml, edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_2",
+      release_date: null}
+    - {source_path: course/static/notes_1.pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf",
+      release_date: "2031-01-01T00:00:00.000000Z"}
+    - {source_path: course/static/notes 1.pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf",
+      release_date: "2032-06-01T12:00:00.000000Z"}
+    - {source_path: course/static/slides.pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@slides.pdf",
+      release_date: null}
 - name: test_int__openedx__content_files_colon_url_names
   description: >
     A block whose url_name has a colon is stored below its type folder (a:b in
     html/a/b.xml). Its key is the one the exclusion row carries (Learn's
     OlxArchive.key, mit-learn#4264), its html body is titled from html/<stem>.xml
-    as Learn titles it (so not from html/a/b.xml), and a transcript's jump URL
-    names its video by the url_name on the video file, or by the url_name the
-    video file's path spells when its root has none. A run whose exclusion rows
+    as Learn titles it (so not from html/a/b.xml), and a transcript names its
+    video by the url_name on the video file, or by the url_name the video file's
+    path spells when its root has none. A run whose exclusion rows
     predate the key falls back to the path rule.
   model: int__openedx__content_files
   given:
@@ -360,17 +421,26 @@ unit_tests:
       content_file_is_excluded: false, content_file_key: null}
   expect:
     rows:
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@html+block@802r:Radiation",
-      title: Radiation, url: null}
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@chapter+block@801r_Pset:Pset1",
-      title: Pset 1, url: null}
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@video+block@vid:1",
-      title: Lecture, url: null}
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@v1.srt",
-      title: Lecture, url: "https://courses.mitxonline.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/vid:1"}
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "block-v1:X+Y+R1+type@video+block@vid:2",
-      title: Recitation, url: null}
-    - {courserun_readable_id: "course-v1:X+Y+R1", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@v2.srt",
-      title: Recitation, url: "https://courses.mitxonline.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/vid:2"}
-    - {courserun_readable_id: "course-v1:X+Y+R2", edx_module_id: "block-v1:X+Y+R2+type@801r_Pset+block@Pset1",
-      title: Pset 1, url: null}
+    # The pointer has no exclusion row of its own here, so it is keyed by its path.
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/html/802r/Radiation.xml,
+      edx_module_id: "block-v1:X+Y+R1+type@802r+block@Radiation", title: Radiation,
+      video_url_name: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/html/802r/Radiation.html,
+      edx_module_id: "block-v1:X+Y+R1+type@html+block@802r:Radiation", title: Radiation,
+      video_url_name: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/chapter/801r_Pset/Pset1.xml,
+      edx_module_id: "block-v1:X+Y+R1+type@chapter+block@801r_Pset:Pset1", title: Pset
+        1, video_url_name: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/video/vid/1.xml,
+      edx_module_id: "block-v1:X+Y+R1+type@video+block@vid:1", title: Lecture, video_url_name: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/static/v1.srt,
+      edx_module_id: "asset-v1:X+Y+R1+type@asset+block@v1.srt", title: Lecture, video_url_name: "vid:1"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/video/vid/2.xml,
+      edx_module_id: "block-v1:X+Y+R1+type@video+block@vid:2", title: Recitation,
+      video_url_name: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/static/v2.srt,
+      edx_module_id: "asset-v1:X+Y+R1+type@asset+block@v2.srt", title: Recitation,
+      video_url_name: "vid:2"}
+    - {courserun_readable_id: "course-v1:X+Y+R2", source_path: course/chapter/801r_Pset/Pset1.xml,
+      edx_module_id: "block-v1:X+Y+R2+type@801r_Pset+block@Pset1", title: Pset 1,
+      video_url_name: null}
