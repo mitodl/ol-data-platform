@@ -1,32 +1,29 @@
 {#
-  One row per file of an MITx Online or xPRO course run that MIT Learn would load
-  as a ContentFile, derived the way Learn's process_olx_path does
-  (learning_resources/etl/utils.py): OLX block XML from course_xml_blocks, and the
-  document and transcript text the openedx location extracts from the course's
-  static files.
+  One row per file of an MITx Online or xPRO course run's export that has text
+  to read: every OLX block file from course_xml_blocks, and every document and
+  transcript the openedx location extracts from the course's static files. A
+  file whose extraction failed or found no text keeps its row, with
+  extraction_status saying so.
 
-  Learn skips any file whose extracted text is empty, and the same rule applies
-  here, to block text read the way Tika reads it (see block_files). That is why an
-  OLX pointer file (<html filename=.../>) or a vertical holding only inline html
-  never reaches Learn. A file whose extraction failed keeps its row, with null
-  content and extraction_status "failed", so a consumer can tell it apart from a
-  removed file.
+  Each file carries what MIT Learn's ContentFile needs, derived the way Learn's
+  process_olx_path does (learning_resources/etl/utils.py): its key
+  (edx_module_id), its title, and for a transcript the video it belongs to. Two
+  files can share a key (foo bar.pdf and foo_bar.pdf); both are here, flagged
+  by shares_edx_module_id. Which files Learn loads, and which of two that share
+  a key it keeps, is integrations__learn__content_files' business.
 
-  Files Learn's excluded_olx_paths drops (staff-only subtrees, unreachable tabs
-  and about pages, course settings, asset manifests, static files nothing
-  learners see references) are dropped here by
-  stg__openedx__s3__course_file_exclusions, which runs a port of those rules over
-  each export. A run whose newest blocks file has not been through it (no
-  exclusion rows, or rows from an older export) has no rows here at all: without
-  the check its files would include ones Learn hides, and a scoped pull would
-  publish them.
+  is_excluded and exclusion_reason are Learn's excluded_olx_paths (staff-only
+  subtrees, unreachable tabs and about pages, course settings, asset manifests,
+  static files nothing learners see references), from
+  stg__openedx__s3__course_file_exclusions, which runs a port of those rules
+  over each export. They are known only for a run whose newest blocks file has
+  been through it: for any other run (no exclusion rows, or rows from an older
+  export) is_exclusion_checked is false and the two are null, and so are
+  release_date and the key the exclusions asset gives.
 
   release_date is the date Learn's OlxArchive.release_dates gives the file, from
   the OLX start dates on its path down from the course, as the exclusions asset
-  computes it. Like Learn's key_dates, a key that two files share (foo bar.pdf and
-  foo_bar.pdf) takes the later of their dates, counting every ingestable file of
-  the key, empty or not. Learn shows a file only once that date has passed
-  (ContentFile.objects.visible()), so it stays in this model, dated.
+  computes it.
 
   The course root files course.xml and course/<run>.xml come from
   course_xml_blocks like any other block, and only for an export parsed after
@@ -34,14 +31,6 @@
   has every other file but not those two until its course_xml_blocks partition
   is rematerialized.
 #}
-
-{% set valid_text_file_types = [
-    '.doc', '.docx', '.htm', '.html', '.json', '.md', '.pdf', '.tex', '.ppt',
-    '.pptx', '.rtf', '.sjson', '.srt', '.txt', '.vtt', '.xml'
-] %}
-{% set non_content_olx_files = [
-    'course/policies/assets.json', 'course/assets/assets.xml', 'course/info/updates.items.json'
-] %}
 
 with blocks as (
     select * from {{ ref('stg__openedx__s3__course_xml_blocks') }}
@@ -132,48 +121,52 @@ with blocks as (
     select * from static_files
 )
 
+-- The exclusions asset's rows for the export the run's blocks came from.
+-- Exclusions from an older export would miss a block hidden since.
 , file_exclusions as (
-    select * from {{ ref('stg__openedx__s3__course_file_exclusions') }}
-)
-
-, block_versions as (
-    select distinct
-        courserun_readable_id
-        , coursestructure_xml_source_system as source_system
-        , coursestructure_xml_archive_version as course_xml_version
-    from blocks
-)
-
--- A run is checked when the exclusions ran over the same export its blocks came
--- from. Exclusions from an older export would miss a block hidden since, and
--- let it through.
-, checked_runs as (
-    select distinct
-        file_exclusions.courserun_readable_id
-        , file_exclusions.content_file_source_system as source_system
-    from file_exclusions
-    inner join block_versions
+    select file_exclusions.*
+    from {{ ref('stg__openedx__s3__course_file_exclusions') }} as file_exclusions
+    inner join (
+        select distinct
+            courserun_readable_id
+            , coursestructure_xml_source_system as source_system
+            , coursestructure_xml_archive_version as course_xml_version
+        from blocks
+    ) as block_versions
         on file_exclusions.courserun_readable_id = block_versions.courserun_readable_id
         and file_exclusions.content_file_source_system = block_versions.source_system
         and file_exclusions.content_file_course_xml_version = block_versions.course_xml_version
 )
 
--- excluded_olx_paths. The exclusion rows are keyed by the path below the
--- export's root directory, which block paths still carry.
-, kept_files as (
+, checked_runs as (
+    select distinct
+        courserun_readable_id
+        , content_file_source_system as source_system
+    from file_exclusions
+)
+
+-- The exclusion rows are keyed by the path below the export's root directory,
+-- which block paths still carry. A file of a checked run with no row of its
+-- own is not excluded.
+, checked_files as (
     select
         candidate_files.*
+        , checked_runs.courserun_readable_id is not null as is_exclusion_checked
+        , case
+            when checked_runs.courserun_readable_id is not null
+                then coalesce(file_exclusions.content_file_is_excluded, false)
+        end as is_excluded
+        , file_exclusions.content_file_exclusion_reason as exclusion_reason
         , file_exclusions.content_file_release_date as release_date
         , file_exclusions.content_file_key as exclusions_key
     from candidate_files
-    inner join checked_runs
+    left join checked_runs
         on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
         and candidate_files.source_system = checked_runs.source_system
     left join file_exclusions
         on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
         and candidate_files.source_system = file_exclusions.content_file_source_system
         and {{ regexp_replace_all('candidate_files.source_path', "'^[^/]*/'", "''") }} = file_exclusions.content_file_path
-    where not coalesce(file_exclusions.content_file_is_excluded, false)
 )
 
 , keyed_files as (
@@ -188,13 +181,7 @@ with blocks as (
         , {{ element_at_array("split(source_path, '/')", array_length("split(source_path, '/')")) }}
             as original_file_name
         , replace(courserun_readable_id, 'course-v1:', '') as run_key
-    from kept_files
-    -- documents_from_olx: Learn's text file types, nothing under a draft
-    -- directory, and not the asset manifests or the announcement archive.
-    where
-        file_extension in ('{{ valid_text_file_types | join("', '") }}')
-        and source_path not in ('{{ non_content_olx_files | join("', '") }}')
-        and not {{ regexp_like("source_path", "'draft.*/'") }}
+    from checked_files
 )
 
 , module_files as (
@@ -215,16 +202,6 @@ with blocks as (
         end) as edx_module_id
         , {{ regexp_replace_all('original_file_name', "'\\.[^.]*$'", "''") }} as original_stem
     from keyed_files
-)
-
-, dated_files as (
-    select
-        *
-        -- ISO 8601 UTC strings of one fixed width, so the latest sorts last
-        , max(release_date) over (
-            partition by source_system, courserun_readable_id, edx_module_id
-        ) as key_release_date
-    from module_files
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
@@ -280,93 +257,44 @@ with blocks as (
     where coursestructure_xml_block_type = 'html'
 )
 
-, resolved as (
-    select
-        module_files.courserun_readable_id
-        , module_files.source_system
-        , module_files.source_path
-        , module_files.file_extension
-        , module_files.content
-        , module_files.extraction_status
-        , module_files.extracted_at
-        , module_files.edx_module_id
-        , module_files.key_release_date as release_date
-        , {{ openedx_lms_root_url('module_files.source_system') }} as root_url
-        , video_transcript_map.video_id
-        -- get_title_for_content: a transcript takes its video's name, an XML
-        -- block its display_name, an HTML file the display_name of its html/
-        -- pointer, and anything else a title made from the file name. Learn
-        -- looks for the pointer beside the file first, but under a path that
-        -- keeps the export's top folder, which never exists, so a body below
-        -- html/ (html/a/b.html) is titled from html/b.xml too.
-        , coalesce(
-            nullif(case
-                when module_files.file_extension = '.xml' then module_files.xml_display_name
-                when module_files.file_extension = '.html' then html_titles.display_name
-                else video_transcript_map.video_title
-            end, '')
-            , {{ title_case("replace(replace(module_files.original_stem, '_', ' '), '-', ' ')") }}
-        ) as title
-    from dated_files as module_files
-    left join video_transcript_map
-        on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
-        and module_files.source_system = video_transcript_map.source_system
-        and module_files.edx_module_id = video_transcript_map.transcript_module_id
-    left join html_titles
-        on module_files.file_extension = '.html'
-        and module_files.courserun_readable_id = html_titles.courserun_readable_id
-        and module_files.source_system = html_titles.source_system
-        and html_titles.xml_path = concat('course/html/', module_files.original_stem, '.xml')
-    -- Learn skips a file whose text is empty. A failed extraction is kept.
-    where module_files.extraction_status = 'failed' or trim(coalesce(module_files.content, '')) != ''
-)
-
-, with_urls as (
-    select
-        *
-        -- get_url_from_module_id
-        , case
-            when edx_module_id like 'asset%' and video_id is not null
-                then concat(root_url, '/courses/', courserun_readable_id, '/jump_to_id/', video_id)
-            when edx_module_id like 'asset%'
-                then concat(root_url, '/', edx_module_id)
-            when {{ regexp_like(
-                regexp_replace_all(
-                    element_at_array("split(edx_module_id, '@')", array_length("split(edx_module_id, '@')"))
-                    , "'[{}-]'", "''"
-                )
-                , "'^[0-9a-fA-F]{32}$'"
-            ) }}
-                then concat(
-                    root_url, '/courses/', courserun_readable_id, '/jump_to_id/'
-                    , {{ element_at_array("split(edx_module_id, '@')", array_length("split(edx_module_id, '@')")) }}
-                )
-        end as url
-        -- One ContentFile per (source, run, key): Learn upserts on key, so of
-        -- two files that map to one key only one survives. Prefer a file with
-        -- text. The source is part of the scope because run ids can repeat
-        -- across sources (contentfile_scoped_pull_contract.md).
-        , row_number() over (
-            partition by source_system, courserun_readable_id, edx_module_id
-            order by
-                case when extraction_status = 'failed' then 1 else 0 end nulls last
-                , case when file_extension = '.xml' then 1 else 0 end nulls last
-                , source_path nulls last
-        ) as key_rank
-    from resolved
-)
-
 select
-    courserun_readable_id
-    , source_system
-    , edx_module_id
-    , source_path
-    , file_extension
-    , title
-    , url
-    , content
-    , extraction_status
-    , extracted_at
-    , release_date
-from with_urls
-where key_rank = 1
+    module_files.courserun_readable_id
+    , module_files.source_system
+    , module_files.source_path
+    , module_files.file_extension
+    , module_files.edx_module_id
+    , count(*) over (
+        partition by module_files.source_system, module_files.courserun_readable_id, module_files.edx_module_id
+    ) > 1 as shares_edx_module_id
+    -- get_title_for_content: a transcript takes its video's name, an XML
+    -- block its display_name, an HTML file the display_name of its html/
+    -- pointer, and anything else a title made from the file name. Learn
+    -- looks for the pointer beside the file first, but under a path that
+    -- keeps the export's top folder, which never exists, so a body below
+    -- html/ (html/a/b.html) is titled from html/b.xml too.
+    , coalesce(
+        nullif(case
+            when module_files.file_extension = '.xml' then module_files.xml_display_name
+            when module_files.file_extension = '.html' then html_titles.display_name
+            else video_transcript_map.video_title
+        end, '')
+        , {{ title_case("replace(replace(module_files.original_stem, '_', ' '), '-', ' ')") }}
+    ) as title
+    , video_transcript_map.video_id as video_url_name
+    , module_files.content
+    , module_files.extraction_status
+    , module_files.extracted_at
+    , module_files.release_date
+    , module_files.is_exclusion_checked
+    , module_files.is_excluded
+    , module_files.exclusion_reason
+from module_files
+left join video_transcript_map
+    on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
+    and module_files.source_system = video_transcript_map.source_system
+    and module_files.edx_module_id = video_transcript_map.transcript_module_id
+left join html_titles
+    on module_files.file_extension = '.html'
+    and module_files.courserun_readable_id = html_titles.courserun_readable_id
+    and module_files.source_system = html_titles.source_system
+    and html_titles.xml_path = concat('course/html/', module_files.original_stem, '.xml')
