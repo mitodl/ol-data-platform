@@ -175,9 +175,10 @@ models:
     tags: [qa_scheduled]
   description: >
     Published runs of MIT Professional Education courses and programs, for MIT Learn
-    webhook delivery. Publication is evaluated when the model is built. Dates are
-    ISO
-    8601 UTC instants of midnight US Eastern.
+    webhook delivery. Publication is evaluated when the model is built. Runs that
+    one of the feed's run lists is too short to reach are left out too
+    (is_in_all_run_lists), because MIT Learn's ETL zips the lists and never sees
+    them. Dates are ISO 8601 UTC instants of midnight US Eastern.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:

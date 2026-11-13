@@ -27,7 +27,22 @@ with resources as (
 )
 
 select
-    {{ learn_mitpe_resource_columns('resources') }}
+    resources.readable_id
+    , resources.title
+    , resources.url
+    , resources.image_url
+    , resources.image_alt
+    , resources.description
+    , resources.topics
+    -- MIT Learn's shaping: delivery codes (unknown formats are online), location only
+    -- for on-site formats, empty strings for missing text, Learn's duration weeks
+    , {{ learn_delivery('resources.learning_format') }} as delivery
+    , {{ learn_mitpe_location('resources.learning_format', 'resources.location') }} as location
+    , coalesce(resources.duration, '') as duration
+    , {{ learn_duration_weeks('resources.duration', 'min') }} as min_weeks
+    , {{ learn_duration_weeks('resources.duration', 'max') }} as max_weeks
+    , {{ learn_mitpe_price('resources.price_text') }} as price
+    , resources.instructors
     , program_courses.course_readable_ids
     , 'mitpe' as etl_source
     , 'mitpe' as platform
