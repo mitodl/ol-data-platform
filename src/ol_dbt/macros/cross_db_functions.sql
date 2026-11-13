@@ -588,8 +588,11 @@
 {%- endmacro %}
 
 {% macro starrocks__json_is_object(json_expr) -%}
-    {# StarRocks: no dedicated json_type(); a JSON object's cast-to-varchar text starts with '{' #}
-    substr(cast({{ json_expr }} as varchar), 1, 1) = '{'
+    {# StarRocks: no dedicated json_type(); a JSON object's serialized text starts with '{'.
+       json_string, not cast(... as varchar): the cast unquotes a JSON string, so a string
+       holding JSON text ("{\"file\": \"x\"}") would read as an object, and it gives NULL
+       for a JSON null where Trino gives false. #}
+    substr(json_string({{ json_expr }}), 1, 1) = '{'
 {%- endmacro %}
 
 
@@ -649,8 +652,13 @@
 {%- endmacro %}
 
 {% macro starrocks__try_parse_json_array(json_expr) -%}
-    {# StarRocks: parse the JSON string, then cast to an array of JSON elements #}
-    cast(parse_json({{ json_expr }}) as array<json>)
+    {# StarRocks: parse the JSON string, then cast to an array of JSON elements. The cast
+       turns a JSON string, object, number or null into [] where Trino's try_cast gives
+       NULL, so only an array is cast. parse_json is NULL for malformed input. #}
+    case
+        when left(json_string(parse_json({{ json_expr }})), 1) = '['
+            then cast(parse_json({{ json_expr }}) as array<json>)
+    end
 {%- endmacro %}
 
 {#
@@ -1366,22 +1374,14 @@
 {%- endmacro %}
 
 {% macro starrocks__json_array_string(json_col, json_path) -%}
-    {# json_col may be a varchar or a JSON value (an unnest_json_array element); the cast
-       to varchar makes parse_json accept either.
-       cast(json as varchar) drops the quotes from a JSON string ("/a" gives /a), and
-       callers test for them, so json_string() serializes the value. It writes ", " and
-       ": " between items where Trino's json_format writes none; the regexp_replace
-       matches each string literal or run of other characters and drops the whitespace
-       after it, which leaves the whitespace inside strings alone.
-       Still unlike Trino: StarRocks sorts object keys (Trino does only for a JSON
-       value, not a varchar), formats a number with a decimal point or exponent its own
-       way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
-       BMP as surrogate pairs. #}
-    regexp_replace(
-        json_string(json_query(parse_json(cast({{ json_col }} as varchar)), {{ json_path }}))
-        , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
-        , '\\1'
-    )
+    {# json_col may be a varchar or a JSON value (an unnest_json_array element). cast(... as
+       json) parses a varchar and leaves a JSON value as it is; going through varchar would
+       unquote a JSON string element and parse its text again. Callers test for a JSON
+       string's quotes, which json_to_varchar keeps. StarRocks sorts object keys here where
+       Trino does only for a JSON value, not a varchar. #}
+    {{ starrocks__json_to_varchar(
+        "json_query(cast(" ~ json_col ~ " as json), " ~ json_path ~ ")"
+    ) }}
 {%- endmacro %}
 
 
@@ -1511,7 +1511,19 @@
 {%- endmacro %}
 
 {% macro starrocks__json_to_varchar(json_expr) -%}
-    cast({{ json_expr }} as varchar)
+    {# cast(json as varchar) drops the quotes from a JSON string ("/a" gives /a), so
+       json_string() serializes the value. It writes ", " and ": " between items where
+       Trino's json_format writes none; the regexp_replace matches each string literal or
+       run of other characters and drops the whitespace after it, which leaves the
+       whitespace inside strings alone.
+       Still unlike Trino: StarRocks formats a number with a decimal point or exponent its
+       own way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
+       BMP as surrogate pairs. Both sort object keys of a JSON value. #}
+    regexp_replace(
+        json_string({{ json_expr }})
+        , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
+        , '\\1'
+    )
 {%- endmacro %}
 
 
