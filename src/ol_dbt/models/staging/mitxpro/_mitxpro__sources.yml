@@ -2219,6 +2219,9 @@ sources:
     - name: opportunity_last_modified_date
       description: str, date and time when the enrolment was last updated in Emeritus's
         CRM.
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte. Staging orders
+        by it to pick the copy from the latest sync.
 
   - name: raw__global_alumni__bigquery__api_enrollments
     description: xPro course enrollments that are offered on the Global Alumni platform
