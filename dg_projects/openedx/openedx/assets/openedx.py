@@ -33,7 +33,11 @@ from dagster import (
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.lib.failures import permanent_failure, retry_transient_errors
+from ol_orchestrate.lib.failures import (
+    TRANSIENT_HTTP_ERRORS,
+    permanent_failure,
+    retry_transient_errors,
+)
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     CourseExportOutcome,
@@ -533,6 +537,37 @@ def course_structure(context: AssetExecutionContext):
             raise ValueError(err_msg)
 
 
+def _poll_export_status(
+    context: AssetExecutionContext, course_id: str, task_id: str
+) -> dict[str, str]:
+    """Ask Studio for an export's status, treating a dropped request as no news.
+
+    A dropped poll is not raised. Raising would reach ``retry_transient_errors``,
+    which reruns ``course_xml`` from the top and starts a second Studio export
+    of a course that is still exporting. The returned status has no ``state``,
+    which ``classify_course_export_state`` counts as still pending, so the
+    caller polls again and its export timeout still bounds the wait.
+
+    :param context: The ``course_xml`` execution context.
+    :param course_id: The course being exported.
+    :param task_id: Studio's export task id.
+    :returns: Studio's status response, or one whose ``details`` names the
+        transport error.
+    :rtype: dict[str, str]
+    """
+    try:
+        return context.resources.openedx.client.check_course_export_status(
+            course_id, task_id
+        )
+    except TRANSIENT_HTTP_ERRORS as error:
+        context.log.warning(
+            "Polling the export of %s failed; trying again on the next poll",
+            course_id,
+            exc_info=True,
+        )
+        return {"details": f"status request failed: {type(error).__name__}"}
+
+
 @asset(
     automation_condition=upstream_or_code_changes(),
     description=(
@@ -610,12 +645,7 @@ def course_xml(context: AssetExecutionContext):
                     raise TimeoutError(err_msg)
                 time.sleep(timedelta(seconds=20).seconds)
                 for course_id, task_id in tasks.items():
-                    task_status = (
-                        context.resources.openedx.client.check_course_export_status(
-                            course_id,
-                            task_id,
-                        )
-                    )
+                    task_status = _poll_export_status(context, course_id, task_id)
                     state = task_status.get("state")
                     details = task_status.get("details")
                     last_seen_status[course_id] = (
