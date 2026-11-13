@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,51 @@ from ol_orchestrate.resources.api_client import BaseApiClient
 # Resumes after a dropped connection, not retries from zero: each one picks up
 # where the file ends, so three covers three separate drops in one transfer.
 DOWNLOAD_RESUME_ATTEMPTS = 3
+
+
+class RangeReply(StrEnum):
+    """What a download response means for the file already on disk."""
+
+    COMPLETE = "complete"
+    RESTART = "restart"
+    APPEND = "append"
+    WRITE = "write"
+
+
+def _classify_range_reply(response: httpx.Response, written: int) -> RangeReply:
+    """Decide what to do with a response to a (possibly ranged) download request.
+
+    :param response: The streamed response, headers read and body not yet.
+    :param written: Bytes already on disk, which is where the range started.
+    :returns: Whether the file is whole, must start over, or takes this body
+        appended or written fresh.
+    :rtype: RangeReply
+    :raises httpx.HTTPStatusError: for any other error status.
+    """
+    content_range = response.headers.get("Content-Range", "")
+    if response.status_code == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE and written:
+        # A total equal to the size on disk means the connection dropped after
+        # the last byte. Any other total means the file does not match the
+        # server's copy.
+        if content_range == f"bytes */{written}":
+            return RangeReply.COMPLETE
+        return RangeReply.RESTART
+    response.raise_for_status()
+    if response.status_code != HTTPStatus.PARTIAL_CONTENT:
+        return RangeReply.WRITE
+    if content_range.startswith(f"bytes {written}-"):
+        return RangeReply.APPEND
+    return RangeReply.RESTART
+
+
+def _range_total(response: httpx.Response) -> int | None:
+    """Return the file size a 206 names in ``Content-Range``, if it names one.
+
+    A 206 may cover less than the rest of the file and still end cleanly, so
+    this total, not the end of the body, says whether the file is whole.
+    """
+    total = response.headers.get("Content-Range", "").rpartition("/")[2]
+    return int(total) if total.isdigit() else None
 
 
 class CanvasApiClient(BaseApiClient):
@@ -103,28 +149,15 @@ class CanvasApiClient(BaseApiClient):
                 with self.http_client.stream(
                     "GET", url, follow_redirects=True, timeout=60, headers=headers
                 ) as response:
-                    # The connection dropped after the last byte but before the
-                    # body was terminated: the file is already whole.
-                    if (
-                        response.status_code
-                        == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE
-                        and (
-                            response.headers.get("Content-Range")
-                            == f"bytes */{written}"
-                        )
-                    ):
+                    reply = _classify_range_reply(response, written)
+                    if reply is RangeReply.COMPLETE:
                         return output_path
-                    response.raise_for_status()
-                    resumes = response.status_code == HTTPStatus.PARTIAL_CONTENT
-                    content_range = response.headers.get("Content-Range", "")
-                    if resumes and not content_range.startswith(f"bytes {written}-"):
+                    if reply is RangeReply.RESTART:
                         output_path.unlink(missing_ok=True)
                         continue
-                    # A 206 may cover less than the rest of the file and still
-                    # end cleanly, so its total is what says the file is whole.
-                    total = content_range.rpartition("/")[2]
-                    expected_size = int(total) if resumes and total.isdigit() else None
-                    with output_path.open("ab" if resumes else "wb") as f:
+                    appends = reply is RangeReply.APPEND
+                    expected_size = _range_total(response) if appends else None
+                    with output_path.open("ab" if appends else "wb") as f:
                         for chunk in response.iter_bytes():
                             f.write(chunk)
             except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ReadTimeout):

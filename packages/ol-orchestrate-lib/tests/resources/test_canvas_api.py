@@ -229,3 +229,22 @@ def test_a_206_that_never_completes_the_file_fails(tmp_path: Path) -> None:
         client_answering(handler).download_course_export(
             EXPORT_URL, tmp_path / "export.imscc"
         )
+
+
+def test_a_416_for_a_different_total_starts_over(tmp_path: Path) -> None:
+    ranges: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        ranges.append(request.headers.get("Range"))
+        if len(ranges) == 1:
+            return httpx.Response(200, stream=CutOffStream(EXPORT[:8]))
+        if len(ranges) == 2:
+            return httpx.Response(416, headers={"Content-Range": "bytes */6"})
+        return httpx.Response(200, content=EXPORT)
+
+    path = client_answering(handler).download_course_export(
+        EXPORT_URL, tmp_path / "export.imscc"
+    )
+
+    assert path.read_bytes() == EXPORT
+    assert ranges == [None, "bytes=8-", None]
