@@ -652,10 +652,12 @@ models:
 
 - name: int__mitxonline__deferred_course_run_orders
   description: The MITx Online course runs orders were bought for and no longer pay
-    for. A deferral moves the paid course run record to the new run and leaves the
-    order's line on the old one, so these are the lines with no paid record on their
-    run on orders with a paid record on a run they have no line for. One row per (order,
-    course run).
+    for. A deferral moves the paid course run record to another run of the same course
+    and leaves the order's line on the old one, so these are the lines with no paid
+    record on their run where the order has a paid record on another run of the line's
+    course that it has no line for. A record on a run of a different course isn't
+    treated as a deferral, and a line on a multi-line order that never had a record
+    isn't either. One row per (order, course run).
   config:
     meta:
       qa_branches:
@@ -2740,13 +2742,14 @@ unit_tests:
     - {user_id: 1, openedx_user_id: 11, user_username: "ann-lee"}
 - name: test_int__mitxonline__deferred_course_run_orders_finds_moved_orders
   description: >
-    An order whose paid record sits on another run was moved off the run on its line.
-    An
-    order with a record on its own run was not, and neither was one with no record
-    at
-    all. An order with lines on two runs reports only the line that lost its record.
-    A
-    line with no record on an order with no record off its lines was not moved either.
+    An order whose paid record sits on another run of the line's course was moved
+    off
+    the run on its line. An order with a record on its own run was not, and neither
+    was one with no record at all. An order with lines on two runs reports only the
+    line that lost its record. A line with no record on an order with no record off
+    its lines was not moved either, and nor was one whose course has no moved record
+    when another line's record moved. A record on a run of another course doesn't
+    move the line.
   model: int__mitxonline__deferred_course_run_orders
   given:
   - input: ref('int__mitxonline__ecommerce_order')
@@ -2758,17 +2761,30 @@ unit_tests:
     - {order_id: 4, courserun_id: 12}
     - {order_id: 5, courserun_id: 10}
     - {order_id: 5, courserun_id: 12}
+    - {order_id: 6, courserun_id: 10}
+    - {order_id: 6, courserun_id: 12}
+    - {order_id: 7, courserun_id: 10}
   - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
     rows:
     - {order_id: 1, courserun_id: 11}
     - {order_id: 2, courserun_id: 10}
     - {order_id: 4, courserun_id: 10}
-    - {order_id: 4, courserun_id: 11}
+    - {order_id: 4, courserun_id: 13}
     - {order_id: 5, courserun_id: 10}
+    - {order_id: 6, courserun_id: 11}
+    - {order_id: 7, courserun_id: 20}
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - {courserun_id: 10, course_id: 50}
+    - {courserun_id: 11, course_id: 50}
+    - {courserun_id: 12, course_id: 60}
+    - {courserun_id: 13, course_id: 60}
+    - {courserun_id: 20, course_id: 70}
   expect:
     rows:
     - {order_id: 1, courserun_id: 10}
     - {order_id: 4, courserun_id: 12}
+    - {order_id: 6, courserun_id: 10}
 - name: test_int__mitxonline__courserunenrollments_moved_dedp_order_does_not_verify
   description: >
     A deferral leaves the app's mode audit on the run the order was bought for. That
