@@ -568,12 +568,12 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
-# The Open edX tracking logs, one asset per deployment. xPro's replaced the
-# Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the
-# archive. MITx Online's and MITx's load beside their Airbyte tables until
-# staging is repointed. One listing per run: a full listing of a production
-# bucket (264,950 to 473,863 files on 2026-10-27) takes 50 to 89 s, and the
-# first runs walk ~331 (xpro), ~884 (mitxonline) and ~932 (mitx) batches.
+# The Open edX tracking logs, one asset per deployment. Each replaced the
+# Airbyte-loaded raw__<deployment>__openedx__tracking_logs, which is kept as the
+# archive (ingestion/inventory/retired.yml). One listing per run: a full
+# listing of a production bucket (264,950 to 473,863 files on 2026-10-27) takes
+# 50 to 89 s, and the first runs walked ~331 (xpro), ~884 (mitxonline) and ~932
+# (mitx) batches.
 TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
 
 
