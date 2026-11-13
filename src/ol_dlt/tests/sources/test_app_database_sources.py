@@ -154,5 +154,5 @@ def test_no_table_is_optional(
     unit_stem: str,
     module_name: str,
 ) -> None:
-    """A skipped table loads nothing silently, so an optional one is named here."""
+    """A skipped table loads nothing silently, so no app-database table is optional."""
     assert {table.name for table in spec.tables if table.optional} == set()

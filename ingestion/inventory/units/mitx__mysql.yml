@@ -104,9 +104,10 @@ airbyte:
     - workflow_assessmentworkflow
     - workflow_assessmentworkflowstep
 tables:
-# The five assessment_ai* tables are ORA2's retired AI grading: production
-# raw holds 0 rows in each, QA's database has none of them (2026-11-12), and
-# the IRx export never delivered them. The production connection still syncs
+# The five assessment_ai* tables are ORA2's retired AI grading. Production
+# raw holds 0 rows in each (2026-11-13), QA's database has none of them
+# (2026-11-12), and the IRx export never delivered them (IRx could only
+# read their irx__ models in the warehouse). The production connection still syncs
 # them, so they stay here unmodeled until its streams are deselected and they
 # move to retired.yml.
 - name: assessment_aiclassifier
