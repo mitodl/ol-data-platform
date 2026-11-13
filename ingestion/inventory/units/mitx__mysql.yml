@@ -104,41 +104,46 @@ airbyte:
     - workflow_assessmentworkflow
     - workflow_assessmentworkflowstep
 tables:
+# The five assessment_ai* tables are ORA2's retired AI grading: production
+# raw holds 0 rows in each, QA's database has none of them (2026-11-12), and
+# the IRx export never delivered them. The production connection still syncs
+# them, so they stay here unmodeled until its streams are deselected and they
+# move to retired.yml.
 - name: assessment_aiclassifier
   raw_table: raw__mitx__openedx__mysql__assessment_aiclassifier
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: true
+  modeled: false
 - name: assessment_aiclassifierset
   raw_table: raw__mitx__openedx__mysql__assessment_aiclassifierset
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: true
+  modeled: false
 - name: assessment_aigradingworkflow
   raw_table: raw__mitx__openedx__mysql__assessment_aigradingworkflow
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: true
+  modeled: false
 - name: assessment_aitrainingworkflow
   raw_table: raw__mitx__openedx__mysql__assessment_aitrainingworkflow
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: true
+  modeled: false
 - name: assessment_aitrainingworkflow_training_examples
   raw_table: raw__mitx__openedx__mysql__assessment_aitrainingworkflow_training_examples
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: true
+  modeled: false
 - name: assessment_assessment
   raw_table: raw__mitx__openedx__mysql__assessment_assessment
   sync_mode: full_refresh_overwrite

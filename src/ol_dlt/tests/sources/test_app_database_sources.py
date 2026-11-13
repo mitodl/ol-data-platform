@@ -148,23 +148,11 @@ def test_password_hash_is_excluded(spec: DatabaseSourceSpec, table_name: str) ->
 
 
 @pytest.mark.parametrize(PARAMS, SOURCES)
-def test_only_the_retired_ai_grading_tables_are_optional(
+def test_no_table_is_optional(
     build_source: Callable[[], Any],
     spec: DatabaseSourceSpec,
     unit_stem: str,
     module_name: str,
 ) -> None:
-    """A skipped table loads nothing silently, so each one has to be named here."""
-    optional = {table.name for table in spec.tables if table.optional}
-    expected = (
-        {
-            "assessment_aiclassifier",
-            "assessment_aiclassifierset",
-            "assessment_aigradingworkflow",
-            "assessment_aitrainingworkflow",
-            "assessment_aitrainingworkflow_training_examples",
-        }
-        if unit_stem == "mitx__mysql"
-        else set()
-    )
-    assert optional == expected
+    """A skipped table loads nothing silently, so an optional one is named here."""
+    assert {table.name for table in spec.tables if table.optional} == set()
