@@ -127,7 +127,7 @@ def test_a_misaligned_range_every_time_gives_up(tmp_path: Path) -> None:
             206, content=EXPORT[4:], headers={"Content-Range": "bytes 4-19/20"}
         )
 
-    with pytest.raises(RuntimeError, match="did not resume the file"):
+    with pytest.raises(RuntimeError, match="without receiving the whole file"):
         client_answering(handler).download_course_export(
             EXPORT_URL, tmp_path / "export.imscc"
         )
@@ -183,3 +183,49 @@ def test_the_download_asks_for_no_content_encoding(tmp_path: Path) -> None:
     )
 
     assert encodings == ["identity"]
+
+
+def test_a_clean_but_short_206_is_resumed_until_the_file_is_whole(
+    tmp_path: Path,
+) -> None:
+    """A server may answer a range with less than the rest and end the body cleanly."""
+    ranges: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        ranges.append(request.headers.get("Range"))
+        if len(ranges) == 1:
+            return httpx.Response(200, stream=CutOffStream(EXPORT[:8]))
+        if len(ranges) == 2:
+            return httpx.Response(
+                206, content=EXPORT[8:12], headers={"Content-Range": "bytes 8-11/20"}
+            )
+        return httpx.Response(
+            206, content=EXPORT[12:], headers={"Content-Range": "bytes 12-19/20"}
+        )
+
+    path = client_answering(handler).download_course_export(
+        EXPORT_URL, tmp_path / "export.imscc"
+    )
+
+    assert path.read_bytes() == EXPORT
+    assert ranges == [None, "bytes=8-", "bytes=12-"]
+
+
+def test_a_206_that_never_completes_the_file_fails(tmp_path: Path) -> None:
+    ranges: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        ranges.append(request.headers.get("Range"))
+        if len(ranges) == 1:
+            return httpx.Response(200, stream=CutOffStream(EXPORT[:8]))
+        start = 8 + len(ranges) - 2
+        return httpx.Response(
+            206,
+            content=EXPORT[start : start + 1],
+            headers={"Content-Range": f"bytes {start}-{start}/20"},
+        )
+
+    with pytest.raises(RuntimeError, match="without receiving the whole file"):
+        client_answering(handler).download_course_export(
+            EXPORT_URL, tmp_path / "export.imscc"
+        )

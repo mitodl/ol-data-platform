@@ -116,11 +116,14 @@ class CanvasApiClient(BaseApiClient):
                         return output_path
                     response.raise_for_status()
                     resumes = response.status_code == HTTPStatus.PARTIAL_CONTENT
-                    if resumes and not response.headers.get(
-                        "Content-Range", ""
-                    ).startswith(f"bytes {written}-"):
+                    content_range = response.headers.get("Content-Range", "")
+                    if resumes and not content_range.startswith(f"bytes {written}-"):
                         output_path.unlink(missing_ok=True)
                         continue
+                    # A 206 may cover less than the rest of the file and still
+                    # end cleanly, so its total is what says the file is whole.
+                    total = content_range.rpartition("/")[2]
+                    expected_size = int(total) if resumes and total.isdigit() else None
                     with output_path.open("ab" if resumes else "wb") as f:
                         for chunk in response.iter_bytes():
                             f.write(chunk)
@@ -128,11 +131,11 @@ class CanvasApiClient(BaseApiClient):
                 if attempt == DOWNLOAD_RESUME_ATTEMPTS:
                     raise
             else:
-                return output_path
+                if expected_size is None or output_path.stat().st_size >= expected_size:
+                    return output_path
         msg = (
             f"Gave up on {output_path.name} after {DOWNLOAD_RESUME_ATTEMPTS + 1} "
-            "requests: the last range request got a Content-Range that did not "
-            "resume the file."
+            "requests without receiving the whole file."
         )
         raise RuntimeError(msg)
 
