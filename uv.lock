@@ -3136,12 +3136,13 @@ dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-llm"
-version = "0.0.13"
+version = "0.0.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "httpx", extra = ["http2"] },
     { name = "httpx2" },
+    { name = "jinja2" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
     { name = "opik" },
@@ -3149,9 +3150,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/32/3e/7f9a5156018034e9074fcb3768218d4063c762d2259da3dea2bc11542747/ol_llm-0.0.13.tar.gz", hash = "sha256:13dff41f695344a4e551fe85c065065de6616eaa77dd48ab2c9715506d16c039", size = 350996, upload-time = "2026-11-12T18:50:27.821Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/e8/865669292272dd97c5d775ec456eadb086e70110d783859f162db75b9cfc/ol_llm-0.0.14.tar.gz", hash = "sha256:cf47cfefcdbb5c6838e4b18219be9b40a02e51952518a274e9efe4335d71a28e", size = 392689, upload-time = "2026-11-13T18:23:18.783Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/01/442c80cb75b2b1d46374d11f95c77c8ff1a810b16b3af116b19d1d8add36/ol_llm-0.0.13-py3-none-any.whl", hash = "sha256:fff48ee4ef5daeedc276d87afe1bf82e610765b3bcde2d1618ecddb295083602", size = 173748, upload-time = "2026-11-12T18:50:26.318Z" },
+    { url = "https://files.pythonhosted.org/packages/39/1e/756587e760242c08110ce54884772671d9559bfb49260815e23a80fc5b5c/ol_llm-0.0.14-py3-none-any.whl", hash = "sha256:9c4fd7c0dfed096b8385782b00948ee6d277d318f4a553feacfb7f35969b9055", size = 215589, upload-time = "2026-11-13T18:23:17.165Z" },
 ]
 
 [package.optional-dependencies]
@@ -3219,7 +3220,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
     { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.3" },
-    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.13" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.14" },
     { name = "pandas", specifier = "~=3.1.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },

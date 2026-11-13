@@ -16,9 +16,8 @@ from ml.lib.summarize import (
     Summarizer,
     summary_use_case,
 )
-from ol_llm.evaluation import ValidatorMetric
+from ol_llm.evaluation import ValidatorMetric, hallucination
 from ol_llm.gate import GateContext, Suite
-from opik.evaluation.metrics import Hallucination
 
 # Markdown the prompt rules out: a heading, list item, quote, or table row at a
 # line start, emphasis, code, or a link. A bare __ and an underscore inside a word
@@ -99,7 +98,7 @@ def suite(context: GateContext) -> Suite:
         result = summarizer.summarize(
             {"feedback_conversation_pk": None, "conversation_text": text}
         )
-        # Without a context, Opik's Hallucination judges the output against
+        # Without a context, the hallucination metric judges the output against
         # general knowledge and ignores the input.
         return {"input": text, "output": result.output, "context": [text]}
 
@@ -109,7 +108,7 @@ def suite(context: GateContext) -> Suite:
             ValidatorMetric("plain_text", plain_text),
             ValidatorMetric("withholds_details", withholds_details),
             ValidatorMetric("at_most_three_sentences", at_most_three_sentences),
-            Hallucination(model=context.require_judge()),
+            hallucination(context.require_judge()),
         ],
         experiment_config={"model": DEPLOYED_SUMMARY_MODEL},
     )
