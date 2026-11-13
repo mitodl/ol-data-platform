@@ -176,9 +176,10 @@ def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
     assert row["excluded"] == "true"
     assert row["exclusion_reason"] == "unreferenced_static"
     assert list(row) == list(course_xml_blocks.FILE_EXCLUSION_FIELDS)
-    # Files written before the asset stamped and dated its rows have neither.
+    # Files written before the asset stamped, dated and keyed its rows have none.
     assert row["extracted_at"] is None
     assert row["release_date"] is None
+    assert row["content_file_key"] is None
 
 
 def test_file_exclusion_row_keeps_the_release_date() -> None:
@@ -193,11 +194,17 @@ def test_file_exclusion_row_keeps_the_release_date() -> None:
                 "exclusion_reason": None,
                 "extracted_at": "2026-10-22T00:00:00+00:00",
                 "release_date": "2027-02-02T15:00:00.000000Z",
+                "content_file_key": (
+                    "block-v1:MITxT+7.05x+2T2026+type@html+block@801x:final"
+                ),
             }
         ),
         course_xml_blocks.OPENEDX_FILE_EXCLUSIONS,
     )
     assert row["release_date"] == "2027-02-02T15:00:00.000000Z"
+    assert row["content_file_key"] == (
+        "block-v1:MITxT+7.05x+2T2026+type@html+block@801x:final"
+    )
 
 
 def test_unit_row_keeps_its_order_and_files() -> None:

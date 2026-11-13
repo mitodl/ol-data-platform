@@ -1,7 +1,7 @@
 """Learn's own tests for the OlxArchive the exclusion asset ports.
 
-Copied from mit-learn learning_resources/etl/olx_test.py at c9f269c86
-(2026-10-22; its units tests unchanged through 3128467e1), less the tests of
+Copied from mit-learn learning_resources/etl/olx_test.py at 5da30ef30
+(2026-11-09, mit-learn#4264; unchanged through 3e0ad0e67), less the tests of
 what the port leaves out (video metadata, and loading units into Learn's
 database), so a change to Learn's rules shows up as a failing case here. The
 differences: ETLSource names are spelled out, no test needs the database, units
@@ -32,6 +32,24 @@ def _write_olx(root, rel, text):
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+
+
+def _write_tree(root, files):
+    """Write each file of a {relative path: text} dict under root"""
+    for rel, text in files.items():
+        _write_olx(root, rel, text)
+
+
+def _excluded_keys(archive, run_id):
+    """
+    Learn's OlxArchive.excluded_keys, which the port leaves out: keys of
+    excluded files, minus any key an ingested path shares
+    """
+    return {
+        archive.key(path, run_id)
+        for path in archive.text_files
+        if path in archive.excluded
+    } - {archive.key(path, run_id) for path in archive.paths}
 
 
 def _ingested(olx, etl_source=None, **kwargs):
@@ -1712,23 +1730,26 @@ def test_olx_archive_units_missing_course_file(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("missing", "message"),
+    ("chapter", "missing", "message"),
     [
-        ("chapter/ch.xml", r"chapter/ch\.xml is missing"),
-        ("sequential/seq.xml", r"sequential/seq\.xml is missing"),
+        ("ch", "chapter/ch.xml", r"chapter/ch\.xml is missing"),
+        ("ch", "sequential/seq.xml", r"sequential/seq\.xml is missing"),
+        # a colon-named block's message names the file edX would have written
+        ("ch:one", "chapter/ch/one.xml", r"chapter/ch/one\.xml is missing"),
     ],
 )
-def test_olx_archive_units_missing_outline_file(tmp_path, missing, message):
+def test_olx_archive_units_missing_outline_file(tmp_path, chapter, missing, message):
     """A chapter or sequential pointing to a missing file is not read as empty"""
     files = {
         "course.xml": '<course url_name="run" org="MITx" course="1"/>',
-        "course/run.xml": '<course><chapter url_name="ch"/></course>',
-        "chapter/ch.xml": '<chapter><sequential url_name="seq"/></chapter>',
+        "course/run.xml": f'<course><chapter url_name="{chapter}"/></course>',
+        f"chapter/{chapter.replace(':', '/')}.xml": (
+            '<chapter><sequential url_name="seq"/></chapter>'
+        ),
         "sequential/seq.xml": "<sequential><vertical><html><p>hi</p></html></vertical></sequential>",
     }
     del files[missing]
-    for rel, text in files.items():
-        _write_olx(tmp_path, rel, text)
+    _write_tree(tmp_path, files)
     with pytest.raises(ValueError, match=message):
         _units(tmp_path)
 
@@ -1888,3 +1909,195 @@ def test_olx_archive_sequential_blocks_skip_markup(tmp_path):
 
     # the sequential, the vertical, the html and the problem
     assert len(blocks) == 4
+
+
+def _colon_olx(olx):
+    """
+    Write a course whose blocks have url_names with a colon, stored as edX
+    writes them: a:b in <type>/a/b.xml
+    """
+    files = {
+        "course.xml": '<course url_name="run" org="MITx" course="1"/>',
+        "course/run.xml": '<course><chapter url_name="ch:one"/></course>',
+        "chapter/ch/one.xml": '<chapter><sequential url_name="s:one"/></chapter>',
+        "sequential/s/one.xml": (
+            f"<sequential {_start(START_FUTURE)}>"
+            '<vertical url_name="v:1"/><vertical url_name="v:staff"/></sequential>'
+        ),
+        # an inline html block reads its body from its own folder too
+        "vertical/v/1.xml": (
+            '<vertical><html url_name="h:ok"/>'
+            '<html url_name="h:in" filename="body"/>'
+            '<video url_name="vid:1"/></vertical>'
+        ),
+        "html/h/ok.xml": '<html filename="other"/>',
+        "html/h/other.html": "<p>ok</p>",
+        "html/h/body.html": "<p>inline body</p>",
+        "video/vid/1.xml": (
+            '<video url_name="vid:1" display_name="V">'
+            '<transcript language="en" src="v1.srt"/></video>'
+        ),
+        "static/v1.srt": "1\n00:00:00,000 --> 00:00:01,000\nhi\n",
+        "vertical/v/staff.xml": (
+            '<vertical visible_to_staff_only="true"><problem url_name="p:staff"/>'
+            '<html url_name="h:staff"/></vertical>'
+        ),
+        "problem/p/staff.xml": "<problem/>",
+        "html/h/staff.xml": '<html filename="../private"/>',
+        "html/private.html": "<p>staff only</p>",
+    }
+    _write_tree(olx, files)
+
+
+def test_olx_archive_colon_url_names(tmp_path):
+    """
+    A url_name with a colon is read from where edX exports it, so its block's
+    units, staff-only status and release date apply, and its files are keyed
+    by the url_name (Learn's case less video_metadata, which the port leaves out)
+    """
+    olx = tmp_path / "course"
+    _colon_olx(olx)
+    archive = OlxArchive(olx, "mitxonline")
+
+    assert _ingested(olx) == [
+        "chapter/ch/one.xml",
+        "course.xml",
+        "course/run.xml",
+        "html/h/body.html",
+        "html/h/ok.xml",
+        "html/h/other.html",
+        "sequential/s/one.xml",
+        "static/v1.srt",
+        "vertical/v/1.xml",
+        "video/vid/1.xml",
+    ]
+    _assert_release_dates(
+        olx,
+        {
+            "html/h/ok.xml": START_FUTURE,
+            "html/h/body.html": START_FUTURE,
+            "video/vid/1.xml": START_FUTURE,
+        },
+    )
+    block = "block-v1:MITx+1+run+type@"
+    unit, context = archive.units(RUN_ID)
+    assert unit["external_id"] == f"{block}sequential+block@s:one"
+    assert unit["url_name"] == "s:one"
+    # the inline body is the lesson, not the vertical holding it
+    assert list(unit["content_files"]) == [
+        f"{block}html+block@h:ok",
+        f"{block}html+block@h:other",
+        f"{block}html+block@h:body",
+        f"{block}video+block@vid:1",
+        "asset-v1:MITx+1+run+type@asset+block@v1.srt",
+    ]
+    assert context["content_files"] == {}
+    assert _excluded_keys(archive, RUN_ID) == {
+        f"{block}vertical+block@v:staff",
+        f"{block}problem+block@p:staff",
+        f"{block}html+block@h:staff",
+        f"{block}html+block@private",
+    }
+
+
+@pytest.mark.parametrize(
+    ("rel", "is_olx", "expected"),
+    [
+        ("sequential/801x/a.xml", True, "type@sequential+block@801x:a"),
+        ("problem/a/b/c d.xml", True, "type@problem+block@a:b:c_d"),
+        ("problem/p.xml", True, "type@problem+block@p"),
+        # folders that hold no blocks keep their old keys
+        ("static/images/x.png", True, "type@images+block@x"),
+        ("tabs/t/page.html", True, "type@t+block@page"),
+        # so does any file of a tree that is not OLX, like Canvas
+        ("sequential/801x/a.xml", False, "type@801x+block@a"),
+    ],
+)
+def test_olx_archive_key(tmp_path, rel, is_olx, expected):
+    """An OLX tree keys a nested block file by its url_name; other trees don't"""
+    if is_olx:
+        _write_olx(tmp_path, "course.xml", "<course/>")
+    assert OlxArchive(tmp_path).key(tmp_path / rel, "course-v1:test_run") == (
+        f"block-v1:test_run+{expected}"
+    )
+
+
+def test_olx_archive_odd_url_name_parts(tmp_path):
+    """
+    url_names with an empty, . or .. part stay in the tree, keep staff-only
+    exclusion, and keep their declared key
+    """
+    olx = tmp_path / "course"
+    files = {
+        "course.xml": '<course url_name="run" org="MITx" course="1"/>',
+        "course/run.xml": '<course><chapter url_name="ch"/></course>',
+        "chapter/ch.xml": (
+            '<chapter><vertical url_name=":v" visible_to_staff_only="true"/>'
+            '<html url_name="h::x"/><problem url_name="q"/>'
+            '<problem url_name="q:" visible_to_staff_only="true"/>'
+            '<html url_name="a:.." visible_to_staff_only="true"/>'
+            '<html url_name="a:..:b"/></chapter>'
+        ),
+        # a:.. is the file ..., a:..:b resolves to html/b.xml
+        "html/a/...xml": "<html><p>staff only</p></html>",
+        "html/a/../b.xml": "<html><p>b</p></html>",
+        # q: is stored at problem/q/.xml; it mustn't take q's file
+        "problem/q.xml": "<problem/>",
+        "problem/q/.xml": "<problem/>",
+        "vertical/v.xml": '<vertical><problem url_name="p"/></vertical>',
+        "problem/p.xml": "<problem/>",
+        "html/h/x.xml": "<html><p>hi</p></html>",
+    }
+    _write_tree(olx, files)
+    run_id = "course-v1:test_run"
+    archive = OlxArchive(olx)
+
+    assert _ingested(olx) == [
+        "chapter/ch.xml",
+        "course.xml",
+        "course/run.xml",
+        "html/b.xml",
+        "html/h/x.xml",
+        "problem/q.xml",
+    ]
+    assert archive.key(olx / "html/h/x.xml", run_id) == (
+        "block-v1:test_run+type@html+block@h::x"
+    )
+    assert archive.key(olx / "problem/q.xml", run_id) == (
+        "block-v1:test_run+type@problem+block@q"
+    )
+    assert archive.key(olx / "html/b.xml", run_id) == (
+        "block-v1:test_run+type@html+block@a:..:b"
+    )
+    # Learn's case also expects html+block@a:.. here. Under Python 3.14, which
+    # this code location runs, pathlib gives "...xml" no suffix (3.12, Learn's,
+    # reads it as .xml), so the file is not a text file and has no key to
+    # exclude. Production exports had no such file name on 2026-11-10.
+    assert _excluded_keys(archive, run_id) == {
+        "block-v1:test_run+type@vertical+block@:v",
+        "block-v1:test_run+type@problem+block@p",
+    }
+
+
+def test_olx_archive_html_filename_ending_in_html(tmp_path):
+    """
+    An html filename that already ends in .html names <filename>.html, and
+    only if that is missing the file as written, as in edX
+    """
+    olx = tmp_path / "course"
+    files = {
+        "course.xml": '<course url_name="run" org="MITx" course="1"/>',
+        "course/run.xml": (
+            '<course><chapter url_name="ch" visible_to_staff_only="true"/></course>'
+        ),
+        "chapter/ch.xml": (
+            '<chapter><html url_name="c:only" filename="private.html"/>'
+            '<html url_name="c:two" filename="both.html"/></chapter>'
+        ),
+        "html/c/private.html": "<p>staff only</p>",
+        # both.html.html is the body; both.html is another file
+        "html/c/both.html.html": "<p>staff only</p>",
+        "html/c/both.html": "<p>not this block's</p>",
+    }
+    _write_tree(olx, files)
+    assert _ingested(olx) == ["course.xml", "course/run.xml", "html/c/both.html"]
