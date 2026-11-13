@@ -149,10 +149,13 @@ class TestCommittedFiles:
         assert stale_history_files(REPO_ROOT, rendered) == [], "Run `ol-dbt inventory history --write`."
 
     def test_real_scope(self) -> None:
-        """339 tables on 2026-11-10: the decided rule's ~330, keyed, minus the activity tables."""
+        """340 tables: 339 on 2026-11-10, plus mitxonline courses_paidcourserun.
+
+        The 339 were the decided rule's ~330, keyed, minus the activity tables.
+        """
         selected = history_tables(load_units(REAL_INVENTORY))
         raw_tables = {table.raw_table for rows in selected.values() for table in rows}
-        assert len(raw_tables) == 339  # noqa: PLR2004
+        assert len(raw_tables) == 340  # noqa: PLR2004
         assert not raw_tables & LEARNER_ACTIVITY_TABLES
 
     def test_pilot_snapshots_keep_their_names_and_alone_are_live(self) -> None:
