@@ -184,3 +184,30 @@ def test_a_transient_blip_retries_the_step_and_succeeds() -> None:
 
     assert result.success
     assert len(attempts) == 2
+
+
+def test_exhausted_transient_retries_stop_run_retries() -> None:
+    """The step already retried; run_retries would multiply each attempt by four."""
+    attempts = []
+
+    @asset(name="unreachable")
+    def unreachable() -> None:
+        with retry_transient_errors(max_retries=1, seconds_to_wait=0):
+            attempts.append(1)
+            msg = "EOF occurred in violation of protocol"
+            raise httpx2.ConnectError(msg)
+
+    instance = dg.DagsterInstance.ephemeral()
+    dg.materialize(
+        with_failure_hooks([unreachable]), instance=instance, raise_on_error=False
+    )
+
+    assert len(attempts) == 2
+    assert _tags_of_the_only_run(instance)[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+
+
+def test_a_retry_request_from_elsewhere_leaves_run_retries_alone() -> None:
+    """Only retry_transient_errors' own exhaustion is known to be retried already."""
+    instance = _run_failing_asset(dg.RetryRequested(max_retries=0))
+
+    assert RETRY_ON_ASSET_OR_OP_FAILURE_TAG not in _tags_of_the_only_run(instance)

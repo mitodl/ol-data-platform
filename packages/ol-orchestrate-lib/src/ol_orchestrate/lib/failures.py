@@ -111,6 +111,11 @@ def retry_transient_errors(
 def stop_run_retries(context: HookContext) -> None:
     """Stop ``run_retries`` re-running a step that failed permanently.
 
+    Also stops it after ``retry_transient_errors`` has used up its retries. The
+    step has already been retried in the run, so ``run_retries`` would multiply
+    each attempt by four, and in ``course_xml`` an attempt can start a Studio
+    export.
+
     The daemon reads ``dagster/retry_on_asset_or_op_failure`` off the run when it
     processes the failure, which is after this hook has run in the run worker, so
     stamping it here is in time to be seen.
@@ -119,7 +124,11 @@ def stop_run_retries(context: HookContext) -> None:
     permanent failure or the guarantee is only as good as whoever remembered, and
     the raise sites do not all have an op context to hand.
     """
-    if not isinstance(context.op_exception, PermanentFailure):
+    exception = context.op_exception
+    retried_in_run = isinstance(exception, RetryRequested) and isinstance(
+        exception.__cause__, TRANSIENT_HTTP_ERRORS
+    )
+    if not (isinstance(exception, PermanentFailure) or retried_in_run):
         return
 
     context.instance.add_run_tags(
