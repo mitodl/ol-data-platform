@@ -34,26 +34,29 @@ with source_offerings as (
         *
         , {{ regexp_extract_or_null('duration_normalized', "'^(\\d+(?:\\.\\d+)?)'", 1) }} as duration_min_value
         , {{ regexp_extract_or_null(
-            'duration_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|to)\\s*(\\d+(?:\\.\\d+)?)'", 1
+            'duration_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)'", 1
         ) }} as duration_max_value
-        -- the first word after the number or range, up to a space, "/" or "+"
-        -- ("6 hours/day")
+        -- the first word after the number or range (and an optional hyphen, "8-week"),
+        -- up to a space or punctuation ("3 mes/curso", "3 days, online",
+        -- "2 days in person+3 live webinars")
         , {{ regexp_extract_or_null(
-            'duration_normalized', "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|to)\\s*\\d+(?:\\.\\d+)?)?\\s*([^\\s/+]+)'", 1
+            'duration_normalized',
+            "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?)?\\s*-?\\s*([^\\s/+,.;:()]+)'",
+            1
         ) }} as duration_unit_word
-        -- A number or range of hours at the start, e.g. "6-8 hours/week", "5 - 7 Hours/week",
-        -- "8 hours, 5 days/week". "3 one-week modules" names no hours.
+        -- A number or range of hours at the start, e.g. "6-8 hours/week", "6–8 hours/week",
+        -- "5 - 7 Hours/week", "8 hours, 5 days/week". "3 one-week modules" names no hours.
         , {{ regexp_extract_or_null(
-            'time_commitment_normalized', "'^(\\d+(?:\\.\\d+)?)(?:\\s*(?:-|to)\\s*\\d+(?:\\.\\d+)?)?\\s*hours?'", 1
+            'time_commitment_normalized', "'^(\\d+(?:\\.\\d+)?)(?:\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?)?\\s*hours?'", 1
         ) }} as hours_min_value
         , {{ regexp_extract_or_null(
-            'time_commitment_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|to)\\s*(\\d+(?:\\.\\d+)?)\\s*hours?'", 1
+            'time_commitment_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)\\s*hours?'", 1
         ) }} as hours_max_value
         -- the period the hours are per, only when it follows them ("hours/week",
         -- "hours/ day", "hours per week")
         , {{ regexp_extract_or_null(
             'time_commitment_normalized'
-            , "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|to)\\s*\\d+(?:\\.\\d+)?)?\\s*hours?\\s*(?:/|per)\\s*(week|day)'"
+            , "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?)?\\s*hours?\\s*(?:/|per)\\s*(week|day)'"
             , 1
         ) }} as hours_period
     from normalized_offerings
@@ -100,8 +103,8 @@ select
     ) }} as instructors
     , offerings.courseoffering_continuing_ed_credits as continuing_ed_credits
     , nullif(offerings.courseoffering_duration, '') as duration
-    , cast(offerings.duration_min_value as decimal(8, 2)) as duration_min
-    , cast(coalesce(offerings.duration_max_value, offerings.duration_min_value) as decimal(8, 2))
+    , {{ try_cast('offerings.duration_min_value', 'decimal(8, 2)') }} as duration_min
+    , {{ try_cast('coalesce(offerings.duration_max_value, offerings.duration_min_value)', 'decimal(8, 2)') }}
         as duration_max
     , case
         when offerings.duration_min_value is null then null
@@ -115,8 +118,8 @@ select
         when offerings.duration_unit_word in ('semester', 'semesters', 'semestre', 'semestres') then 'semester'
     end as duration_unit
     , nullif(offerings.courseoffering_time_commitment, '') as time_commitment
-    , cast(offerings.hours_min_value as decimal(8, 2)) as time_commitment_min_hours
-    , cast(coalesce(offerings.hours_max_value, offerings.hours_min_value) as decimal(8, 2))
+    , {{ try_cast('offerings.hours_min_value', 'decimal(8, 2)') }} as time_commitment_min_hours
+    , {{ try_cast('coalesce(offerings.hours_max_value, offerings.hours_min_value)', 'decimal(8, 2)') }}
         as time_commitment_max_hours
     , offerings.hours_period as time_commitment_hours_per
 from offerings

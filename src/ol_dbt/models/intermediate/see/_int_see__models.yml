@@ -144,8 +144,11 @@ unit_tests:
     with a flag for an unknown code. The duration keeps its own unit, so "6 hours/day"
     is 6 hours, not weeks. The time commitment's hours and period are read only when
     the text names them, so "8 hours, 5 days/week" is 8 hours with no period rather
-    than 8 to 5, and "3 one-week modules" has no hours. An offering whose course
-    Sloan doesn't list is kept.
+    than 8 to 5, and "3 one-week modules" has no hours. A hyphen before the unit
+    ("3-day"), punctuation after it ("6 weeks, live online", "6 days(on campus)")
+    and
+    an en dash in a range ("6–8 weeks", "6–8 hours/week") all parse. An offering whose
+    course Sloan doesn't list is kept.
   model: int__see__course_runs
   given:
   - input: ref('stg__see__api__course_offerings')
@@ -163,6 +166,19 @@ unit_tests:
     - {course_id: c2, courseoffering_title: r4, courseoffering_delivery: Online, courseoffering_format: Asynchronous
         (On-Demand), courseoffering_currency: '', courseoffering_duration: '', courseoffering_time_commitment: "4\
         \ hours/ day + 1-2 hours on team project assignment"}
+    - {course_id: c1, courseoffering_title: r5, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "3-day", courseoffering_time_commitment: "6–8 hours/week"}
+    - {course_id: c1, courseoffering_title: r6, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6 weeks, live online", courseoffering_time_commitment: "4\
+        \ – 6 hours per week"}
+    - {course_id: c1, courseoffering_title: r7, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6–8 weeks", courseoffering_time_commitment: null}
+    - {course_id: c1, courseoffering_title: r8, courseoffering_delivery: In Person,
+      courseoffering_format: null, courseoffering_location: null, courseoffering_currency: USD,
+      courseoffering_duration: "6 days(on campus)", courseoffering_time_commitment: null}
   - input: ref('stg__see__api__courses')
     rows:
     - {course_id: c1, course_title: Course one, course_url: 'https://executive.mit.edu/c1'}
@@ -194,6 +210,27 @@ unit_tests:
       duration_max: null, duration_unit: null, time_commitment: "4 hours/ day + 1-2\
         \ hours on team project assignment", time_commitment_min_hours: 4, time_commitment_max_hours: 4,
       time_commitment_hours_per: day}
+    - {readable_id: c1, run_id: r5, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "3-day", duration_min: 3,
+      duration_max: 3, duration_unit: day, time_commitment: "6–8 hours/week", time_commitment_min_hours: 6,
+      time_commitment_max_hours: 8, time_commitment_hours_per: week}
+    - {readable_id: c1, run_id: r6, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6 weeks,\
+        \ live online", duration_min: 6, duration_max: 6, duration_unit: week, time_commitment: "4\
+        \ – 6 hours per week", time_commitment_min_hours: 4, time_commitment_max_hours: 6,
+      time_commitment_hours_per: week}
+    - {readable_id: c1, run_id: r7, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6–8 weeks",
+      duration_min: 6, duration_max: 8, duration_unit: week, time_commitment: null,
+      time_commitment_min_hours: null, time_commitment_max_hours: null, time_commitment_hours_per: null}
+    - {readable_id: c1, run_id: r8, title: Course one, delivery_label: In Person,
+      format_label: null, is_on_demand: false, is_synchronous: true, is_asynchronous: false,
+      location: null, currency: USD, is_known_currency: true, duration: "6 days(on\
+        \ campus)", duration_min: 6, duration_max: 6, duration_unit: day, time_commitment: null,
+      time_commitment_min_hours: null, time_commitment_max_hours: null, time_commitment_hours_per: null}
 
 - name: test_int__see__courses_keeps_every_course
   description: >
