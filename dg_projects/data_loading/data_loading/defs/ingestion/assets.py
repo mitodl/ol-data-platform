@@ -203,21 +203,26 @@ def google_ads_assets(
             context.log.warning("Backfill not drained; the lookback waits a run.")
             yield from backfill
             return
-        # The merge logs nothing while it writes, and it is most of a daily run.
+        # The merge writes silently, and it is most of a daily run.
         context.log.info(
-            "Lookback: re-pulling the last %s days of %s tables and merging them",
+            "Lookback: re-pulling %s days before each account's cursor for %s "
+            "tables and merging them",
             google_ads.DEFAULT_LOOKBACK_DAYS,
             len(daily),
         )
         started = time.monotonic()
-        lookback = list(
-            dlt.run(
-                context=context,
-                dlt_source=google_ads.build_source().with_resources(*daily),
-                loader_file_format="parquet",
+        try:
+            lookback = list(
+                dlt.run(
+                    context=context,
+                    dlt_source=google_ads.build_source().with_resources(*daily),
+                    loader_file_format="parquet",
+                )
             )
-        )
-        context.log.info("Lookback merged in %.0fs", time.monotonic() - started)
+        finally:
+            context.log.info(
+                "Lookback re-pull and merge took %.0fs", time.monotonic() - started
+            )
         yield from lookback
 
 
