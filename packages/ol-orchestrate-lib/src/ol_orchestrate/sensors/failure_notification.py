@@ -197,7 +197,10 @@ def is_retry_of_a_reported_failure(run: DagsterRun) -> bool:
 # that exhausts its attempts serializes as
 # ``RetryRequestedFromPolicy -> <the user's exception>`` while the hook still
 # reports the user's exception. Several delivery assets carry a
-# RetryPolicy, so this is a live path, not a hypothetical one.
+# RetryPolicy, so this is a live path, not a hypothetical one. RetryRequested
+# is the same shape from failures.retry_transient_errors: an exhausted retry
+# serializes as ``RetryRequested -> <the transport error>``, and the hook
+# unwraps it to the transport error.
 DAGSTER_USER_CODE_WRAPPERS = frozenset(
     {
         "DagsterConfigMappingFunctionError",
@@ -209,6 +212,7 @@ DAGSTER_USER_CODE_WRAPPERS = frozenset(
         "DagsterTypeLoadingError",
         "DagsterUserCodeExecutionError",
         "DagsterUserCodeLoadError",
+        "RetryRequested",
         "RetryRequestedFromPolicy",
     }
 )

@@ -8,12 +8,14 @@ assert on the tag the daemon reads.
 """
 
 import dagster as dg
+import httpx2
 import pytest
 from dagster import AssetSpec, Failure, asset
 from ol_orchestrate.lib.failures import (
     RETRY_ON_ASSET_OR_OP_FAILURE_TAG,
     PermanentFailure,
     permanent_failure,
+    retry_transient_errors,
     with_failure_hooks,
 )
 from ol_orchestrate.lib.http_errors import PermanentHTTPFailure, TransientHTTPFailure
@@ -128,3 +130,84 @@ def test_with_failure_hooks_passes_through_non_assets_definitions() -> None:
     (passed_through,) = with_failure_hooks([spec])
 
     assert passed_through is spec
+
+
+# ── retry_transient_errors ────────────────────────────────────────────────────
+
+
+def test_a_transport_error_becomes_a_retry_request() -> None:
+    connect_error = httpx2.ConnectError("EOF occurred in violation of protocol")
+
+    with (
+        pytest.raises(dg.RetryRequested) as raised,
+        retry_transient_errors(max_retries=2, seconds_to_wait=5),
+    ):
+        raise connect_error
+
+    assert raised.value.max_retries == 2
+    assert raised.value.seconds_to_wait == 5
+    assert raised.value.__cause__ is connect_error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("a bug in the step"),
+        httpx2.UnsupportedProtocol(
+            "Request URL is missing an 'http://' or 'https://' protocol."
+        ),
+        httpx2.HTTPStatusError(
+            "405",
+            request=httpx2.Request("GET", "https://example.com"),
+            response=httpx2.Response(405),
+        ),
+    ],
+    ids=["not-http", "malformed-url", "http-status"],
+)
+def test_other_errors_are_not_retried(error: Exception) -> None:
+    with pytest.raises(type(error)), retry_transient_errors():
+        raise error
+
+
+def test_a_transient_blip_retries_the_step_and_succeeds() -> None:
+    attempts = []
+
+    @asset
+    def flaky() -> None:
+        with retry_transient_errors(seconds_to_wait=0):
+            attempts.append(1)
+            if len(attempts) == 1:
+                msg = "The read operation timed out"
+                raise httpx2.ReadTimeout(msg)
+
+    result = dg.materialize(with_failure_hooks([flaky]))
+
+    assert result.success
+    assert len(attempts) == 2
+
+
+def test_exhausted_transient_retries_stop_run_retries() -> None:
+    """The step already retried; run_retries would multiply each attempt by four."""
+    attempts = []
+
+    @asset(name="unreachable")
+    def unreachable() -> None:
+        with retry_transient_errors(max_retries=1, seconds_to_wait=0):
+            attempts.append(1)
+            msg = "EOF occurred in violation of protocol"
+            raise httpx2.ConnectError(msg)
+
+    instance = dg.DagsterInstance.ephemeral()
+    dg.materialize(
+        with_failure_hooks([unreachable]), instance=instance, raise_on_error=False
+    )
+
+    assert len(attempts) == 2
+    assert _tags_of_the_only_run(instance)[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+
+
+def test_a_retry_request_from_elsewhere_leaves_run_retries_alone() -> None:
+    """Only retry_transient_errors' own exhaustion is known to be retried already."""
+    instance = _run_failing_asset(dg.RetryRequested(max_retries=0))
+
+    assert RETRY_ON_ASSET_OR_OP_FAILURE_TAG not in _tags_of_the_only_run(instance)

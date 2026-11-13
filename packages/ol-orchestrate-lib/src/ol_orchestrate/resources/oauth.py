@@ -12,6 +12,11 @@ from pydantic import Field, PrivateAttr, ValidationError, validator
 from ol_orchestrate.resources.secrets.vault import Vault
 
 TOO_MANY_REQUESTS = 429
+# Retries the connection phase only (refused, reset, TLS handshake EOF, connect
+# timeout), where nothing has reached the server yet, so a retry cannot repeat
+# a request that was already acted on. Most transient Sentry events from the
+# openedx assets were this: DAGSTER-7P, SSL UNEXPECTED_EOF while connecting.
+CONNECT_RETRIES = 3
 # Each retry sleeps for Retry-After (default 60s), so this is the point past
 # which a caller is better served by an exception than by more waiting.
 MAX_RATE_LIMIT_RETRIES = 3
@@ -51,7 +56,10 @@ class OAuthApiClient(ConfigurableResource):
     def http_client(self) -> httpx.Client:
         if not self._http_client:
             timeout = httpx.Timeout(self.http_timeout, connect=10)
-            self._http_client = httpx.Client(timeout=timeout)
+            self._http_client = httpx.Client(
+                timeout=timeout,
+                transport=httpx.HTTPTransport(retries=CONNECT_RETRIES),
+            )
         return self._http_client
 
     @validator("token_type")
