@@ -4,10 +4,15 @@ The platform's point ids are Learn's, so a partition's chunks are read back from
 Learn's ``content_files`` collection by id, and the run's points there are listed
 to find the ones the platform lacks. Text and checksum mismatches are expected for
 mitxonline and xpro OLX files, whose text the platform approximates
-(docs/learn_embedding_config.md), so they only warn. A chunk whose text is
-Learn's but whose vector is not is an error: both sides embed the same text with
-text-embedding-3-large, so the Azure OpenAI and OpenAI deployments would be
-returning different vectors, or the two sides embed differently.
+(docs/learn_embedding_config.md), so they only warn. Both sides embed a chunk
+with Learn's text with text-embedding-3-large, Learn through OpenAI and the
+platform through Azure OpenAI, and the two return slightly different vectors of
+one text. A few vectors under ``MIN_COSINE_SIMILARITY`` are that noise and warn,
+with the lowest points named. It is an error when a vector is under
+``FLOOR_COSINE_SIMILARITY``, so is taken as not one of its text, or when a model's
+vectors are under ``MIN_COSINE_SIMILARITY`` too often to be noise
+(``SYSTEMATIC_MIN_CHUNKS`` and ``SYSTEMATIC_SHARE``), so the two sides embed
+differently.
 
 The checks have no automation condition, so they run with every materialization
 of their asset: automation's, backfills' and the UI's. They read Learn's cluster
@@ -43,6 +48,7 @@ from ml.lib.learn_embeddings import (
     strategies,
 )
 from ml.lib.learn_parity import (
+    FLOOR_COSINE_SIMILARITY,
     MIN_COSINE_SIMILARITY,
     ParityReport,
     compare_with_learn,
@@ -92,12 +98,7 @@ def platform_chunks(
     )
 
 
-def check_result(report: ParityReport) -> AssetCheckResult:
-    """Fail with ERROR for unlike vectors of the same text, WARN for other gaps.
-
-    :param report: the comparison
-    :rtype: AssetCheckResult
-    """
+def _report_metadata(report: ParityReport) -> dict[str, MetadataValue]:
     metadata: dict[str, MetadataValue] = {
         "platform_chunks": MetadataValue.int(report.platform_chunks),
         "platform_chunks_without_vector": MetadataValue.int(
@@ -114,6 +115,8 @@ def check_result(report: ParityReport) -> AssetCheckResult:
         "compared_vectors": MetadataValue.int(report.compared_vectors),
         "below_min_cosine": MetadataValue.int(report.below_threshold),
         "min_cosine_threshold": MetadataValue.float(MIN_COSINE_SIMILARITY),
+        "below_floor_cosine": MetadataValue.int(report.below_floor),
+        "floor_cosine_threshold": MetadataValue.float(FLOOR_COSINE_SIMILARITY),
         "platform_vector_size": MetadataValue.int(report.platform_vector_size),
         "vector_length_mismatches": MetadataValue.int(report.vector_length_mismatches),
     }
@@ -131,33 +134,82 @@ def check_result(report: ParityReport) -> AssetCheckResult:
         if stats.minimum is not None and stats.p50 is not None:
             metadata[f"{model_id}/cosine_min"] = MetadataValue.float(stats.minimum)
             metadata[f"{model_id}/cosine_p50"] = MetadataValue.float(stats.p50)
-    if report.vectors_differ:
-        description = (
-            f"{report.below_threshold} chunks with Learn's text have a vector, "
-            f"not from {report.reference_model_id}, under "
-            f"{MIN_COSINE_SIMILARITY} cosine similarity to Learn's"
+        if stats.lowest:
+            metadata[f"{model_id}/lowest_cosine_points"] = MetadataValue.json(
+                dict(stats.lowest)
+            )
+        if stats.non_finite:
+            metadata[f"{model_id}/non_finite_cosine_points"] = MetadataValue.json(
+                list(stats.non_finite)
+            )
+    return metadata
+
+
+def _below_threshold(report: ParityReport) -> str:
+    return (
+        f"{report.below_threshold} chunks with Learn's text have a vector, not "
+        f"from {report.reference_model_id}, under {MIN_COSINE_SIMILARITY} cosine "
+        "similarity to Learn's"
+    )
+
+
+def _error_reasons(report: ParityReport) -> list[str]:
+    reasons = []
+    if report.size_differs:
+        reasons.append(
+            f"Learn's dense vectors are {report.learn_vector_size} long and the "
+            f"platform's {report.platform_vector_size}"
         )
-        if report.vector_length_mismatches:
-            description += (
-                f"; {report.vector_length_mismatches} have a vector of another "
-                "length than Learn's"
-            )
-        if report.size_differs:
-            description = (
-                f"Learn's dense vectors are {report.learn_vector_size} long and "
-                f"the platform's {report.platform_vector_size}. {description}"
-            )
+    if report.below_floor:
+        reasons.append(
+            f"{report.below_floor} chunks with Learn's text have a vector under "
+            f"{FLOOR_COSINE_SIMILARITY} cosine similarity to Learn's, so not one of "
+            "that text"
+        )
+    reasons.extend(
+        f"{stats.below_threshold} of the {stats.compared} {model_id} vectors of "
+        f"chunks with Learn's text are under {MIN_COSINE_SIMILARITY} cosine "
+        "similarity to Learn's, too many to be the providers' noise"
+        for model_id, stats in report.models_embedding_differently.items()
+    )
+    if report.vector_length_mismatches:
+        reasons.append(
+            f"{report.vector_length_mismatches} have a vector of another length "
+            "than Learn's"
+        )
+    return reasons
+
+
+def check_result(report: ParityReport) -> AssetCheckResult:
+    """Fail with ERROR for vectors that differ beyond the providers' noise, WARN
+    for that noise and other gaps.
+
+    :param report: the comparison
+    :rtype: AssetCheckResult
+    """
+    metadata = _report_metadata(report)
+    if report.vectors_differ:
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.ERROR,
-            description=description,
+            description="; ".join(_error_reasons(report)),
             metadata=metadata,
         )
     if report.points_differ:
+        sentences = []
+        if report.below_threshold:
+            sentences.append(
+                f"{_below_threshold(report)}, none under {FLOOR_COSINE_SIMILARITY}, "
+                "so taken as the providers' noise (the points are in "
+                "<model>/lowest_cosine_points)."
+            )
+        if report.entries_differ:
+            sentences.append("Some points, texts or checksums differ from Learn's.")
+        description = " ".join(sentences)
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.WARN,
-            description="Some points, texts or checksums differ from Learn's",
+            description=description,
             metadata=metadata,
         )
     return AssetCheckResult(passed=True, metadata=metadata)
