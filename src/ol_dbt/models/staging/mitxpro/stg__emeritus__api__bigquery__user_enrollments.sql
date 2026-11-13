@@ -33,7 +33,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601('opportunity_created_date') }} as enrollment_created_on
         , {{ cast_timestamp_to_iso8601('opportunity_last_modified_date') }} as enrollment_updated_on
         , if(lower(status) = 'enrolled', true, false) as is_enrolled
-        , if("deferred" = true, 'deferred', null) as enrollment_status  -- noqa: ST10
+        , if({{ adapter.quote("deferred") }} = true, 'deferred', null) as enrollment_status  -- noqa: ST10
 
         , if(email = '(blank)', null, email) as user_email
         , if({{ adapter.quote("function") }} = 'No Response', null, {{ adapter.quote("function") }}) as user_job_function  -- noqa: ST10

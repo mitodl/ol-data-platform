@@ -42,7 +42,7 @@ with source as (
 
         ---enrollment
         , if(lower(status) = 'enrolled', true, false) as is_enrolled
-        , if("deferred" = true, 'deferred', null) as enrollment_status  -- noqa: ST10
+        , if({{ adapter.quote("deferred") }} = true, 'deferred', null) as enrollment_status  -- noqa: ST10
     from most_recent_source
 )
 
