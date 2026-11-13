@@ -455,3 +455,27 @@ def test_openedx_structure_blocks_load_one_deployment_each(
     table = pipeline.dataset()[raw_table].arrow()
     assert table.column("course_title").to_pylist() == ["xpro"]
     assert table.column("block_index").to_pylist() == [_STRUCTURE_BLOCK["block_index"]]
+
+
+@pytest.mark.parametrize("raw_table", sorted(course_xml_blocks.TABLES))
+@pytest.mark.parametrize("profile", ["dev", "qa", "production"])
+def test_qa_reads_its_own_landing_zone_and_never_ingests_edxorg(
+    raw_table: str, profile: str
+) -> None:
+    """QA's IAM role cannot list production's zone, and the openedx units are
+    `qa: ingest`. edX.org is one instance that QA gets from the mirror.
+    """
+    table = course_xml_blocks.TABLES[raw_table]
+    is_edxorg = raw_table.startswith("raw__edxorg__")
+    assert table.singleton == is_edxorg
+    assert table.ingested_under(profile) == (not (profile == "qa" and is_edxorg))
+    if profile == "qa" and is_edxorg:
+        with pytest.raises(ValueError, match="qa: mirror"):
+            table.bucket_url_for(profile)
+        return
+    expected = (
+        course_xml_blocks.QA_LANDING_BUCKET
+        if profile == "qa"
+        else course_xml_blocks.LANDING_BUCKET
+    )
+    assert table.bucket_url_for(profile) == expected

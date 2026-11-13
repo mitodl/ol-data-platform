@@ -1,7 +1,8 @@
 """Course XML block ingestion via dlt.
 
 The course archive assets parse every block out of a course's XML export and
-land one JSON Lines file per course version in the production landing zone:
+land one JSON Lines file per course version in their environment's landing
+zone:
 
     edxorg (dg_projects/edxorg/.../openedx_course_archives.py)
         edxorg-raw-data/edxorg/processed_data/course_xml_blocks/
@@ -87,9 +88,11 @@ from ol_dlt.sources.edxorg_s3 import edxorg_files
 
 logger = logging.getLogger(__name__)
 
-# Always the production landing zone, whatever the profile: it is where the
-# files are read from, not where rows are written to.
+# Where the files are read from, not where rows are written to. QA's openedx
+# code location lands its own files in QA's zone; every other profile reads
+# production's (see XmlBlocksTable.bucket_url_for).
 LANDING_BUCKET = "s3://ol-data-lake-landing-zone-production/"
+QA_LANDING_BUCKET = "s3://ol-data-lake-landing-zone-qa/"
 
 # The largest file is 33 MB, so the budget is what sizes a load. dlt's Iceberg
 # writer holds a whole load in memory (see ol_dlt.sources.edxorg_s3), measured
@@ -202,7 +205,10 @@ class XmlBlocksTable:
 
     :param raw_table: Raw warehouse table name.
     :param pipeline_prefix: Destination bucket prefix, the table's deployment.
-    :param file_globs: Globs relative to ``LANDING_BUCKET``.
+    :param file_globs: Globs relative to the landing bucket.
+    :param singleton: edX.org is one instance for every environment (inventory
+        ``scope: singleton``, ``qa: mirror``), so its tables always read
+        production's files and QA does not ingest them.
     :param fields: Every field a line carries, in order.
     :param optional_fields: Fields a line may leave out. A failed extraction
         row has no file_extension.
@@ -217,6 +223,7 @@ class XmlBlocksTable:
     raw_table: str
     pipeline_prefix: str
     file_globs: tuple[str, ...]
+    singleton: bool = False
     fields: tuple[str, ...] = XML_BLOCK_FIELDS
     optional_fields: frozenset[str] = frozenset()
     integer_fields: frozenset[str] = frozenset()
@@ -231,6 +238,34 @@ class XmlBlocksTable:
             object.__setattr__(
                 self, "pipeline_name", f"course_xml_blocks__{self.pipeline_prefix}"
             )
+
+    def ingested_under(self, profile: str) -> bool:
+        """Return whether this profile loads the table from a landing zone.
+
+        QA gets a singleton table's rows from the production mirror instead.
+        """
+        return not (profile == "qa" and self.singleton)
+
+    def bucket_url_for(self, profile: str) -> str:
+        """Return the landing bucket a profile reads this table's files from.
+
+        The openedx units are ``qa: ingest``: QA reads the files its own openedx
+        code location lands, because QA's IAM role cannot read production's
+        zone and QA users are not production users.
+
+        :raises ValueError: For a table the profile does not ingest
+            (``ingested_under``). Reading production's zone into QA raw would
+            bypass the mirror.
+        """
+        if profile != "qa":
+            return LANDING_BUCKET
+        if not self.ingested_under(profile):
+            msg = (
+                f"{self.raw_table} is qa: mirror; QA does not ingest it from "
+                "the landing zone"
+            )
+            raise ValueError(msg)
+        return QA_LANDING_BUCKET
 
     @property
     def schema(self) -> pa.Schema:
@@ -248,11 +283,13 @@ EDXORG = XmlBlocksTable(
     raw_table="raw__edxorg__s3__course_xml_blocks",
     pipeline_prefix="edxorg",
     file_globs=("edxorg-raw-data/edxorg/processed_data/course_xml_blocks/**/*.json",),
+    singleton=True,
 )
 EDXORG_STRUCTURE_BLOCKS = XmlBlocksTable(
     raw_table="raw__edxorg__s3__course_structure_blocks",
     pipeline_prefix="edxorg",
     file_globs=("edxorg-raw-data/edxorg/processed_data/course_blocks/**/*.json",),
+    singleton=True,
     fields=STRUCTURE_BLOCK_FIELDS,
     # bigint in the Airbyte table, and staging passes it through uncast.
     integer_fields=frozenset({"block_index"}),
@@ -408,7 +445,7 @@ def _stamp(
 @dlt.source(name="course_xml_blocks")
 def course_xml_blocks_source(
     raw_table: str,
-    bucket_url: str = LANDING_BUCKET,
+    bucket_url: str | None = None,
     table_format: config.TableFormat | None = None,
     budget_bytes: int = BUDGET_BYTES,
 ) -> Generator[Any]:
@@ -419,7 +456,8 @@ def course_xml_blocks_source(
 
     Args:
         raw_table: A key of ``TABLES``.
-        bucket_url: Bucket the globs are relative to.
+        bucket_url: Bucket the globs are relative to; defaults to the one the
+            active profile reads (``XmlBlocksTable.bucket_url_for``).
         table_format: ``native`` or ``iceberg``; defaults to the active profile's.
         budget_bytes: How much source JSON one load may cover.
     """
@@ -427,7 +465,7 @@ def course_xml_blocks_source(
     # No explicit credentials, so s3fs refreshes IRSA credentials itself (see
     # ol_dlt.sources.edxorg_s3 for why dlt's own credentials expire mid-run).
     files = edxorg_files(
-        bucket_url=bucket_url,
+        bucket_url=bucket_url or table.bucket_url_for(config.active_profile()),
         file_globs=table.file_globs,
         credentials=s3fs.S3FileSystem(),
         budget_bytes=budget_bytes,

@@ -281,23 +281,25 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
 # blocks on 2026-10-05, 18 GB of openedx structure blocks on 2026-10-06) a
 # budget at a time; later runs read only new course versions.
 #
-# RUNNING by default in production, unlike the schedules above. A schedule
-# without default_status starts STOPPED, which is how the PostHog ingest never
-# ran after it shipped. Elsewhere it stays stopped: the source always reads the
-# production landing zone.
+# RUNNING by default in QA and production, unlike the schedules above. A
+# schedule without default_status starts STOPPED, which is how the PostHog
+# ingest never ran after it shipped. QA reads its own landing zone and leaves
+# out the edX.org tables, which are `qa: mirror` and live only in production's
+# zone; selecting them failed every QA run on an s3:ListBucket denial.
 course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
     name="course_xml_blocks_ingest_daily_schedule",
     target=dg.AssetSelection.keys(
         *(
             ["ol_warehouse_raw_data", raw_table]
-            for raw_table in course_xml_blocks.TABLES
+            for raw_table, table in course_xml_blocks.TABLES.items()
+            if table.ingested_under(DAGSTER_ENV)
         )
     ),
     cron_schedule="45 4 * * *",
     execution_timezone="Etc/UTC",
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
-        if DAGSTER_ENV == "production"
+        if DAGSTER_ENV in {"qa", "production"}
         else dg.DefaultScheduleStatus.STOPPED
     ),
 )
@@ -307,8 +309,9 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
 # reports are loaded well ahead of the next non_airbyte_staging_daily at 06:00.
 # The first runs walk the 4.93 TB backlog, at most 430 GB per run at the
 # 200-batch cap (the first run, 2026-10-27, read 385 GB); later runs read one
-# day of reports. RUNNING by default in production only, as for the course XML
-# blocks: the source always reads the production landing zone.
+# day of reports. RUNNING by default in production only: the source always
+# reads the production landing zone, and QA (`qa: mirror`) does not define the
+# schedule at all.
 #
 # That first run peaked at 8.06 GB RSS against the 8Gi default limit, with the
 # largest batch at 2.05 GiB, so a load peaks near 3.7x its batch. A batch can
@@ -511,9 +514,17 @@ defs = dg.Definitions(
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         *qa_first_app_database_schedules,
-        posthog_events_ingest_schedule,
+        # posthog/s3 is `qa: omit` and edxorg/program_reports is `qa: mirror`,
+        # and both read production's landing zone, which QA cannot list.
+        # Leaving them out of QA, rather than relying on their STOPPED
+        # default, stops a tick someone started by hand: the PostHog one
+        # failed every hour.
+        *(
+            [posthog_events_ingest_schedule, edxorg_program_reports_ingest_schedule]
+            if DAGSTER_ENV != "qa"
+            else []
+        ),
         course_xml_blocks_ingest_schedule,
-        edxorg_program_reports_ingest_schedule,
         *tracking_logs_ingest_schedules.values(),
         ocw_content_ingest_schedule,
         canvas_content_ingest_schedule,
