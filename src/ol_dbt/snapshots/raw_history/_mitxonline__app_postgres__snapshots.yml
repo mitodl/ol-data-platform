@@ -840,6 +840,40 @@ snapshots:
     description: >-
       'True' on the row written when the record left the source, 'False' otherwise.
       The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__app__postgres__courses_paidcourserun
+  description: >-
+    History of raw__mitxonline__app__postgres__courses_paidcourserun (mitxonline/app_postgres,
+    table courses_paidcourserun): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__mitxonline__app__postgres__courses_paidcourserun__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/app_postgres courses_paidcourserun record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
 - name: snapshot_raw__mitxonline__app__postgres__courses_program
   description: >-
     History of raw__mitxonline__app__postgres__courses_program (mitxonline/app_postgres,

@@ -205,6 +205,14 @@
 ) }}
 {% endsnapshot %}
 
+{% snapshot snapshot_raw__mitxonline__app__postgres__courses_paidcourserun %}
+{{ raw_history_snapshot(
+    'raw__mitxonline__app__postgres__courses_paidcourserun',
+    unique_key='id',
+    live=false
+) }}
+{% endsnapshot %}
+
 {% snapshot snapshot_raw__mitxonline__app__postgres__courses_program %}
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_program',

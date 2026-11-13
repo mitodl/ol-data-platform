@@ -60,6 +60,7 @@
         'raw__mitxonline__app__postgres__courses_courserungrade': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
         'raw__mitxonline__app__postgres__courses_coursestopic': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
         'raw__mitxonline__app__postgres__courses_department': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
+        'raw__mitxonline__app__postgres__courses_paidcourserun': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
         'raw__mitxonline__app__postgres__courses_programcertificate': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
         'raw__mitxonline__app__postgres__courses_programenrollment': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
         'raw__mitxonline__app__postgres__courses_programenrollmentaudit': {'kind': 'keyset', 'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 12},
