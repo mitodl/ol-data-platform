@@ -5,7 +5,9 @@ columns:
 - advanced_data_type: null
   column_name: order_total_price_paid_plus_tax
   datetime_format: null
-  description: null
+  description: Total of the order in order_id. For Bootcamps, the total of all the
+    enrollment's fulfilled and refunded orders, so it includes every installment and
+    refund.
   expression: null
   extra:
     warning_markdown: null
@@ -854,21 +856,26 @@ params: null
 schema: ol_warehouse_production_mart
 sql: "with enrollments as (\n SELECT * FROM ol_warehouse_production_mart.marts__combined_course_enrollment_detail\
   \ \n)\n\n, orders as (\n    SELECT * FROM  ol_warehouse_production_mart.marts__combined__orders\n\
-  )\n\n--- TO DO: this should move to dbt \n, programs as (\n    select distinct program_enrollments.platform_name,\
-  \ program_enrollments.program_name, program_enrollments.user_email, coursesinprogram.course_readable_id\n\
-  \    from ol_warehouse_production_mart.marts__combined_program_enrollment_detail\
-  \ as program_enrollments \n    join ol_warehouse_production_mart.marts__combined_coursesinprogram\
-  \ as coursesinprogram \n        on program_enrollments.platform_name=coursesinprogram.platform\
-  \ \n        and program_enrollments.program_name=coursesinprogram.program_name\n\
-  \        and program_enrollments.program_id = coursesinprogram.program_id\n  WHERE\
-  \ coursesinprogram.program_name <> 'Computer Science'\n)\n\n, course_passed_counts\
-  \ as (\n    select \n      count(distinct course_title) as num_of_course_passed,\
-  \ user_email\n    from enrollments\n    where courserungrade_is_passing = true\n\
-  \    group by user_email\n)\n\nSELECT \n    enrollments.platform\n    , enrollments.courserunenrollment_id\n\
-  \    , enrollments.course_readable_id\n    , enrollments.course_title\n    , enrollments.courserun_id\n\
-  \    , enrollments.courserun_is_current\n    , enrollments.courserun_readable_id\n\
-  \    , enrollments.courserun_start_on\n    , enrollments.courserun_end_on\n    ,\
-  \ enrollments.courserun_title\n    , enrollments.courseruncertificate_created_on\n\
+  )\n\n--- The mart keeps one order per enrollment, so a Bootcamps installment plan's\
+  \ total comes from every order\n, bootcamps_enrollment_order_totals as (\n    select\n\
+  \        cast(user_id as varchar) as user_id\n        , courserun_id\n        ,\
+  \ sum(order_total_price_paid_plus_tax) as order_total_price_paid_plus_tax\n    from\
+  \ orders\n    where platform = 'Bootcamps' and order_state in ('fulfilled', 'refunded')\n\
+  \    group by 1, 2\n)\n\n--- TO DO: this should move to dbt \n, programs as (\n\
+  \    select distinct program_enrollments.platform_name, program_enrollments.program_name,\
+  \ program_enrollments.user_email, coursesinprogram.course_readable_id\n    from\
+  \ ol_warehouse_production_mart.marts__combined_program_enrollment_detail as program_enrollments\
+  \ \n    join ol_warehouse_production_mart.marts__combined_coursesinprogram as coursesinprogram\
+  \ \n        on program_enrollments.platform_name=coursesinprogram.platform \n  \
+  \      and program_enrollments.program_name=coursesinprogram.program_name\n    \
+  \    and program_enrollments.program_id = coursesinprogram.program_id\n  WHERE coursesinprogram.program_name\
+  \ <> 'Computer Science'\n)\n\n, course_passed_counts as (\n    select \n      count(distinct\
+  \ course_title) as num_of_course_passed, user_email\n    from enrollments\n    where\
+  \ courserungrade_is_passing = true\n    group by user_email\n)\n\nSELECT \n    enrollments.platform\n\
+  \    , enrollments.courserunenrollment_id\n    , enrollments.course_readable_id\n\
+  \    , enrollments.course_title\n    , enrollments.courserun_id\n    , enrollments.courserun_is_current\n\
+  \    , enrollments.courserun_readable_id\n    , enrollments.courserun_start_on\n\
+  \    , enrollments.courserun_end_on\n    , enrollments.courserun_title\n    , enrollments.courseruncertificate_created_on\n\
   \    , enrollments.courseruncertificate_is_earned\n    , enrollments.courseruncertificate_url\n\
   \    , enrollments.courseruncertificate_uuid\n    , enrollments.courserunenrollment_created_on\n\
   \    , enrollments.courserunenrollment_enrollment_mode\n    , enrollments.courserunenrollment_enrollment_status\n\
@@ -880,8 +887,9 @@ sql: "with enrollments as (\n SELECT * FROM ol_warehouse_production_mart.marts__
   \    , enrollments.user_highest_education\n    , enrollments.user_id\n    , enrollments.user_hashed_id\n\
   \    , enrollments.user_username\n    , course_passed_counts.num_of_course_passed\n\
   \    , orders.coupon_code\n    , orders.coupon_id\n    , orders.coupon_name\n  \
-  \  , orders.coupon_type\n    , orders.discount\n    , orders.order_total_price_paid_plus_tax\n\
-  \    , orders.order_created_on\n    , orders.order_state\n    , orders.receipt_authorization_code\n\
+  \  , orders.coupon_type\n    , orders.discount\n    , coalesce(bootcamps_enrollment_order_totals.order_total_price_paid_plus_tax,\
+  \ orders.order_total_price_paid_plus_tax) as order_total_price_paid_plus_tax\n \
+  \   , orders.order_created_on\n    , orders.order_state\n    , orders.receipt_authorization_code\n\
   \    , orders.receipt_bill_to_address_state\n    , orders.receipt_bill_to_address_country\n\
   \    , orders.receipt_payment_method\n    , orders.receipt_payment_amount\n    ,\
   \ orders.receipt_payment_currency\n    , orders.receipt_payment_card_number\n  \
@@ -893,8 +901,11 @@ sql: "with enrollments as (\n SELECT * FROM ol_warehouse_production_mart.marts__
   \    , concat('https://mitxonline.mit.edu/orders/receipt/', cast(orders.order_id\
   \ as varchar))\n       , null) as receipt_url\nFROM enrollments\nleft join orders\
   \ \n   on enrollments.order_id=orders.order_id and enrollments.platform=orders.platform\n\
-  left join course_passed_counts on enrollments.user_email = course_passed_counts.user_email\n\
-  left join programs\n  on enrollments.platform=programs.platform_name\n and enrollments.course_readable_id\
+  left join bootcamps_enrollment_order_totals\n   on enrollments.platform = 'Bootcamps'\n\
+  \  and enrollments.user_id = bootcamps_enrollment_order_totals.user_id\n  and enrollments.courserun_id\
+  \ = bootcamps_enrollment_order_totals.courserun_id\nleft join course_passed_counts\
+  \ on enrollments.user_email = course_passed_counts.user_email\nleft join programs\n\
+  \  on enrollments.platform=programs.platform_name\n and enrollments.course_readable_id\
   \ = programs.course_readable_id\n and enrollments.user_email = programs.user_email"
 table_name: combined_learners_enrollment_detail
 template_params: null

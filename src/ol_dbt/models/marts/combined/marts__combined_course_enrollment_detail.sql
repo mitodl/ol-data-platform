@@ -96,9 +96,20 @@ with tfact_enrollment as (
     group by order_id
 )
 
+-- An installment plan is one order per payment. The enrollment keeps the latest created, so
+-- the plan's other payments are only in marts__combined__orders. A refund is its own fulfilled
+-- order with a negative total, so it is left out or it would replace the order it refunds.
 , bootcamps_completed_orders as (
-    select * from {{ ref('int__bootcamps__ecommerce_order') }}
-    where order_state in ('fulfilled', 'refunded')
+    select
+        *
+        , row_number() over (
+            partition by user_username, courserun_id
+            order by order_created_on desc, order_id desc
+        ) as row_num
+    from {{ ref('int__bootcamps__ecommerce_order') }}
+    where
+        order_state in ('fulfilled', 'refunded')
+        and order_payment_type != 'refund'
 )
 
 , bootcamps_receipts as (
@@ -113,6 +124,28 @@ with tfact_enrollment as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+-- An order can have several lines. The enrollment takes the line for its own run, else a
+-- program line, the preference tfact_enrollment_order uses.
+, mitxpro_enrollment_lines as (
+    select
+        mitxpro_enrollments.courserunenrollment_id
+        , mitxpro__ecommerce_line.order_id
+        , mitxpro__ecommerce_line.line_id
+        , row_number() over (
+            partition by mitxpro_enrollments.courserunenrollment_id
+            order by
+                case
+                    when mitxpro__ecommerce_line.courserun_id = mitxpro_enrollments.courserun_id then 1
+                    when mitxpro__ecommerce_line.program_id is not null then 2
+                    else 3
+                end
+                , mitxpro__ecommerce_line.line_id desc
+        ) as row_num
+    from mitxpro_enrollments
+    inner join mitxpro__ecommerce_line
+        on mitxpro_enrollments.ecommerce_order_id = mitxpro__ecommerce_line.order_id
+)
+
 -- A revoked certificate is not earned, so it must not supply the certificate columns of the
 -- edX.org enrollment it matches.
 , mitxonline_certificates as (
@@ -120,9 +153,50 @@ with tfact_enrollment as (
     where courseruncertificate_is_revoked = false
 )
 
+-- A learner with two MITx Online accounts can have a certificate for the run on each, one
+-- found by the linked username and the other by email. The enrollment keeps the latest.
+, edxorg_learner_certificates as (
+    select
+        micromasters_users.user_edxorg_username
+        , mitxonline_certificates.courserun_readable_id
+        , mitxonline_certificates.courseruncertificate_created_on
+        , mitxonline_certificates.courseruncertificate_issued_on
+        , mitxonline_certificates.courseruncertificate_url
+        , mitxonline_certificates.courseruncertificate_uuid
+    from micromasters_users
+    inner join mitxonline_certificates
+        on micromasters_users.user_mitxonline_username = mitxonline_certificates.user_username
+
+    union all
+
+    select
+        micromasters_users.user_edxorg_username
+        , mitxonline_certificates.courserun_readable_id
+        , mitxonline_certificates.courseruncertificate_created_on
+        , mitxonline_certificates.courseruncertificate_issued_on
+        , mitxonline_certificates.courseruncertificate_url
+        , mitxonline_certificates.courseruncertificate_uuid
+    from micromasters_users
+    inner join mitxonline_certificates
+        on micromasters_users.user_email = mitxonline_certificates.user_email
+)
+
+, edxorg_mitxonline_certificates as (
+    select
+        *
+        , {{ format_course_id('courserun_readable_id') }} as courserun_edxorg_readable_id
+        , row_number() over (
+            partition by user_edxorg_username, {{ format_course_id('courserun_readable_id') }}
+            order by courseruncertificate_created_on desc, courseruncertificate_uuid desc
+        ) as row_num
+    from edxorg_learner_certificates
+    where user_edxorg_username is not null
+)
+
 , combined_enrollment_detail as (
     select
         '{{ var("mitxonline") }}' as platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -182,6 +256,7 @@ with tfact_enrollment as (
 
     select
         '{{ var("edxorg") }}' as platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -204,24 +279,24 @@ with tfact_enrollment as (
         , combined_users.user_company
         , combined_users.user_gender
         , case
-            when mitxonline_certificates.courseruncertificate_created_on is not null then true
+            when edxorg_mitxonline_certificates.courseruncertificate_created_on is not null then true
             when combined_enrollments.courseruncertificate_created_on is not null then true
             else false
         end as courseruncertificate_is_earned
         , coalesce(
-            mitxonline_certificates.courseruncertificate_created_on
+            edxorg_mitxonline_certificates.courseruncertificate_created_on
             , combined_enrollments.courseruncertificate_created_on
         ) as courseruncertificate_created_on
         , coalesce(
-            mitxonline_certificates.courseruncertificate_issued_on
+            edxorg_mitxonline_certificates.courseruncertificate_issued_on
             , combined_enrollments.courseruncertificate_issued_on
         ) as courseruncertificate_issued_on
         , coalesce(
-            mitxonline_certificates.courseruncertificate_url
+            edxorg_mitxonline_certificates.courseruncertificate_url
             , combined_enrollments.courseruncertificate_url
         ) as courseruncertificate_url
         , coalesce(
-            mitxonline_certificates.courseruncertificate_uuid
+            edxorg_mitxonline_certificates.courseruncertificate_uuid
             , combined_enrollments.courseruncertificate_uuid
         ) as courseruncertificate_uuid
         , micromasters_completed_orders.order_id
@@ -252,19 +327,19 @@ with tfact_enrollment as (
         on
             combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
             and combined_enrollments.platform = combined_courseruns.platform
-    left join mitxonline_certificates
-        on (
-            micromasters_users.user_mitxonline_username = mitxonline_certificates.user_username
-            or micromasters_users.user_email = mitxonline_certificates.user_email
-        )
-        and combined_enrollments.courserun_readable_id
-        = {{ format_course_id('mitxonline_certificates.courserun_readable_id') }}
+    left join edxorg_mitxonline_certificates
+        on
+            combined_enrollments.user_username = edxorg_mitxonline_certificates.user_edxorg_username
+            and combined_enrollments.courserun_readable_id
+            = edxorg_mitxonline_certificates.courserun_edxorg_readable_id
+            and edxorg_mitxonline_certificates.row_num = 1
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
     union all
 
     select
         '{{ var("mitxpro") }}' as platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -291,7 +366,7 @@ with tfact_enrollment as (
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , mitxpro_completed_orders.order_id
-        , mitxpro__ecommerce_line.line_id
+        , mitxpro_enrollment_lines.line_id
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , mitxpro_completed_orders.coupon_code
         , combined_enrollments.courserungrade_grade
@@ -314,8 +389,11 @@ with tfact_enrollment as (
         on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join combined_courseruns
         on mitxpro_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    left join mitxpro__ecommerce_line
-        on mitxpro_completed_orders.order_id = mitxpro__ecommerce_line.order_id
+    left join mitxpro_enrollment_lines
+        on
+            mitxpro_completed_orders.order_id = mitxpro_enrollment_lines.order_id
+            and mitxpro_enrollments.courserunenrollment_id = mitxpro_enrollment_lines.courserunenrollment_id
+            and mitxpro_enrollment_lines.row_num = 1
     left join mitxpro_receipts
         on mitxpro_completed_orders.order_id = mitxpro_receipts.order_id
     where combined_enrollments.platform = '{{ var("mitxpro") }}'
@@ -324,6 +402,7 @@ with tfact_enrollment as (
 
     select
         combined_enrollments.platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -373,6 +452,7 @@ with tfact_enrollment as (
 
     select
         '{{ var("bootcamps") }}' as platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -420,6 +500,7 @@ with tfact_enrollment as (
         on
             combined_enrollments.user_username = bootcamps_completed_orders.user_username
             and combined_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
+            and bootcamps_completed_orders.row_num = 1
     left join combined_courseruns
         on
             combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
@@ -432,6 +513,7 @@ with tfact_enrollment as (
 
     select
         '{{ var("residential") }}' as platform
+        , combined_enrollments.enrollment_key
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -495,6 +577,7 @@ with tfact_enrollment as (
 
 select
     platform
+    , enrollment_key
     , courserunenrollment_id
     , {{ generate_hash_id(dbt.concat(["cast(order_id as varchar)", "cast(coalesce(line_id, 9) as varchar)", "platform"])) }} as combined_orders_hash_id
     , course_readable_id
