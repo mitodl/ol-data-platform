@@ -53,7 +53,7 @@ from ml.lib.learn_embeddings import (
     known_vectors,
     strategies,
 )
-from ml.lib.learn_parity import LearnPoint, compare_with_learn
+from ml.lib.learn_parity import CosineStats, LearnPoint, compare_with_learn
 from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
     SAMPLE_RUNS_PER_SOURCE,
@@ -1044,6 +1044,7 @@ def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdra
     # Similarity 0.82, under the floor: not a vector of this text.
     assert not evaluation.passed
     assert evaluation.severity == AssetCheckSeverity.ERROR
+    assert "so not one of that text" in evaluation.description
     assert evaluation.metadata["below_min_cosine"].value == 1
     assert evaluation.metadata["below_floor_cosine"].value == 1
 
@@ -1061,6 +1062,8 @@ def test_a_vector_a_little_unlike_learns_warns_and_is_named(tables, learn_qdrant
     # Similarity 0.978: the providers' noise, as on CTL.SC0x's Thai transcripts.
     assert not evaluation.passed
     assert evaluation.severity == AssetCheckSeverity.WARN
+    # Every text and checksum matches, so only the noise is described.
+    assert "checksums differ" not in evaluation.description
     metadata = {key: value.value for key, value in evaluation.metadata.items()}
     assert (metadata["below_min_cosine"], metadata["below_floor_cosine"]) == (1, 0)
     assert metadata[f"{AZURE_MODEL}/lowest_cosine_points"] == {
@@ -1068,23 +1071,38 @@ def test_a_vector_a_little_unlike_learns_warns_and_is_named(tables, learn_qdrant
     }
 
 
-def test_most_vectors_a_little_unlike_learns_is_an_error(tables, learn_qdrant):
-    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+def test_one_noisy_vector_of_a_one_chunk_run_only_warns(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:b": "Second."})
     learn_qdrant.upsert(
         f"{LEARN_BASE}.content_files",
-        [
-            learn_chunk("block-v1:a", "First file.", skew=2.0),
-            learn_chunk("block-v1:b", "Second.", skew=1.5),
-        ],
+        [learn_chunk("block-v1:b", "Second.", skew=1.5)],
+    )
+
+    evaluation = check_content_files(tables)
+
+    # All of the run's vectors are under 0.99, but one is too few to be systematic.
+    assert evaluation.severity == AssetCheckSeverity.WARN
+
+
+def test_many_vectors_a_little_unlike_learns_is_an_error(tables, learn_qdrant):
+    texts = {f"block-v1:{name}": f"File {name}." for name in "abcdef"}
+    load_sources(tables, **texts)
+    # skew = len / 5 gives each about 0.98, over the floor and under 0.99.
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [learn_chunk(key, text, skew=len(text) / 5) for key, text in texts.items()],
     )
 
     evaluation = check_content_files(tables)
 
     assert not evaluation.passed
     assert evaluation.severity == AssetCheckSeverity.ERROR
-    assert "most of those compared" in evaluation.description
+    assert f"6 of the 6 {AZURE_MODEL} vectors" in evaluation.description
     metadata = {key: value.value for key, value in evaluation.metadata.items()}
-    assert (metadata["below_min_cosine"], metadata["below_floor_cosine"]) == (2, 0)
+    assert (metadata["below_min_cosine"], metadata["below_floor_cosine"]) == (6, 0)
+    lowest = list(metadata[f"{AZURE_MODEL}/lowest_cosine_points"].values())
+    assert len(lowest) == 6
+    assert lowest == sorted(lowest)
 
 
 def test_a_chunk_without_a_vector_warns(tables, learn_qdrant):
@@ -1231,6 +1249,13 @@ def test_learn_points_are_read_a_batch_at_a_time():
     stats = report.cosine_by_model[AZURE_MODEL]
     assert (stats.compared, stats.minimum, stats.below_threshold) == (2, 0.0, 1)
     assert (report.platform_chunks_without_vector, report.vectors_differ) == (1, True)
+
+
+def test_a_similarity_that_is_not_a_number_is_under_the_floor():
+    stats = CosineStats.of({"a": 1.0, "b": math.nan})
+
+    assert (stats.below_threshold, stats.below_floor) == (1, 1)
+    assert stats.lowest == (("b", -math.inf),)
 
 
 def test_a_learn_collection_of_another_size_is_an_error(tables, learn_qdrant):

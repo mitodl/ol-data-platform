@@ -9,8 +9,10 @@ with Learn's text with text-embedding-3-large, Learn through OpenAI and the
 platform through Azure OpenAI, and the two return slightly different vectors of
 one text. A few vectors under ``MIN_COSINE_SIMILARITY`` are that noise and warn,
 with the lowest points named. It is an error when a vector is under
-``FLOOR_COSINE_SIMILARITY``, so is not one of its text, or when most of them are
-under ``MIN_COSINE_SIMILARITY``, so the two sides embed differently.
+``FLOOR_COSINE_SIMILARITY``, so is taken as not one of its text, or when a model's
+vectors are under ``MIN_COSINE_SIMILARITY`` too often to be noise
+(``SYSTEMATIC_MIN_CHUNKS`` and ``SYSTEMATIC_SHARE``), so the two sides embed
+differently.
 
 The checks have no automation condition, so they run with every materialization
 of their asset: automation's, backfills' and the UI's. They read Learn's cluster
@@ -160,8 +162,12 @@ def _error_reasons(report: ParityReport) -> list[str]:
             f"{FLOOR_COSINE_SIMILARITY} cosine similarity to Learn's, so not one of "
             "that text"
         )
-    if report.embeds_differently:
-        reasons.append(f"{_below_threshold(report)}, most of those compared")
+    reasons.extend(
+        f"{stats.below_threshold} of the {stats.compared} {model_id} vectors of "
+        f"chunks with Learn's text are under {MIN_COSINE_SIMILARITY} cosine "
+        "similarity to Learn's, too many to be the providers' noise"
+        for model_id, stats in report.models_embedding_differently.items()
+    )
     if report.vector_length_mismatches:
         reasons.append(
             f"{report.vector_length_mismatches} have a vector of another length "
@@ -186,13 +192,16 @@ def check_result(report: ParityReport) -> AssetCheckResult:
             metadata=metadata,
         )
     if report.points_differ:
-        description = "Some points, texts or checksums differ from Learn's"
+        sentences = []
         if report.below_threshold:
-            description = (
-                f"{_below_threshold(report)} (none under "
-                f"{FLOOR_COSINE_SIMILARITY}, so the providers' noise; see "
-                f"lowest_cosine_points). {description}"
+            sentences.append(
+                f"{_below_threshold(report)}, none under {FLOOR_COSINE_SIMILARITY}, "
+                "so taken as the providers' noise (the points are in "
+                "<model>/lowest_cosine_points)."
             )
+        if report.entries_differ:
+            sentences.append("Some points, texts or checksums differ from Learn's.")
+        description = " ".join(sentences)
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.WARN,
