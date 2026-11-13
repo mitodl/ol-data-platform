@@ -63,11 +63,11 @@ models:
       column_list: [platform, courserun_readable_id, scope_id, source_ref]
 
 - name: int__courseware__ocw_files
-  description: One row per file int__ocw__content_files publishes for the OCW courses
-    var('courseware_ocw_courses') selects, with whether it is an answer key and, for
-    a page, its role and unit. int__courseware__extraction_sources scopes OCW courses
-    from it. It is a table because that model reads it from many places, and Trino
-    plans every reference to a CTE again.
+  description: One row per page and resource int__ocw__content_files has for the OCW
+    courses var('courseware_ocw_courses') selects, a resource with no text included,
+    with whether it is an answer key and, for a page, its role and unit. int__courseware__extraction_sources
+    scopes OCW courses from it. It is a table because that model reads it from many
+    places, and Trino plans every reference to a CTE again.
   config:
     meta:
       # It reads int__ocw__content_files, which QA cannot build.
@@ -88,6 +88,9 @@ models:
     description: str, page or the resource's type (pdf, video, file, ...)
   - name: title
     description: str, the file's title
+  - name: description
+    description: str, a page's description, or a resource's HTML body, whose links
+      int__courseware__extraction_sources follows from the resource
   - name: file_extension
     description: str, the resource's file extension; null for a page
   - name: page_path
@@ -1575,8 +1578,6 @@ unit_tests:
         the course.</p>}
     - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
         course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__courseware__ocw_files')
     rows:
     - {courserun_readable_id: run2, content_file_key: courses/c2/pages/readings/,
@@ -1697,9 +1698,11 @@ unit_tests:
 - name: test_int__courseware__extraction_sources_follows_ocw_resource_descriptions
   description: >
     Session 10's page links a video clip whose description links the session notes.
-    The clip has no transcript, so int__ocw__content_files drops it, but the notes
-    are read in the page's unit, after the page, and do not land in materials. The
-    clip's link to another course's notes is left to that course.
+    The clip has no transcript, so it has no text to read, but the notes are read
+    in
+    the page's unit, after the page, and do not land in materials. The clip's link
+    to
+    another course's notes is left to that course.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -1716,13 +1719,12 @@ unit_tests:
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows:
-    - {course_slug: c1, coursecontent_kind: resource, coursecontent_s3_key: courses/c1/resources/clip-1-quotient-rule/data.json,
-      coursecontent_body: <p><a href="/courses/c1/resources/ses10a/">Accompanying
-        Notes (PDF)</a></p> <p><a href="/courses/c0/resources/lec4/">Lecture 4</a></p>}
   - input: ref('int__courseware__ocw_files')
     rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/clip-1-quotient-rule/,
+      content_type: video, title: 'Clip 1: Quotient Rule', description: <p><a href="/courses/c1/resources/ses10a/">Accompanying
+        Notes (PDF)</a></p> <p><a href="/courses/c0/resources/lec4/">Lecture 4</a></p>,
+      is_solution: false, body: null}
     - {courserun_readable_id: run1, content_file_key: courses/c1/pages/differentiation/,
       title: Differentiation, page_path: differentiation/, section: differentiation,
       parent_key: courses/c1/pages/, is_solution: false, body: <p>Part A.</p><a href="/courses/c1/pages/differentiation/session-10-quotient-rule/">Session
@@ -1842,8 +1844,6 @@ unit_tests:
         the course.</p>}
     - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
         course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__courseware__ocw_files')
     rows:
     - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-1/, title: Week
@@ -1976,8 +1976,6 @@ unit_tests:
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__courseware__ocw_files')
     rows:
     - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
@@ -2051,8 +2049,6 @@ unit_tests:
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__courseware__ocw_files')
     rows:
     - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
