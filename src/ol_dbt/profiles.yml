@@ -87,16 +87,25 @@ open_learning:
         s3_region: '{{ env_var("AWS_DEFAULT_REGION", "us-east-1") }}'
         s3_access_key_id: '{{ env_var("AWS_ACCESS_KEY_ID", "") }}'
         s3_secret_access_key: '{{ env_var("AWS_SECRET_ACCESS_KEY", "") }}'
+    # QA as yourself, through your Keycloak login:
+    #   bin/starrocks-auth --env qa --port-forward --output exec -- dbt ... --target starrocks_qa
+    # The helper sets STARROCKS_USER, STARROCKS_HOST and STARROCKS_ID_TOKEN_FILE.
+    # The OIDC plugin sends the token only over TLS, which the QA FE serves.
+    # use_pure: the C extension's OIDC plugin aborts dbt (malloc(): unaligned
+    # tcache chunk detected) when threads log in concurrently; the pure-Python
+    # plugin does not.
     starrocks_qa:
       type: starrocks
-      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse.qa.starrocks.ol.mit.edu")
+      host: '{{ env_var("DBT_STARROCKS_HOST", env_var("STARROCKS_HOST", "lakehouse.qa.starrocks.ol.mit.edu"))
         }}'
       port: 9030
       database: default_catalog
       schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
-      username: '{{ env_var("DBT_STARROCKS_OIDC_USERNAME") }}'
-      password: '{{ env_var("DBT_STARROCKS_OIDC_TOKEN") }}'
-      auth_plugin: mysql_clear_password
+      username: '{{ env_var("STARROCKS_USER") }}'
+      password: ''
+      auth_plugin: authentication_openid_connect_client
+      openid_token_file: '{{ env_var("STARROCKS_ID_TOKEN_FILE") }}'
+      use_pure: 'true'
       threads: 4
     starrocks_qa_vault:
       type: starrocks

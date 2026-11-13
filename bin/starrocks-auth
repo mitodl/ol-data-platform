@@ -40,7 +40,21 @@ NLB is internal to the data VPC.
 
   # Shell session with OIDC token exported (e.g. for DBeaver / DataGrip via JDBC)
   eval "$(starrocks-auth --env qa --port-forward --output env)"
-  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST
+  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST, STARROCKS_ID_TOKEN_FILE
+
+  STARROCKS_ID_TOKEN_FILE is the id_token written to
+  ~/.cache/starrocks-auth/<env>.id_token (mode 0600). mysql-connector-python
+  reads it as openid_token_file, e.g.
+  mysql.connector.connect(host=..., port=9030, user=os.environ["STARROCKS_USER"],
+      auth_plugin="authentication_openid_connect_client",
+      openid_token_file=os.environ["STARROCKS_ID_TOKEN_FILE"])
+  StarRocks checks the token only at connect, so reconnect after it expires
+  (about an hour) with a fresh run of this script.
+
+--- dbt as yourself (OIDC, human users) ---
+
+  starrocks-auth --env qa --port-forward --output exec -- \
+      dbt build --target starrocks_qa --select my_model
 
 --- CI / non-interactive ---
 
@@ -635,8 +649,40 @@ def _output_token(username: str, token: str, **_) -> None:  # noqa: ARG001
     print(token)  # noqa: T201  # nosec B106
 
 
+def _id_token_file_path(env_name: str) -> Path:
+    return _CACHE_DIR / f"{env_name}.id_token"
+
+
+def _write_id_token_file(env_name: str) -> Path | None:
+    """Write the cached id_token to a file for mysql-connector-python and dbt.
+
+    Their authentication_openid_connect_client plugin reads the token from a
+    path (``openid_token_file``), not from a value. The file lives next to the
+    token cache, which already holds the same token, and is rewritten on every
+    run so it is as fresh as the cache. Returns None when the cache holds no
+    id_token.
+    """
+    cached = _load_cache(env_name)
+    id_token = cached.get("id_token") if cached else None
+    if not id_token:
+        return None
+    path = _id_token_file_path(env_name)
+    # Created 0600 rather than chmod'ed after the write, so the token is never
+    # readable by other users, not even briefly.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as token_file:
+        token_file.write(id_token)
+    path.chmod(0o600)
+    return path
+
+
 def _output_env(
-    username: str, token: str, host: str, password: str | None = None, **_
+    username: str,
+    token: str,
+    host: str,
+    password: str | None = None,
+    id_token_file: Path | None = None,
+    **_,
 ) -> None:
     # shlex.quote (not repr) — this output is eval'd by a shell, and repr's
     # quoting rules are for Python syntax, not POSIX shell syntax: a value
@@ -650,14 +696,17 @@ def _output_env(
     else:
         # OIDC access token — human interactive sessions
         print(f"export STARROCKS_TOKEN={shlex.quote(token)}")  # noqa: T201
+    if id_token_file is not None:
+        print(f"export STARROCKS_ID_TOKEN_FILE={shlex.quote(str(id_token_file))}")  # noqa: T201
 
 
-def _output_exec(
+def _output_exec(  # noqa: PLR0913
     username: str,
     token: str,
     host: str,
     cmd: list[str],
     password: str | None = None,
+    id_token_file: Path | None = None,
     **_,
 ) -> None:
     if not cmd:
@@ -667,6 +716,8 @@ def _output_exec(
         env["STARROCKS_PASSWORD"] = password
     else:
         env["STARROCKS_TOKEN"] = token
+    if id_token_file is not None:
+        env["STARROCKS_ID_TOKEN_FILE"] = str(id_token_file)
     # A child process rather than exec: exec replaces this interpreter, so the
     # atexit hook that stops --port-forward's kubectl never runs and the tunnel
     # outlives the command, holding port 9030 against the next run.
@@ -871,10 +922,15 @@ def main() -> None:
         host = env_cfg["host"]
 
     password: str | None = None
+    id_token_file: Path | None = None
     if args.mode == "browser":
         username, token = _get_browser_token(
             issuer, args.env, force_refresh=args.refresh
         )
+        # Only the browser flow's own user may log in with its cached id_token,
+        # and only env and exec hand the path to another program (e.g. dbt).
+        if args.output in {"env", "exec"}:
+            id_token_file = _write_id_token_file(args.env)
     elif args.mode == "ci":
         username, token = _client_credentials(issuer)
     else:  # vault
@@ -904,6 +960,7 @@ def main() -> None:
         mode=args.mode,
         tls=env_cfg["tls"],
         password=password,
+        id_token_file=id_token_file,
     )
 
 
