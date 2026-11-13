@@ -7,6 +7,7 @@ materialization reads what the first wrote. The embedder counts its calls and
 returns a vector made from the text, so a test can tell which texts were sent.
 """
 
+import json
 import math
 import uuid
 from collections.abc import Sequence
@@ -27,6 +28,7 @@ from dagster import (
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from ml.assets.learn_embedding_checks import (
+    check_result,
     content_file_vectors_match_learn,
     learn_parity_definitions,
     topic_vectors_match_learn,
@@ -1252,10 +1254,44 @@ def test_learn_points_are_read_a_batch_at_a_time():
 
 
 def test_a_similarity_that_is_not_a_number_is_under_the_floor():
-    stats = CosineStats.of({"a": 1.0, "b": math.nan})
+    stats = CosineStats.of({"a": 1.0, "b": 0.98, "c": math.nan})
 
-    assert (stats.below_threshold, stats.below_floor) == (1, 1)
-    assert stats.lowest == (("b", -math.inf),)
+    assert (stats.compared, stats.below_threshold, stats.below_floor) == (3, 2, 1)
+    # The summaries stay finite: the NaN is named apart, not ranked as -inf.
+    assert (stats.minimum, stats.p50) == (0.98, pytest.approx(0.99))
+    assert stats.lowest == (("b", 0.98),)
+    assert stats.non_finite == ("c",)
+
+
+def test_a_non_finite_similarity_is_an_error_with_json_metadata():
+    report = compare_with_learn(
+        pl.DataFrame(
+            {
+                "point_id": ["a"],
+                "chunk_text": ["A."],
+                "text_checksum": [md5_hex("A.")],
+                "vector": [[math.nan, 1.0]],
+                "model_id": [AZURE_MODEL],
+            }
+        ),
+        lambda ids: {
+            point_id: LearnPoint(text="A.", checksum=None, vector=[1.0, 0.0])
+            for point_id in ids
+        },
+        ["a"],
+        compare_checksums=False,
+        reference_model_id=LEARN_V1_CONTENT_FILES.model.model_id,
+        platform_vector_size=2,
+    )
+
+    result = check_result(report)
+
+    assert result.severity == AssetCheckSeverity.ERROR
+    metadata = {key: value.value for key, value in result.metadata.items()}
+    assert metadata[f"{AZURE_MODEL}/non_finite_cosine_points"] == ["a"]
+    assert f"{AZURE_MODEL}/lowest_cosine_points" not in metadata
+    assert f"{AZURE_MODEL}/cosine_min" not in metadata
+    json.dumps(metadata, allow_nan=False)
 
 
 def test_a_learn_collection_of_another_size_is_an_error(tables, learn_qdrant):

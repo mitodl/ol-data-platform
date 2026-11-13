@@ -138,6 +138,10 @@ def _report_metadata(report: ParityReport) -> dict[str, MetadataValue]:
             metadata[f"{model_id}/lowest_cosine_points"] = MetadataValue.json(
                 dict(stats.lowest)
             )
+        if stats.non_finite:
+            metadata[f"{model_id}/non_finite_cosine_points"] = MetadataValue.json(
+                list(stats.non_finite)
+            )
     return metadata
 
 

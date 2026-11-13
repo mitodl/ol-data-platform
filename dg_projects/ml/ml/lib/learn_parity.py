@@ -65,13 +65,21 @@ class LearnPoint:
 class CosineStats:
     """Cosine similarities of the compared vectors of one model.
 
+    A similarity that is not a finite number (a NaN in either vector) counts
+    under both thresholds, and is named in ``non_finite`` rather than in the
+    summaries, so they stay finite numbers and JSON.
+
     :param compared: vectors compared
-    :param minimum: the least similarity, ``None`` with none compared
-    :param p50: the median similarity, ``None`` with none compared
-    :param below_threshold: similarities under ``MIN_COSINE_SIMILARITY``
-    :param below_floor: similarities under ``FLOOR_COSINE_SIMILARITY``
-    :param lowest: up to ``LOWEST_POINTS_REPORTED`` point ids under
-        ``MIN_COSINE_SIMILARITY`` with their similarity, least first
+    :param minimum: the least finite similarity, ``None`` with none
+    :param p50: the median finite similarity, ``None`` with none
+    :param below_threshold: similarities under ``MIN_COSINE_SIMILARITY``, the
+        non-finite ones included
+    :param below_floor: similarities under ``FLOOR_COSINE_SIMILARITY``, the
+        non-finite ones included
+    :param lowest: up to ``LOWEST_POINTS_REPORTED`` point ids with a finite
+        similarity under ``MIN_COSINE_SIMILARITY``, with it, least first
+    :param non_finite: up to ``LOWEST_POINTS_REPORTED`` point ids whose
+        similarity is not finite
     """
 
     compared: int
@@ -80,6 +88,7 @@ class CosineStats:
     below_threshold: int
     below_floor: int = 0
     lowest: tuple[tuple[str, float], ...] = ()
+    non_finite: tuple[str, ...] = ()
 
     @classmethod
     def of(cls, similarities: Mapping[str, float]) -> "CosineStats":
@@ -88,27 +97,30 @@ class CosineStats:
         :param similarities: the similarity of each point id
         :rtype: CosineStats
         """
-        # A NaN compares false with every threshold, so it is ranked as the least.
-        ranked = {
-            point_id: similarity if math.isfinite(similarity) else -math.inf
+        finite = {
+            point_id: similarity
             for point_id, similarity in similarities.items()
+            if math.isfinite(similarity)
         }
-        values = list(ranked.values())
+        non_finite = sorted(similarities.keys() - finite.keys())
+        values = list(finite.values())
         below = sorted(
             (
                 (point_id, similarity)
-                for point_id, similarity in ranked.items()
+                for point_id, similarity in finite.items()
                 if similarity < MIN_COSINE_SIMILARITY
             ),
             key=lambda pair: pair[1],
         )
         return cls(
-            compared=len(values),
+            compared=len(similarities),
             minimum=min(values) if values else None,
             p50=float(np.median(values)) if values else None,
-            below_threshold=len(below),
-            below_floor=sum(value < FLOOR_COSINE_SIMILARITY for value in values),
+            below_threshold=len(below) + len(non_finite),
+            below_floor=sum(value < FLOOR_COSINE_SIMILARITY for value in values)
+            + len(non_finite),
             lowest=tuple(below[:LOWEST_POINTS_REPORTED]),
+            non_finite=tuple(non_finite[:LOWEST_POINTS_REPORTED]),
         )
 
     @property
