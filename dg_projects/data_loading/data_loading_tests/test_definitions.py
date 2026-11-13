@@ -155,6 +155,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__youtube__api__videos",
         "ol_warehouse_raw_data/raw__google_ads__api__keyword_daily",
         "ol_warehouse_raw_data/raw__google_ads__api__change_events",
+        "ol_warehouse_raw_data/raw__google_ads__s3__change_history_report",
+        "ol_warehouse_raw_data/raw__google_ads__s3__change_history_api",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
