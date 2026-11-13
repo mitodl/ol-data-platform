@@ -8,6 +8,7 @@ blocking the rest of the run behind it.
 """
 
 import logging
+import time
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial
@@ -202,11 +203,22 @@ def google_ads_assets(
             context.log.warning("Backfill not drained; the lookback waits a run.")
             yield from backfill
             return
-        yield from dlt.run(
-            context=context,
-            dlt_source=google_ads.build_source().with_resources(*daily),
-            loader_file_format="parquet",
+        # The merge logs nothing while it writes, and it is most of a daily run.
+        context.log.info(
+            "Lookback: re-pulling the last %s days of %s tables and merging them",
+            google_ads.DEFAULT_LOOKBACK_DAYS,
+            len(daily),
         )
+        started = time.monotonic()
+        lookback = list(
+            dlt.run(
+                context=context,
+                dlt_source=google_ads.build_source().with_resources(*daily),
+                loader_file_format="parquet",
+            )
+        )
+        context.log.info("Lookback merged in %.0fs", time.monotonic() - started)
+        yield from lookback
 
 
 keycloak_assets = build_ingest_assets(
