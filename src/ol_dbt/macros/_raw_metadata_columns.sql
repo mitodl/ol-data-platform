@@ -49,6 +49,8 @@
         'raw__google_ads__api__keyword_daily': '_dlt_load_id',
         'raw__google_ads__api__keyword_snapshots': '_dlt_load_id',
         'raw__google_ads__api__shared_criterion_snapshots': '_dlt_load_id',
+        'raw__google_ads__github__change_history_api': '_dlt_load_id',
+        'raw__google_ads__github__change_history_report': '_dlt_load_id',
         'raw__irx__edxorg__bigquery__email_opt_in': '_airbyte_extracted_at',
         'raw__irx__edxorg__bigquery__mitx_course': '_airbyte_extracted_at',
         'raw__irx__edxorg__bigquery__mitx_person_course': '_airbyte_extracted_at',

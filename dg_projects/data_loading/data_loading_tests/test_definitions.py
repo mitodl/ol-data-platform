@@ -524,7 +524,7 @@ def test_google_ads_schedule_selects_every_google_ads_table() -> None:
     google_ads_keys = {
         key.to_user_string()
         for key in _REPO.assets_defs_by_key
-        if key.path[-1].startswith("raw__google_ads__api__")
+        if key.path[-1].startswith("raw__google_ads__")
     }
     assert "ol_warehouse_raw_data/raw__google_ads__api__change_events" in scheduled
     assert scheduled == google_ads_keys

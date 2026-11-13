@@ -94,6 +94,7 @@ layers:
 - s3                    # files landed in a bucket
 - bigquery              # a BigQuery dataset shared with us
 - google_sheets         # a maintained spreadsheet
+- github                # files read from a GitHub repository
 - fastly                # Fastly access logs
 - rss                   # A published RSS feed, read as the source of record
 - course_structure      # Open edX course archives (course.xml bundles), parsed
