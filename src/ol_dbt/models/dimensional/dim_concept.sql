@@ -67,7 +67,7 @@ with registry as (
         , coalesce(member_mentions.taught_mention_count, 0) as taught_mention_count
         , row_number() over (
             partition by aliases.concept_id
-            order by coalesce(member_mentions.mention_count, 0) desc, labels.concept_label_key asc
+            order by coalesce(member_mentions.mention_count, 0) desc, labels.concept_label_key asc nulls last
         ) as member_rank
     from aliases
     inner join labels
@@ -100,7 +100,7 @@ with registry as (
         , concept_kind
         , row_number() over (
             partition by concept_id
-            order by count(*) desc, concept_kind asc
+            order by count(*) desc, concept_kind asc nulls last
         ) as kind_rank
     from mentions
     where concept_kind is not null
@@ -114,7 +114,7 @@ with registry as (
         , description
         , row_number() over (
             partition by concept_id
-            order by case when teaching_status = 'taught' then 0 else 1 end, length(description) desc
+            order by case when teaching_status = 'taught' then 0 else 1 end nulls last, length(description) desc
         ) as description_rank
     from mentions
     where description is not null

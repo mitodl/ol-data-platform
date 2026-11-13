@@ -192,7 +192,7 @@ with mentions as (
             end
         ) as accepted_claim_count
         , count(*) as scope_count
-        , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
+        , array_agg(relied_on.scope_id order by relied_on.relied_position nulls last, relied_on.scope_id nulls last) as relied_scope_ids
         , sum(
             case
                 when

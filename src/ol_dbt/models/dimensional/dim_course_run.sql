@@ -191,7 +191,7 @@ with micromasters_courseruns as (
                     enrollments.courserun_start_on desc
                     , enrollments.courserun_end_on desc
                     , enrollments.enrollment_created_on desc
-                    , enrollments.courserun_title asc
+                    , enrollments.courserun_title asc nulls last
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }} as enrollments
         left join mitxpro_external_run_codes
@@ -234,7 +234,7 @@ with micromasters_courseruns as (
                     enrollments.courserun_start_on desc
                     , enrollments.courserun_end_on desc
                     , enrollments.user_gdpr_consent_date desc
-                    , enrollments.courserun_title asc
+                    , enrollments.courserun_title asc nulls last
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }} as enrollments
         left join mitxpro_external_run_codes

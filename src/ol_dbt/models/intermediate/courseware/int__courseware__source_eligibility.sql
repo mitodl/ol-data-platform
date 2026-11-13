@@ -16,7 +16,7 @@ with policy as (
         {{ md5_hex(array_join(
             "array_agg(concat_ws('|', platform, coalesce(courserun_readable_id, ''),"
             ~ " case when is_eligible then 'eligible' else 'ineligible' end)"
-            ~ " order by platform, coalesce(courserun_readable_id, ''))", ','
+            ~ " order by platform nulls last, coalesce(courserun_readable_id, '') nulls last)", ','
         )) }} as source_policy_version
     from policy
 )

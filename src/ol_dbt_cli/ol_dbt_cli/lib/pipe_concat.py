@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ol_dbt_cli.lib.sql_source import macro_declarations, sql_code, yaml_sql_strings
+from ol_dbt_cli.lib.sql_source import other_engine_spans, sql_code, starrocks_macro_names, yaml_sql_strings
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -32,7 +32,6 @@ PIPE_CONCAT_CHECK = "pipe_concat"
 # no SQL files, but their YAML can hold test expressions.
 _SQL_DIRS = ("models", "macros", "tests", "snapshots", "analyses")
 _YAML_DIRS = (*_SQL_DIRS, "seeds")
-_OTHER_ENGINE_PREFIXES = ("trino__", "duckdb__")
 _DETAIL = (
     "StarRocks evaluates || as a logical OR and returns NULL or 1 without an error. "
     "Concatenate strings with {{ dbt.concat([a, b]) }}; append to an array with a dispatched macro."
@@ -43,19 +42,6 @@ _PIPES = re.compile(r"\|\|")
 
 def _pipe_offsets(sql: str) -> Iterator[int]:
     return (match.start() for match in _PIPES.finditer(sql_code(sql)))
-
-
-def _other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[tuple[int, int]]:
-    """Spans of the macro bodies in *source* that StarRocks never renders."""
-    spans = []
-    for match in macro_declarations(source):
-        name = match.group("name")
-        other_engine = name.startswith(_OTHER_ENGINE_PREFIXES) or (
-            name.startswith("default__") and name.removeprefix("default__") in starrocks_macros
-        )
-        if other_engine:
-            spans.append(match.span("body"))
-    return spans
 
 
 def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
@@ -72,15 +58,10 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
         ),
     ]
     sources = {path: path.read_text() for path in sql_files}
-    starrocks_macros = frozenset(
-        match.group("name").removeprefix("starrocks__")
-        for source in sources.values()
-        for match in macro_declarations(source)
-        if match.group("name").startswith("starrocks__")
-    )
+    starrocks_macros = starrocks_macro_names(sources.values())
 
     for path, source in sources.items():
-        exempt = _other_engine_spans(source, starrocks_macros)
+        exempt = other_engine_spans(source, starrocks_macros)
         for offset in _pipe_offsets(source):
             if any(start <= offset < end for start, end in exempt):
                 continue

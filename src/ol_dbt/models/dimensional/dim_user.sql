@@ -136,18 +136,18 @@ with mitx_users as (
                     user_gdpr_consent_date desc
                     , enrollment_created_on desc
                     , enrollment_updated_on desc
-                    , user_id asc
-                    , user_email asc
-                    , user_full_name asc
-                    , user_address_country asc
-                    , user_gender asc
-                    , user_company asc
-                    , user_job_title asc
-                    , user_industry asc
-                    , user_address_street asc
-                    , user_address_city asc
-                    , user_address_state asc
-                    , user_address_postal_code asc
+                    , user_id asc nulls last
+                    , user_email asc nulls last
+                    , user_full_name asc nulls last
+                    , user_address_country asc nulls last
+                    , user_gender asc nulls last
+                    , user_company asc nulls last
+                    , user_job_title asc nulls last
+                    , user_industry asc nulls last
+                    , user_address_street asc nulls last
+                    , user_address_city asc nulls last
+                    , user_address_state asc nulls last
+                    , user_address_postal_code asc nulls last
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
     ) as subquery
@@ -174,18 +174,18 @@ with mitx_users as (
                 order by
                     user_gdpr_consent_date desc
                     , courserun_start_on desc
-                    , user_id asc
-                    , user_email asc
-                    , user_full_name asc
-                    , user_address_country asc
-                    , user_gender asc
-                    , user_company asc
-                    , user_job_title asc
-                    , user_industry asc
-                    , user_address_street asc
-                    , user_address_city asc
-                    , user_address_state asc
-                    , user_address_postal_code asc
+                    , user_id asc nulls last
+                    , user_email asc nulls last
+                    , user_full_name asc nulls last
+                    , user_address_country asc nulls last
+                    , user_gender asc nulls last
+                    , user_company asc nulls last
+                    , user_job_title asc nulls last
+                    , user_industry asc nulls last
+                    , user_address_street asc nulls last
+                    , user_address_city asc nulls last
+                    , user_address_state asc nulls last
+                    , user_address_postal_code asc nulls last
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
     ) as subquery
@@ -311,7 +311,7 @@ with mitx_users as (
     select
         profile_topic_interests.profile_id
         -- Sorted so the array is the same on every build.
-        , array_agg(topic.learningresourcetopic_name order by topic.learningresourcetopic_name) as topic_interests
+        , array_agg(topic.learningresourcetopic_name order by topic.learningresourcetopic_name nulls last) as topic_interests
     from {{ ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests') }} as profile_topic_interests
     join {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic') }} as topic
         on profile_topic_interests.learningresourcetopic_id = topic.learningresourcetopic_id
@@ -784,8 +784,8 @@ with mitx_users as (
         end) over (
             partition by ranked_accounts.email
             order by
-                ranked_accounts.has_no_source_id asc
-                , ranked_accounts.id_source_rank asc
+                ranked_accounts.has_no_source_id asc nulls last
+                , ranked_accounts.id_source_rank asc nulls last
                 , ranked_accounts.user_global_id desc
                 , ranked_accounts.sort_id desc nulls last
                 , ranked_accounts.id_source_user_id desc
@@ -794,8 +794,8 @@ with mitx_users as (
             over (
                 partition by ranked_accounts.email
                 order by
-                    ranked_accounts.has_no_source_id asc
-                    , ranked_accounts.id_source_rank asc
+                    ranked_accounts.has_no_source_id asc nulls last
+                    , ranked_accounts.id_source_rank asc nulls last
                     , ranked_accounts.user_global_id desc
                     , ranked_accounts.sort_id desc nulls last
                     , ranked_accounts.id_source_user_id desc
@@ -831,26 +831,26 @@ with mitx_users as (
                     , coalesce(user_joined_on_residential, '')
                     , coalesce(user_joined_on_bootcamps, '')
                 ) desc
-                , id_source asc
-                , id_source_user_id asc
+                , id_source asc nulls last
+                , id_source_user_id asc nulls last
                 -- Accounts with no join dates (Emeritus, Global Alumni) can still tie here, e.g.
                 -- one student id sent under two emails. Ordering by every column the base row
                 -- supplies makes row_num unique wherever the output could differ.
-                , email asc
-                , full_name asc
-                , address_country asc
-                , highest_education asc
-                , gender asc
-                , birth_year asc
-                , company asc
-                , job_title asc
-                , industry asc
-                , address_state asc
-                , mitlearn_user_id asc
+                , email asc nulls last
+                , full_name asc nulls last
+                , address_country asc nulls last
+                , highest_education asc nulls last
+                , gender asc nulls last
+                , birth_year asc nulls last
+                , company asc nulls last
+                , job_title asc nulls last
+                , industry asc nulls last
+                , address_state asc nulls last
+                , mitlearn_user_id asc nulls last
                 -- Last, so tied rows that differ only in address still pick the same one on every build.
-                , user_street_address asc
-                , user_address_city asc
-                , user_address_postal_code asc
+                , user_street_address asc nulls last
+                , user_address_city asc nulls last
+                , user_address_postal_code asc nulls last
         ) as row_num
         , coalesce(
             nullif(trim(user_street_address), '')
@@ -961,8 +961,8 @@ with mitx_users as (
                 (
                     nullif(trim(user_street_address), '') is null
                     and nullif(trim(user_address_postal_code), '') is null
-                ) asc
-                , row_num asc
+                ) asc nulls last
+                , row_num asc nulls last
         ) as address_row_num
     from ranked_users
     where has_street_address

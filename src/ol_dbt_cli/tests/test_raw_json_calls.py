@@ -7,24 +7,13 @@ from pathlib import Path
 import pytest
 
 from ol_dbt_cli.lib.raw_json_calls import RAW_JSON_CALLS_CHECK, check_raw_json_calls
-from ol_dbt_cli.lib.validation import Severity, ValidationReport
+from tests.source_checks import error_messages
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.fixture
-def dbt_dir(tmp_path: Path) -> Path:
-    for name in ("models", "macros"):
-        (tmp_path / name).mkdir()
-    (tmp_path / "dbt_project.yml").write_text("name: p\n")
-    return tmp_path
-
-
 def _messages(dbt_dir: Path) -> list[str]:
-    report = ValidationReport()
-    check_raw_json_calls(dbt_dir, report)
-    assert all(i.check == RAW_JSON_CALLS_CHECK and i.severity == Severity.ERROR for i in report.issues)
-    return [i.message for i in report.issues]
+    return error_messages(check_raw_json_calls, RAW_JSON_CALLS_CHECK, dbt_dir)
 
 
 def test_reports_a_call_with_its_line_and_the_macros_to_use(dbt_dir: Path) -> None:

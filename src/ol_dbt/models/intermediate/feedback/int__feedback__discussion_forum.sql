@@ -161,7 +161,7 @@ with forum_thread as (
         *
         , row_number() over (
             partition by forumthread_id
-            order by post_created_on, post_type_order, source_record_ref
+            order by post_created_on nulls last, post_type_order nulls last, source_record_ref nulls last
         ) as turn_index
     from learner_turns
     where

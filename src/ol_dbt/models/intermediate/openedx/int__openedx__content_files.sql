@@ -349,9 +349,9 @@ with blocks as (
         , row_number() over (
             partition by source_system, courserun_readable_id, edx_module_id
             order by
-                case when extraction_status = 'failed' then 1 else 0 end
-                , case when file_extension = '.xml' then 1 else 0 end
-                , source_path
+                case when extraction_status = 'failed' then 1 else 0 end nulls last
+                , case when file_extension = '.xml' then 1 else 0 end nulls last
+                , source_path nulls last
         ) as key_rank
     from resolved
 )

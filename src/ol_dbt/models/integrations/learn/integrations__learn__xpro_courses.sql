@@ -25,7 +25,7 @@ with courses as (
 , topics as (
     select
         course_id
-        , array_agg(distinct coursetopic_name order by coursetopic_name) as topics
+        , array_agg(distinct coursetopic_name order by coursetopic_name nulls last) as topics
     from {{ ref('int__mitxpro__courses_to_topics') }}
     group by course_id
 )

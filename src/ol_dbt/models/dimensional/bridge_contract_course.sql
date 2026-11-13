@@ -44,7 +44,7 @@ with contract_programs as (
             order by
                 contract_programs.contractprogramitem_sort_order asc nulls last
                 , bridge_program_course.course_order asc nulls last
-                , dim_program.program_pk asc
+                , dim_program.program_pk asc nulls last
         ) as position_rank
     from contract_programs
     inner join dim_contract

@@ -30,6 +30,29 @@ Model and snapshot SQL in `models/` and `snapshots/` has no direct calls left to
 `json_query`, `from_iso8601_timestamp`, `array_join`, `regexp_like`, `element_at` or
 `cardinality`. Every use goes through a macro.
 
+## Ascending sort keys say `nulls last`
+
+An ascending ORDER BY puts NULLs last on Trino and DuckDB and first on StarRocks, so
+`row_number() over (order by created_on)` picks a NULL `created_on` as row 1 on
+StarRocks and `array_agg(x order by x)` starts with its NULLs. Descending keys put
+NULLs last on all three. StarRocks' `SORT_NULLS_LAST` sql_mode is not used, because it
+makes NULLs sort first on a descending key.
+
+Every ascending key in a window's ORDER BY or an ordered aggregate (`array_agg`,
+`group_concat`, the `order_by` argument of `array_agg_filter`) therefore ends in
+`nulls last`, whether or not the column can be NULL:
+
+```sql
+row_number() over (partition by user_id order by created_on nulls last, id nulls last)
+array_agg(tag order by tag nulls last)
+{{ array_agg_filter('label', "kind = 'skill'", order_by='label nulls last') }}
+```
+
+A query's own ORDER BY (top-level or in a subquery) only orders output rows, unless a
+LIMIT follows it, and then its ascending keys need `nulls last` too. `ol-dbt validate`
+(the `null_ordering` check, run in dbt PR CI) fails on an ascending key with no NULLS
+clause in any of these places.
+
 ## Examples
 
 These were the first macros written, and each is applied across the models:

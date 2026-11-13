@@ -52,7 +52,7 @@ with programs as (
 , program_courses as (
     select
         program_id
-        , {{ array_join('array_agg(course_readable_id order by position_in_program)', ', ') }} as courses
+        , {{ array_join('array_agg(course_readable_id order by position_in_program nulls last)', ', ') }} as courses
     from courses
     where course_is_live
     group by program_id
@@ -68,7 +68,7 @@ with programs as (
         , catalog_runs.courserun_enrollment_start_on
         , row_number() over (
             partition by courses.program_id
-            order by catalog_runs.courserun_start_on, catalog_runs.courserun_id
+            order by catalog_runs.courserun_start_on nulls last, catalog_runs.courserun_id nulls last
         ) as run_rank
     from courses
     inner join catalog_runs on courses.course_id = catalog_runs.course_id
@@ -96,7 +96,7 @@ with programs as (
 , topics as (
     select
         courses.program_id
-        , array_agg(distinct course_topics.coursetopic_name order by course_topics.coursetopic_name) as topics
+        , array_agg(distinct course_topics.coursetopic_name order by course_topics.coursetopic_name nulls last) as topics
     from courses
     inner join {{ ref('int__mitxpro__courses_to_topics') }} as course_topics
         on courses.course_id = course_topics.course_id

@@ -1767,13 +1767,14 @@
     whose condition is not true.
 
     `order_by` is passed through, so its NULL ordering is the engine's: an ascending key
-    sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`.
+    sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`, which
+    the null_ordering check of `ol-dbt validate` requires.
 
     With `distinct`, Trino only accepts `expr` itself as the ORDER BY, so `order_by` must be
-    `expr` (ascending). StarRocks then sorts after array_distinct() with array_sort(), NULLs
-    last as in Trino, rather than relying on array_distinct() to keep the aggregated order:
-    its planner rewrites array_distinct(array_agg(x)) into array_agg_distinct(x), which
-    does not keep it.
+    `expr` ascending (`nulls last` is accepted). StarRocks then sorts after array_distinct()
+    with array_sort(), NULLs last as in Trino, rather than relying on array_distinct() to
+    keep the aggregated order: its planner rewrites array_distinct(array_agg(x)) into
+    array_agg_distinct(x), which does not keep it.
 #}
 {% macro array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
     {{ adapter.dispatch('array_agg_filter', 'open_learning')(expr, condition, order_by, distinct) }}
@@ -1784,10 +1785,12 @@
 {%- endmacro %}
 
 {% macro starrocks__array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
-    {%- if distinct and order_by and (order_by | trim | lower) not in [expr | trim | lower, (expr | trim | lower) ~ ' asc'] -%}
+    {%- set key = expr | trim | lower -%}
+    {%- set ascending = [key, key ~ ' asc', key ~ ' nulls last', key ~ ' asc nulls last'] -%}
+    {%- if distinct and order_by and (order_by | trim | lower) not in ascending -%}
         {{ exceptions.raise_compiler_error(
             "array_agg_filter: with distinct=true, order_by must be the aggregated expression in "
-            ~ "ascending order ('" ~ expr ~ "'), got '" ~ order_by ~ "'"
+            ~ "ascending order ('" ~ expr ~ " nulls last'), got '" ~ order_by ~ "'"
         ) }}
     {%- endif -%}
     {%- set kept -%}

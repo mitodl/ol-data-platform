@@ -76,7 +76,7 @@ with programs as (
 , topics as (
     select
         program_id
-        , array_agg(coursetopic_name order by coursetopic_name) as topics
+        , array_agg(coursetopic_name order by coursetopic_name nulls last) as topics
     from topic_names
     group by program_id
 )
@@ -84,7 +84,7 @@ with programs as (
 , departments as (
     select
         program_departments.program_id
-        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name) as departments
+        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name nulls last) as departments
     from {{ ref('stg__mitxonline__app__postgres__courses_program_to_department') }} as program_departments
     inner join {{ ref('stg__mitxonline__app__postgres__courses_department') }} as departments
         on program_departments.coursedepartment_id = departments.coursedepartment_id
@@ -129,7 +129,7 @@ with programs as (
 , prices as (
     select
         program_id
-        , array_agg(price order by price) as prices
+        , array_agg(price order by price nulls last) as prices
     from price_rows
     group by program_id
 )

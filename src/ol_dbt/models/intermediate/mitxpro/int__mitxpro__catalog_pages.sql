@@ -48,7 +48,7 @@ with pages as (
         product_pages.wagtail_page_id
         , certificates.cms_certificate_ceus
         , row_number() over (
-            partition by product_pages.wagtail_page_id order by certificate_wagtail.wagtail_page_path
+            partition by product_pages.wagtail_page_id order by certificate_wagtail.wagtail_page_path nulls last
         ) as certificate_rank
     from product_pages
     inner join pages as product_wagtail
@@ -68,7 +68,7 @@ with pages as (
         product_pages.wagtail_page_id
         , {{ json_array_field_values('faculty.cms_facultymemberspage_faculty', 'value.name') }} as instructors
         , row_number() over (
-            partition by product_pages.wagtail_page_id order by faculty_wagtail.wagtail_page_path
+            partition by product_pages.wagtail_page_id order by faculty_wagtail.wagtail_page_path nulls last
         ) as faculty_rank
     from product_pages
     inner join pages as product_wagtail

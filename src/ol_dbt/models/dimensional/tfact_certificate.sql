@@ -306,8 +306,8 @@ with mitxonline_certificates as (
         , row_number() over (
             partition by _certificate_group
             order by
-                _platform_rank ASC
-                , case when certificate_is_revoked then 1 else 0 end
+                _platform_rank ASC nulls last
+                , case when certificate_is_revoked then 1 else 0 end nulls last
                 , certificate_issued_on desc nulls last
                 -- certificate_id is a string; compare the integer ids as numbers.
                 , {{ try_cast('certificate_id', 'bigint') }} desc nulls last
@@ -347,7 +347,7 @@ with mitxonline_certificates as (
             , count(*) over (partition by certificate_key) > 1 as target_has_copies
             , row_number() over (
                 partition by certificate_key
-                order by certificate_updated_on desc nulls last, user_fk, courserun_fk
+                order by certificate_updated_on desc nulls last, user_fk nulls last, courserun_fk nulls last
             ) as target_copy_num
         from {{ this }}
     ) as target

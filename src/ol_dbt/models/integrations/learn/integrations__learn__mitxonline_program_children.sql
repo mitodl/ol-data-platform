@@ -38,7 +38,7 @@ with programs as (
         , required_programs.program_display_mode as required_program_display_mode
         , row_number() over (
             partition by nodes.program_id, nodes.required_program_id
-            order by nodes.programrequirement_path
+            order by nodes.programrequirement_path nulls last
         ) as node_rank
     from nodes
     inner join programs as required_programs on nodes.required_program_id = required_programs.program_id
@@ -87,7 +87,7 @@ with programs as (
         *
         , row_number() over (
             partition by program_id, child_resource_type, child_id
-            order by node_path, nested_path
+            order by node_path nulls last, nested_path nulls last
         ) as entry_rank
     from entries
 )
@@ -98,7 +98,7 @@ with programs as (
         , required_programs.program_display_mode as child_display_mode
         , row_number() over (
             partition by first_entries.program_id
-            order by first_entries.node_path, first_entries.nested_path
+            order by first_entries.node_path nulls last, first_entries.nested_path nulls last
         ) - 1 as child_position
     from first_entries
     left join programs as required_programs
@@ -144,7 +144,7 @@ select
     , positioned.child_position
     , row_number() over (
         partition by program_nodes.program_id
-        order by program_nodes.programrequirement_path
+        order by program_nodes.programrequirement_path nulls last
     ) - 1 as child_program_order
 from program_nodes
 inner join programs on program_nodes.program_id = programs.program_id

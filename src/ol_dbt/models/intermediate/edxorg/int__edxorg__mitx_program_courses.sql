@@ -38,7 +38,7 @@ with programs as (
         , course_number
         , row_number() over (
             partition by course_readable_id
-            order by run_count desc, latest_courserun_start_date desc nulls last, course_number asc
+            order by run_count desc, latest_courserun_start_date desc nulls last, course_number asc nulls last
         ) as course_number_rank
     from edxorg_course_number_runs
 )

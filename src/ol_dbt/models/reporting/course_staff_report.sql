@@ -3,7 +3,7 @@ with user_roles as (
         user_fk
         , platform_code
         , courserun_readable_id
-        , {{ array_join('array_agg(courseaccess_role order by courseaccess_role)', ", ") }} as course_roles
+        , {{ array_join('array_agg(courseaccess_role order by courseaccess_role nulls last)', ", ") }} as course_roles
     from {{ ref('bridge_user_courserun_role') }}
     group by user_fk, platform_code, courserun_readable_id
 )

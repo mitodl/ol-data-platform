@@ -25,7 +25,7 @@ with chatbot as (
         end as block_id
         , row_number() over (
             partition by chatbot.chatsession_thread_id
-            order by chatbot.checkpoint_step, chatbot.djangocheckpoint_id
+            order by chatbot.checkpoint_step nulls last, chatbot.djangocheckpoint_id nulls last
         ) as turn_index
     from chatbot
     where chatbot.human_message is not null
@@ -84,7 +84,7 @@ with chatbot as (
             *
             , row_number() over (
                 partition by chatsession_thread_id, human_message
-                order by tutorbotoutput_id, message_index
+                order by tutorbotoutput_id nulls last, message_index nulls last
             ) as message_occurrence
         from tutorbot_flatten
         where human_message is not null
@@ -114,7 +114,7 @@ with chatbot as (
         , tutorbot_deduplicated.edx_module_id as block_id
         , row_number() over (
             partition by tutorbot_deduplicated.chatsession_thread_id
-            order by tutorbot_deduplicated.message_index
+            order by tutorbot_deduplicated.message_index nulls last
         ) as turn_index
     from tutorbot_deduplicated
     left join chatbot
