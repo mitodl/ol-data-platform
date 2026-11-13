@@ -12,8 +12,8 @@
         late row is picked up by the first build after its load.
 
         dlt's _dlt_load_id is the load's unix timestamp as text with a fixed 10-digit
-        integer part, so text order is load order. The stored maximum is inlined as a
-        literal, so Iceberg can skip every raw file whose load id range is below it.
+        integer part, so text order is load order. The bound is inlined as a literal,
+        so Iceberg can skip every raw file whose load id range is below it.
 
         The bound is the stored maximum less `lookback_seconds` (3 hours), compared
         with >=. A load that commits after a newer one (an overlapping manual run), or

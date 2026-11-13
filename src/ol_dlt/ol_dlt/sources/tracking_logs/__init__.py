@@ -11,7 +11,8 @@ raw__<deployment>__openedx__tracking_logs. This source appends them into the
 tables in ``TABLES``, stamped with the file they came from. Staging dedups
 tracking events on their business columns, and reads new rows by
 ``_dlt_load_id`` (macro ``tracking_log_load_watermark``), so every row has to
-carry one. A row without it is never read.
+carry one. Outside a reprocess (the ``tracking_log_reprocess_from`` var), a row
+without it is never read.
 
 edX.org's tracking logs have no table here. MIT's courses moved off edX.org,
 and the Airbyte table raw__edxorg__s3__tracking_logs is frozen as their final
