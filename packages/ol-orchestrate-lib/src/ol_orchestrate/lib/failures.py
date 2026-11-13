@@ -25,10 +25,12 @@ re-request per failure edge instead (see ``automation_policies``), so a permanen
 failure now costs two runs rather than an unbounded stream of them.
 """
 
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from typing import Any
 
-from dagster import AssetsDefinition, Failure, HookContext, failure_hook
+from dagster import AssetsDefinition, Failure, HookContext, RetryRequested, failure_hook
+from httpx2 import NetworkError, RemoteProtocolError, TimeoutException
 
 from ol_orchestrate.lib.sentry import capture_exception_to_sentry
 
@@ -37,6 +39,12 @@ from ol_orchestrate.lib.sentry import capture_exception_to_sentry
 # constant lives in the private dagster._core.storage.tags, but the tag string
 # is stable and documented.
 RETRY_ON_ASSET_OR_OP_FAILURE_TAG = "dagster/retry_on_asset_or_op_failure"
+TRANSIENT_MAX_RETRIES = 3
+TRANSIENT_RETRY_WAIT_SECONDS = 60
+# The TransportErrors that can clear on their own. The rest of that family
+# (UnsupportedProtocol, LocalProtocolError, ProxyError) mean the request itself
+# is malformed or misrouted, and rerunning sends the same request again.
+TRANSIENT_HTTP_ERRORS = (TimeoutException, NetworkError, RemoteProtocolError)
 
 
 class PermanentFailure(Failure):
@@ -70,6 +78,33 @@ def permanent_failure(
         },
         allow_retries=False,
     )
+
+
+@contextmanager
+def retry_transient_errors(
+    max_retries: int = TRANSIENT_MAX_RETRIES,
+    seconds_to_wait: int = TRANSIENT_RETRY_WAIT_SECONDS,
+) -> Generator[None]:
+    """Retry the step when an HTTP request fails below the HTTP layer.
+
+    Wrap the body of an asset that talks to an external API. A timeout, reset or
+    dropped connection becomes a ``RetryRequested``, so the step runs again
+    after ``seconds_to_wait`` and the failure hooks fire only if every attempt
+    fails. Anything else, including an HTTP error status, propagates unchanged.
+
+    Selective on purpose, rather than a ``RetryPolicy``: a policy retries every
+    exception, so ``course_xml`` would re-run its hour-long Studio export after
+    a timeout, and every step would retry the bugs in its own code.
+
+    :param max_retries: Attempts after the first before the step fails.
+    :param seconds_to_wait: Pause before each retry.
+    """
+    try:
+        yield
+    except TRANSIENT_HTTP_ERRORS as error:
+        raise RetryRequested(
+            max_retries=max_retries, seconds_to_wait=seconds_to_wait
+        ) from error
 
 
 @failure_hook(name="stop_run_retries")
