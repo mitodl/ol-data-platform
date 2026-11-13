@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from qdrant_client import models
 
 from ol_orchestrate.lib.embeddings.chunking import TokenChunker
-from ol_orchestrate.lib.embeddings.documents import Document
+from ol_orchestrate.lib.embeddings.documents import Document, content_file_doc_key
 from ol_orchestrate.lib.embeddings.models import Embedder, EmbeddingModelSpec
 from ol_orchestrate.lib.embeddings.pipeline import (
     ChunkRow,
@@ -157,28 +157,10 @@ def content_file_point_key(
     :returns: ``{platform}.{resource_readable_id}.{run_readable_id}.{key}.{chunk}``
     :rtype: str
     """
-    doc_key = content_file_doc_key(
-        platform_code, resource_readable_id, run_readable_id, key
+    return (
+        f"{platform_code or ''}.{resource_readable_id}.{run_readable_id or ''}"
+        f".{key}.{chunk_number}"
     )
-    return f"{doc_key}.{chunk_number}"
-
-
-def content_file_doc_key(
-    platform_code: str | None,
-    resource_readable_id: str,
-    run_readable_id: str | None,
-    key: str,
-) -> str:
-    """Key of a content file as a document: its point keys without the chunk.
-
-    :param platform_code: the parent resource's ``platform.code``
-    :param resource_readable_id: the parent resource's ``readable_id``
-    :param run_readable_id: the run's ``run_id``, ``None`` for a run-less file
-    :param key: the content file's ``key``
-    :returns: ``{platform}.{resource_readable_id}.{run_readable_id}.{key}``
-    :rtype: str
-    """
-    return f"{platform_code or ''}.{resource_readable_id}.{run_readable_id or ''}.{key}"
 
 
 def resource_metadata_point_key(
@@ -210,14 +192,18 @@ def is_markdown(file_type: str | None, file_extension: str | None) -> bool:
 class ContentFileDocument(BaseModel):
     """A content file as Learn's chunking and payload see it.
 
-    The fields other than ``content`` and ``payload`` go into the point id or
-    pick the splitter. ``payload`` carries the rest of the chunk payload, keyed as
-    Learn's ``ContentFileSerializer`` keys it (e.g. ``platform`` and
-    ``offered_by`` are objects with a ``code``).
+    ``etl_source``, ``run_readable_id`` and ``source_path`` key the document
+    (:func:`content_file_doc_key`). The other fields besides ``content`` and
+    ``payload`` go into Learn's point id or pick the splitter. ``payload``
+    carries the rest of the chunk payload, keyed as Learn's
+    ``ContentFileSerializer`` keys it (e.g. ``platform`` and ``offered_by`` are
+    objects with a ``code``).
     """
 
     model_config = ConfigDict(frozen=True)
 
+    etl_source: str
+    source_path: str
     key: str
     content: str | None
     resource_readable_id: str
@@ -254,10 +240,7 @@ class ContentFileDocument(BaseModel):
         """
         return Document(
             doc_key=content_file_doc_key(
-                self.platform_code,
-                self.resource_readable_id,
-                self.run_readable_id,
-                self.key,
+                self.etl_source, self.run_readable_id, self.source_path
             ),
             doc_kind=CONTENT_FILE_DOC_KIND,
             text=self.content,
@@ -266,6 +249,8 @@ class ContentFileDocument(BaseModel):
             else "text",
             metadata={
                 **self.payload,
+                "etl_source": self.etl_source,
+                "source_path": self.source_path,
                 "key": self.key,
                 "resource_readable_id": self.resource_readable_id,
                 "run_readable_id": self.run_readable_id,
