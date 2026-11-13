@@ -6,10 +6,11 @@
 #}
 
 {#
-    json_extract_value: Cross-db extraction of a JSON value. On Trino this returns varchar
-    (JSON-formatted text), NOT a native JSON value -- safe to select directly as a persisted
-    model column. On DuckDB/StarRocks it returns a native JSON value (those connectors don't
-    have this restriction).
+    json_extract_value: Cross-db extraction of a JSON value. On Trino and StarRocks this
+    returns varchar (JSON-formatted text), NOT a native JSON value -- safe to select directly
+    as a persisted model column. StarRocks cannot write a JSON column to an Iceberg table
+    either ("Unsupported primitive column type JSON"). On DuckDB it returns a native JSON
+    value.
 
     This replaces the Trino-specific: json_query(col, 'lax $.path')
 
@@ -47,7 +48,9 @@
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
     {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
-    json_query(parse_json({{ json_col }}), {{ json_path }})
+    {# json_string serializes the JSON value, so a string keeps its quotes as on Trino; a
+       cast to varchar would unquote it #}
+    json_string(json_query(parse_json({{ json_col }}), {{ json_path }}))
 {%- endmacro %}
 
 
@@ -1190,6 +1193,27 @@
 {% macro default__null_timestamptz() -%}cast(null as timestamp with time zone){%- endmacro %}
 
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
+
+{#
+    cast_to_timestamptz: a zone-less timestamp read as UTC, as the type the
+    *_to_timestamptz macros return. StarRocks has no zoned type and keeps UTC
+    instants as DATETIME.
+#}
+{% macro cast_to_timestamptz(timestamp_expr) -%}
+    {{ adapter.dispatch('cast_to_timestamptz', 'open_learning')(timestamp_expr) }}
+{%- endmacro %}
+
+{% macro default__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamp(6) with time zone)
+{%- endmacro %}
+
+{% macro duckdb__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamptz)
+{%- endmacro %}
+
+{% macro starrocks__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as datetime)
+{%- endmacro %}
 
 {#
     null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has

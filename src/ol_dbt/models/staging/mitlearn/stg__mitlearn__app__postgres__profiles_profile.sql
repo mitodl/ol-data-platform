@@ -20,10 +20,10 @@ with source as (
         , completed_onboarding as user_completed_onboarding
         , nullif(name, '') as user_name
         , nullif(bio, '') as user_bio
-        , nullif(goals, array[]) as user_goals
+        , {{ varchar_array_column(source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__profiles_profile'), 'goals') }} as user_goals
         , nullif(headline, '') as user_headline
         , nullif(location, '') as user_location
-        , nullif(delivery, array[]) as user_delivery_preference
+        , {{ varchar_array_column(source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__profiles_profile'), 'delivery') }} as user_delivery_preference
         , nullif(current_education, '') as user_current_education
         , nullif(time_commitment, '') as user_time_commitment
         , nullif(image, '') as user_image_url
