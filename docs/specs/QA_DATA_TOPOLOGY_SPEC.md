@@ -248,13 +248,14 @@ union is then consistent as of that branch's last load rather than missing it. A
 empties after the observation is caught by `qa_observation_drift_daily` (05:00 UTC, before the
 05:30 build), not by the build itself.
 
-`integrations__learn__program_certificates` declares all five of its units and lists
-`raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
-the 2026-09-08 conversion, with no snapshot (read from the table metadata on 2026-10-22). The
-view reads only `auth_user` from it, through a left join in `int__mitxonline__users` that
-falls back to the MITx Online app username, so the empty branch changes that column and not
-the row set. Its other inputs held rows on 2026-10-21: `mitxonline/app_postgres` loaded that
-day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `irx/bigquery`
+`integrations__learn__program_certificates` declares all five of its units. Until 2026-11-12 it
+listed `raw__mitxonline__openedx__mysql__auth_user` as partial, because QA's whole MITx Online
+Open edX unit was empty Iceberg shells from the 2026-09-08 conversion, and the view reads only
+`auth_user` from it, through a left join in `int__mitxonline__users` that falls back to the
+MITx Online app username. The `mitxonline_edxapp` dlt source loaded QA's own Open edX database
+on 2026-11-12, so the entry was removed. Its other inputs held rows on 2026-10-21:
+`mitxonline/app_postgres` loaded that day, `micromasters/app_postgres` last on 2026-09-14, and
+the `edxorg/s3` and `irx/bigquery`
 mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
 measured at observation time (§2), so nothing fails on that date by itself: the first observation
 refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
@@ -403,6 +404,11 @@ RFC 12711's other three open questions are not resolved here and do not gate any
 ---
 
 ## 7. Measured QA state and the strategies it set (step 3, 2026-09-17)
+
+The tables below record QA as measured on 2026-09-17. They are not current: on 2026-11-12 dlt
+sources began loading mitlearn, learn_ai and ocw studio's app databases and the mitx, xPro and
+MITx Online Open edX databases into QA. `ingestion/inventory/qa_observation.json` holds what QA
+raw holds now.
 
 Every unit's `strategies.qa` now follows one rule:
 

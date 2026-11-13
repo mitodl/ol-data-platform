@@ -10,6 +10,11 @@ strategies:
   local: fixture
 loader: airbyte
 table_prefix: raw__mitxonline__openedx__mysql__
+# Loads QA, so QA staging dedups on dlt's column. Production is still the
+# Airbyte connections below.
+dlt:
+  source_module: ol_dlt.sources.edxapp
+  write_disposition: replace
 airbyte:
   source_kind: source-mysql
   replication_method: cursor

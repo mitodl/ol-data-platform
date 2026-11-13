@@ -97,6 +97,10 @@ models:
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
+  - name: courserungrade_letter_grade
+    description: str, letter grade from the edX.org course grading policy, for example
+      A, B or Pass. Zero-width spaces are removed. Null when edX.org has no letter
+      grade.
   - name: courserunenrollment_created_on
     description: timestamp, specifying when the enrollment was initially
   - name: courseruncertificate_created_on

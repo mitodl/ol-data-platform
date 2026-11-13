@@ -2,9 +2,8 @@
 
 import importlib
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import dlt
@@ -75,11 +74,13 @@ class FakeClient:
         self.clicks = 0
         # Dates the next keyword fetch leaves out, as if Google retracted them.
         self.dropped_dates: set[str] = set()
+        # A keyword window starting on this date fails, as a killed pod would.
+        self.fail_window: str | None = None
 
     def get_service(self, _name: str) -> "FakeClient":
         return self
 
-    def search_stream(self, *, customer_id: str, query: str) -> list[Any]:
+    def search(self, *, customer_id: str, query: str) -> list[Any]:
         self.queries.append((customer_id, query))
         resource = _match(r" FROM (\w+)", query).group(1)
         if resource == "customer_client":
@@ -88,6 +89,9 @@ class FakeClient:
             ]
         elif resource == "keyword_view" and "metrics.impressions" in query:
             first, last = _match(r"BETWEEN '([\d-]+)' AND '([\d-]+)'", query).groups()
+            if first == self.fail_window:
+                msg = f"window {first} failed"
+                raise RuntimeError(msg)
             rows = [
                 _keyword_row(day, self.clicks)
                 for day in (first, last)
@@ -103,7 +107,7 @@ class FakeClient:
             ][:limit]
         else:
             rows = []
-        return [SimpleNamespace(results=rows)]
+        return rows
 
 
 def _keyword_windows(client: FakeClient) -> list[tuple[str, str]]:
@@ -234,7 +238,8 @@ def test_one_source_object_advances_each_run(
     assert by_date["2026-11-04"]["metrics__clicks"] == 4  # noqa: PLR2004
 
     fetches = dataset["raw__google_ads__api__fetch_log"].arrow().to_pylist()
-    assert len(fetches) == 4  # noqa: PLR2004
+    # One per window: run 1's 06-01 to 11-08 is six 31-day windows.
+    assert len(fetches) == 9  # noqa: PLR2004
 
     def is_current(row: dict[str, Any]) -> bool:
         covering = [
@@ -247,3 +252,117 @@ def test_one_source_object_advances_each_run(
     # Run 4 re-read 11-11 and Google no longer returned it, so staging drops it.
     assert is_current(by_date["2026-11-04"])
     assert not is_current(by_date["2026-11-11"])
+
+
+@pytest.mark.integration
+def test_backfill_loads_in_batches_and_resumes_after_a_failure(
+    sqlite_iceberg_lake: Path, tmp_path: Path
+) -> None:
+    client = FakeClient()
+    destination = dlt.destinations.filesystem(bucket_url=sqlite_iceberg_lake.as_uri())
+    pipelines_dir = str(tmp_path / "pipelines")
+    keyword_table = "raw__google_ads__api__keyword_daily"
+
+    def run(backfill_windows: int | None) -> Any:  # noqa: ANN401
+        # Dagster drops the local pipeline before each load, so cursors come
+        # back from the destination.
+        pipeline = dlt.pipeline(
+            pipeline_name="google_ads_backfill_test",
+            destination=destination,
+            dataset_name="raw",
+            pipelines_dir=pipelines_dir,
+        )
+        pipeline.drop()
+        pipeline = dlt.pipeline(
+            pipeline_name="google_ads_backfill_test",
+            destination=destination,
+            dataset_name="raw",
+            pipelines_dir=pipelines_dir,
+        )
+        source = google_ads.google_ads_source(
+            client_factory=lambda: client,
+            start_date="2026-06-01",
+            today=TODAY,
+            backfill_windows=backfill_windows,
+        ).with_resources(keyword_table)
+        source.resources[keyword_table].apply_hints(table_format="iceberg")
+        client.queries.clear()
+        pipeline.run(config.with_nullable_load_id(source))
+        return pipeline
+
+    # 06-01 to 11-08 is six windows: two batches of 2 windows each.
+    pipeline = run(2)
+    assert _keyword_windows(client) == [
+        ("2026-06-01", "2026-07-01"),
+        ("2026-07-02", "2026-08-01"),
+    ]
+    pipeline = run(2)
+    assert _keyword_windows(client)[0] == ("2026-08-02", "2026-09-01")
+    tables = pipeline.default_schema.tables
+    assert tables[keyword_table]["write_disposition"] == "append"
+
+    # A failed batch saves no cursor, so the next one re-reads its windows.
+    client.fail_window = "2026-11-03"
+    with pytest.raises(Exception, match="window 2026-11-03 failed"):
+        run(2)
+    client.fail_window = None
+    pipeline = run(2)
+    assert _keyword_windows(client) == [
+        ("2026-10-03", "2026-11-02"),
+        ("2026-11-03", "2026-11-08"),
+    ]
+
+    pipeline = run(2)
+    assert _keyword_windows(client) == []
+
+    # Once current, a normal run merges its lookback over the appended rows.
+    pipeline = run(None)
+    rows = pipeline.dataset()[keyword_table].arrow().to_pylist()
+    dates = [r["segments__date"] for r in rows]
+    assert len(dates) == len(set(dates))
+    assert {"2026-06-01", "2026-11-08"} <= set(dates)
+
+
+def test_snapshots_append_and_daily_reports_merge() -> None:
+    source = google_ads.google_ads_source(client_factory=FakeClient, today=TODAY)
+
+    for name in google_ads._SNAPSHOTS:  # noqa: SLF001
+        assert source.resources[name].write_disposition == "append"
+    assert source.resources[
+        "raw__google_ads__api__keyword_daily"
+    ].write_disposition == ("merge")
+
+
+@pytest.mark.integration
+def test_a_snapshot_is_taken_once_per_day(
+    sqlite_iceberg_lake: Path, tmp_path: Path
+) -> None:
+    client = FakeClient()
+    destination = dlt.destinations.filesystem(bucket_url=sqlite_iceberg_lake.as_uri())
+    table = "raw__google_ads__api__campaign_snapshots"
+
+    def run(today: date) -> list[str]:
+        # Dropped first, as Dagster does, so the state comes from the destination.
+        dlt.pipeline(
+            pipeline_name="google_ads_snapshot_test",
+            destination=destination,
+            dataset_name="raw",
+            pipelines_dir=str(tmp_path / "pipelines"),
+        ).drop()
+        pipeline = dlt.pipeline(
+            pipeline_name="google_ads_snapshot_test",
+            destination=destination,
+            dataset_name="raw",
+            pipelines_dir=str(tmp_path / "pipelines"),
+        )
+        source = google_ads.google_ads_source(
+            client_factory=lambda: client, today=today
+        ).with_resources(table)
+        source.resources[table].apply_hints(table_format="iceberg")
+        client.queries.clear()
+        pipeline.run(config.with_nullable_load_id(source))
+        return [q for _, q in client.queries if "FROM campaign " in q]
+
+    assert len(run(TODAY)) == 1
+    assert run(TODAY) == []
+    assert len(run(TODAY + timedelta(days=1))) == 1

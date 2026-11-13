@@ -1,13 +1,23 @@
 """Unit + materialization tests for the reusable database source."""
 
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import dlt
 import pytest
-from sqlalchemy import create_engine
+from dlt.extract.exceptions import ResourceExtractionError
+from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources.sql_database import remove_nullability_adapter
+from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
+from dlt.sources.sql_database.schema_types import sqla_col_to_column_schema
+from sqlalchemy import Boolean, Column, MetaData, Table, create_engine
+from sqlalchemy.dialects import mysql
+from sqlalchemy.dialects.mysql import pymysql as mysql_pymysql
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, database
 from ol_dlt.database import DatabaseSourceSpec, DatabaseTable
@@ -31,6 +41,126 @@ def _iceberg_pipeline(lake: Path, tmp_path: Path, name: str) -> dlt.Pipeline:
         dataset_name="raw",
         pipelines_dir=str(tmp_path / "pipelines"),
     )
+
+
+def test_mysql_tinyint1_reflects_as_boolean() -> None:
+    """Django's BooleanField is tinyint(1) on MariaDB; Airbyte lands it as boolean."""
+    adapted = database.mysql_boolean_adapter(mysql.TINYINT(display_width=1))
+    assert isinstance(adapted, Boolean)
+    column = sqla_col_to_column_schema(Column("is_active", adapted), "full")
+    assert column is not None
+    assert column["data_type"] == "bool"
+    assert row_tuples_to_arrow(
+        [(1,), (0,), (None,)], columns={"is_active": column}, tz="UTC"
+    ).column("is_active").to_pylist() == [True, False, None]
+
+
+@pytest.mark.parametrize(
+    "sql_type", [mysql.TINYINT(display_width=4), mysql.TINYINT(), mysql.INTEGER()]
+)
+def test_other_mysql_integers_keep_their_type(sql_type: TypeEngine[Any]) -> None:
+    assert database.mysql_boolean_adapter(sql_type) is sql_type
+
+
+@pytest.mark.parametrize("sql_type", [mysql.DOUBLE(), mysql.REAL()])
+def test_mysql_doubles_are_read_as_floats(sql_type: TypeEngine[Any]) -> None:
+    """Django's FloatField, which the QA xPro and MITx Online edxapp loads failed on.
+
+    Read as reflected, a double comes back as a Decimal rounded to 10 places
+    and dlt types the column decimal(38, 9) from it. Airbyte lands a double.
+    """
+    values = [2 / 3, 1e300, None]
+    dialect = mysql_pymysql.dialect()
+    reflected = sql_type.result_processor(dialect, None)
+    assert reflected is not None
+    assert reflected(2 / 3) != 2 / 3
+
+    table = Table(
+        "studentmodule", MetaData(), Column("grade", sql_type, nullable=False)
+    )
+    grade = database.mysql_table_adapter(table).c.grade
+    processor = grade.type.result_processor(dialect, None)
+    read = [processor(value) if processor else value for value in values]
+    assert read == values
+    column = sqla_col_to_column_schema(
+        grade, "full", type_adapter_callback=database.mysql_boolean_adapter
+    )
+    assert column is not None
+    assert column["data_type"] == "double"
+    # Declared NOT NULL, as remove_nullability_adapter must still undo.
+    assert column.get("nullable") is not False
+    assert (
+        row_tuples_to_arrow(
+            [(value,) for value in read], columns={"grade": column}, tz="UTC"
+        )
+        .column("grade")
+        .to_pylist()
+        == values
+    )
+
+
+@pytest.mark.parametrize(
+    ("drivername", "table_adapter", "type_adapter"),
+    [
+        (
+            database.MYSQL_DRIVER,
+            database.mysql_table_adapter,
+            database.mysql_boolean_adapter,
+        ),
+        (database.POSTGRES_DRIVER, remove_nullability_adapter, None),
+    ],
+)
+def test_only_mysql_sources_get_the_mysql_adapters(
+    drivername: str,
+    table_adapter: object,
+    type_adapter: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_sql_table(**kwargs: Any) -> NoReturn:
+        captured.update(kwargs)
+        raise _CapturedError
+
+    monkeypatch.setattr(database, "sql_table", fake_sql_table)
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__",
+        database="example",
+        vault_mount="example",
+        tables=(DatabaseTable(name="widget", primary_key="id"),),
+        drivername=drivername,
+    )
+    with pytest.raises(_CapturedError):
+        database.build_table_resource(spec, spec.tables[0], profile="dev")
+    assert captured["table_adapter_callback"] is table_adapter
+    assert captured["type_adapter_callback"] is type_adapter
+
+
+@pytest.mark.parametrize(
+    ("table", "expected"),
+    [
+        (DatabaseTable(name="widget", primary_key="id"), database.DEFAULT_CHUNK_SIZE),
+        (DatabaseTable(name="wide", primary_key="id", chunk_size=1_000), 1_000),
+    ],
+)
+def test_table_chunk_size_reaches_sql_table(
+    table: DatabaseTable, expected: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_sql_table(**kwargs: Any) -> NoReturn:
+        captured.update(kwargs)
+        raise _CapturedError
+
+    monkeypatch.setattr(database, "sql_table", fake_sql_table)
+    with pytest.raises(_CapturedError):
+        database.build_table_resource(_SPEC, table, profile="dev")
+    assert captured["chunk_size"] == expected
+
+
+class _CapturedError(Exception):
+    pass
 
 
 def test_cursor_column_requires_primary_key() -> None:
@@ -296,6 +426,102 @@ def test_materializes_a_database_to_the_test_profile(
     assert "name" in gadget_columns
     # excluded_columns must keep credential material out of the warehouse.
     assert "secret" not in gadget_columns
+
+
+def _widget_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "optional.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+        )
+        connection.executemany(
+            "INSERT INTO widget VALUES (?, ?)", [(1, "first"), (2, "second")]
+        )
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+
+
+def _optional_spec(*tables: DatabaseTable) -> DatabaseSourceSpec:
+    return DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=tables,
+    )
+
+
+@pytest.mark.integration
+def test_an_optional_table_the_source_lacks_is_skipped(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA's mitx edxapp database has no assessment_ai* tables; production does."""
+    _widget_database(tmp_path, monkeypatch)
+    spec = _optional_spec(
+        DatabaseTable(name="widget", primary_key="id", optional=True),
+        DatabaseTable(name="absent", primary_key="id", optional=True),
+    )
+    pipeline = config.pipeline_for("example")
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+
+    tables = pipeline.default_schema.tables
+    assert "raw__example__app__postgres__absent" not in tables
+    # A present optional table loads as any other: rows, and the hints dlt's
+    # reflection yields first (the NOT NULL column is still made nullable).
+    widget = tables["raw__example__app__postgres__widget"]["columns"]
+    assert widget["name"].get("nullable") is not False
+    assert (
+        pipeline.last_trace.last_normalize_info.row_counts[
+            "raw__example__app__postgres__widget"
+        ]
+        == 2
+    )
+
+
+def _rows_then_missing(rows: int, missing: str) -> Any:  # noqa: ANN401
+    @dlt.resource(name="raw__example__widget")
+    def widget() -> Iterator[dict[str, int]]:
+        yield from ({"id": row} for row in range(rows))
+        raise NoSuchTableError(missing)
+
+    return widget()
+
+
+def test_an_optional_table_skips_only_its_own_absence() -> None:
+    table = DatabaseTable(name="widget", primary_key="id", optional=True)
+    absent = _rows_then_missing(0, "widget")
+    database._skip_when_absent(absent, _SPEC, table)  # noqa: SLF001
+    assert list(absent) == []
+
+    # Another table missing, e.g. one a reflected foreign key names, still fails.
+    other = _rows_then_missing(0, "gadget")
+    database._skip_when_absent(other, _SPEC, table)  # noqa: SLF001
+    with pytest.raises(ResourceExtractionError) as raised:
+        list(other)
+    assert isinstance(raised.value.__cause__, NoSuchTableError)
+
+    # So does the same error once rows have started: that is not absence.
+    late = _rows_then_missing(1, "widget")
+    database._skip_when_absent(late, _SPEC, table)  # noqa: SLF001
+    with pytest.raises(ResourceExtractionError) as raised:
+        list(late)
+    assert isinstance(raised.value.__cause__, NoSuchTableError)
+
+
+@pytest.mark.integration
+def test_a_required_table_the_source_lacks_fails_the_load(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _widget_database(tmp_path, monkeypatch)
+    spec = _optional_spec(DatabaseTable(name="absent", primary_key="id"))
+    pipeline = config.pipeline_for("example")
+    with pytest.raises(PipelineStepFailed, match="absent"):
+        pipeline.run(database.build_database_source(spec, profile="test"))
 
 
 @pytest.mark.integration

@@ -33,7 +33,27 @@
             ~ "`ol-dbt inventory metadata-columns --write`."
         ) }}
     {%- endif -%}
+    {%- set lake_overrides = raw_metadata_column_lake_overrides().get(raw_data_lake(), {}) -%}
+    {%- if raw_table in lake_overrides -%}
+        {%- do return(lake_overrides[raw_table]) -%}
+    {%- endif -%}
     {%- do return(mapping[raw_table]) -%}
+{% endmacro %}
+
+
+{% macro raw_data_lake() %}
+    {#
+        The lake whose raw tables this build reads: `qa` for a target on
+        ol_data_lake_qa, and so on. Trino lake targets name the catalog in
+        `database`, StarRocks lake targets in `catalog`. Every other target
+        (the DuckDB ones and StarRocks default_catalog) reads production raw or
+        none at all.
+    #}
+    {%- set catalog = target.catalog if target.type == 'starrocks' else target.database -%}
+    {%- if catalog is string and catalog.startswith('ol_data_lake_') -%}
+        {%- do return(catalog[('ol_data_lake_' | length):]) -%}
+    {%- endif -%}
+    {%- do return('production') -%}
 {% endmacro %}
 
 

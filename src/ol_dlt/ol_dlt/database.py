@@ -41,8 +41,11 @@ from dlt.sources.sql_database import (
     sql_table,
 )
 from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
-from sqlalchemy import event
+from sqlalchemy import Boolean, Numeric, Table, event
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL, Engine
+from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, vault
 
@@ -107,12 +110,27 @@ class DatabaseTable:
             duplicate rows even though the ``dev`` and deployed runs do not.
         excluded_columns: Columns never to select. Use this for secrets and
             credential material, which must not reach the warehouse at all.
+        db_schema: Schema to read this table from when it is not the spec's,
+            e.g. Open edX's ``edxapp_csmh`` database beside ``edxapp`` on the
+            same MySQL server. ``None`` takes the spec's.
+        chunk_size: Rows per batch for a table whose rows are too wide for
+            ``DEFAULT_CHUNK_SIZE``. A batch is held in memory whole, so the run
+            pod's limit bounds rows times average row width.
+        optional: The source database may lack this table, and the load skips
+            it with a warning rather than failing. For tables a deployment
+            dropped, e.g. QA's mitx edxapp database has none of the
+            ``assessment_ai*`` tables production keeps (empty). The skipped
+            table gets no raw table, and its asset still reports a
+            materialization, without a row count.
     """
 
     name: str
     primary_key: str | Sequence[str] | None = None
     cursor_column: str | None = None
     excluded_columns: Sequence[str] = ()
+    db_schema: str | None = None
+    chunk_size: int = DEFAULT_CHUNK_SIZE
+    optional: bool = False
 
     def __post_init__(self) -> None:
         """Reject an incremental table that has no key to merge on."""
@@ -308,6 +326,51 @@ class EmptyTableLoader(TableLoader):
             )
 
 
+def mysql_boolean_adapter(sql_type: TypeEngine[Any]) -> TypeEngine[Any]:
+    """Reflect MySQL ``tinyint(1)``, Django's ``BooleanField``, as boolean.
+
+    SQLAlchemy reflects it as ``TINYINT`` and dlt maps that to ``bigint``,
+    while the Airbyte MySQL source lands the same columns as ``boolean``
+    (e.g. production raw__mitx__openedx__mysql__student_courseenrollment
+    .is_active). Downstream models union them with boolean columns from other
+    sources, which fails on a ``bigint``. MariaDB keeps the display width the
+    match depends on.
+
+    :param sql_type: The reflected column type.
+
+    :returns: ``Boolean`` for ``tinyint(1)``, the reflected type otherwise.
+    :rtype: TypeEngine
+    """
+    if isinstance(sql_type, mysql.TINYINT) and sql_type.display_width == 1:
+        return Boolean()
+    return sql_type
+
+
+def mysql_table_adapter(table: Table) -> Table:
+    """Read MySQL ``double`` and ``real`` as floats, then drop nullability.
+
+    Django's ``FloatField`` is a MySQL ``double``, which SQLAlchemy's MySQL
+    dialect reflects with ``asdecimal=True``: the select it runs returns each
+    value as a ``Decimal`` rounded to 10 fractional digits. dlt maps only
+    ``Numeric`` types, which ``Float`` no longer subclasses in SQLAlchemy 2.1,
+    so the column takes its type from those values, ``decimal(38, 9)``, and
+    the load fails on the first value with more digits (e.g.
+    courseware_studentmodule.grade). The column type has to change on the
+    reflected table, which dlt both selects from and maps; a type adapter only
+    reaches the mapping, and the values would still be rounded. Airbyte lands
+    these columns as ``double``.
+
+    :param table: The reflected table.
+
+    :returns: The table, its float columns retyped, every column nullable.
+    :rtype: Table
+    """
+    for column in table.columns:
+        if isinstance(column.type, (mysql.DOUBLE, mysql.REAL)):
+            column.type = Numeric(asdecimal=False)
+    return remove_nullability_adapter(table)
+
+
 def build_table_resource(
     spec: DatabaseSourceSpec,
     table: DatabaseTable,
@@ -323,9 +386,9 @@ def build_table_resource(
     resource = sql_table(
         credentials=_credentials_for(spec, resolved_profile),
         table=table.name,
-        schema=spec.db_schema,
+        schema=table.db_schema or spec.db_schema,
         incremental=incremental,
-        chunk_size=DEFAULT_CHUNK_SIZE,
+        chunk_size=table.chunk_size,
         # pyarrow reflects source types faithfully instead of re-inferring them
         # from sampled rows, which keeps the Iceberg schema stable run to run.
         backend="pyarrow",
@@ -337,7 +400,14 @@ def build_table_resource(
         # would otherwise evolve the Iceberg table with a REQUIRED column, which
         # pyiceberg refuses on a table that holds rows (see
         # config.DLT_LOAD_ID_COLUMN), failing every later load of that table.
-        table_adapter_callback=remove_nullability_adapter,
+        table_adapter_callback=(
+            mysql_table_adapter
+            if spec.drivername == MYSQL_DRIVER
+            else remove_nullability_adapter
+        ),
+        type_adapter_callback=(
+            mysql_boolean_adapter if spec.drivername == MYSQL_DRIVER else None
+        ),
         excluded_columns=list(table.excluded_columns) or None,
         write_disposition="merge" if table.cursor_column else "replace",
         primary_key=table.primary_key,
@@ -347,7 +417,7 @@ def build_table_resource(
             else None
         ),
     )
-    return resource.with_name(raw_name).apply_hints(
+    resource = resource.with_name(raw_name).apply_hints(
         table_name=raw_name,
         table_format=config.active_table_format(resolved_profile),
         # Nullable, overriding dlt's required default -- see
@@ -355,6 +425,48 @@ def build_table_resource(
         # an Iceberg table that already holds rows.
         columns=config.DLT_LOAD_ID_COLUMN,
     )
+    if table.optional:
+        _skip_when_absent(resource, spec, table)
+    return resource
+
+
+def _skip_when_absent(
+    resource: Any, spec: DatabaseSourceSpec, table: DatabaseTable
+) -> None:  # noqa: ANN401
+    """End ``resource`` quietly when the source database lacks ``table``.
+
+    Reflection is deferred to the resource's first item, so an absent table
+    raises ``NoSuchTableError`` there, before any row. Catching it only around
+    that first item keeps any later error loud. The wrapper replaces the
+    resource's own generating step rather than wrapping the resource in
+    another one, because iterating a resource drops the schema hints dlt's
+    reflection yields first. ``Pipe.replace_gen`` is dlt's internal API, so
+    tests/test_database.py's optional-table tests pin this to the locked dlt.
+
+    Reflection raises ``NoSuchTableError`` with the bare table name whatever the
+    schema (SQLAlchemy's ``Inspector.reflect_table``), so any other name is a
+    different table and stays an error.
+    """
+    pipe = resource._pipe  # noqa: SLF001
+    rows = pipe.gen
+
+    def rows_unless_absent() -> Iterator[Any]:
+        items = rows()
+        try:
+            first = next(items)
+        except StopIteration:
+            return
+        except NoSuchTableError as error:
+            if str(error) != table.name:
+                raise
+            logger.warning(
+                "%s: source table %s does not exist; skipping it", spec.name, error
+            )
+            return
+        yield first
+        yield from items
+
+    pipe.replace_gen(rows_unless_absent)
 
 
 def build_database_source(

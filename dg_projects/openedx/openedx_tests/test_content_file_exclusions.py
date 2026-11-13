@@ -287,6 +287,35 @@ def test_rows_carry_learns_release_dates(tmp_path):
     assert rows["static/textbook.pdf"] is None
 
 
+def test_rows_carry_learns_content_file_keys(tmp_path):
+    """A block stored below its type folder is keyed by its url_name, a:b."""
+    files = {
+        **COURSE_FILES,
+        "chapter/week1.xml": (
+            '<chapter display_name="Week 1"><sequential url_name="801x:seq1"/>'
+            "</chapter>"
+        ),
+        "sequential/801x/seq1.xml": "<sequential/>",
+    }
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    keys = {
+        row["file_path"]: row["content_file_key"]
+        for row in build_file_rows(
+            OlxArchive(olx_root, "mitxonline"),
+            course_id="course-v1:MITx+7.05x+2T2026",
+            course_xml_version="abc",
+        )
+    }
+    run = "MITx+7.05x+2T2026"
+    assert keys["sequential/801x/seq1.xml"] == (
+        f"block-v1:{run}+type@sequential+block@801x:seq1"
+    )
+    assert keys["chapter/week1.xml"] == f"block-v1:{run}+type@chapter+block@week1"
+    assert keys["static/handout.pdf"] == f"asset-v1:{run}+type@asset+block@handout.pdf"
+
+
 def test_static_text_pages_keep_their_bytes(tmp_path):
     """Release dating follows links through static text pages, so they're read."""
     files = {**COURSE_FILES, "static/reading.html": '<a href="handout.pdf">h</a>'}

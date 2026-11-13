@@ -1,14 +1,12 @@
 ---
-# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
-# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
 #
-# ol_dlt.sources.tracking_logs loads the same files into
-# raw__mitx__openedx__tracking_log_events, beside the Airbyte table, until it
-# is checked against it and staging is repointed (spec §10.1, step 1). That
-# table is not declared below yet, because an Airbyte unit may only declare the
-# streams its connections carry. It is declared in the cutover change, which
-# disables the connection, moves raw__mitx__openedx__tracking_logs to
-# retired.yml as the archive and flips the unit to `loader: dlt`.
+# ol_dlt.sources.tracking_logs loads the MITx tracking log into
+# raw__mitx__openedx__tracking_log_events. It replaced the Airbyte-loaded
+# raw__mitx__openedx__tracking_logs, which stays in place as the archive (see
+# retired.yml).
 schema_version: 1
 deployment: mitx
 layer: tracking_logs
@@ -16,30 +14,19 @@ scope: scoped
 strategies:
   qa: ingest
   local: fixture
-loader: airbyte
-# Covers both tables: the Airbyte one is ..._tracking_logs and the dlt one
-# ..._tracking_log_events.
+loader: dlt
+# The load appends each log file once. Staging dedups events on their
+# business columns and reads new rows by event time, so this only orders
+# copies of the same event.
+raw_metadata_column: _file_modified_at
 table_prefix: raw__mitx__openedx__tracking_log
-airbyte:
-  source_kind: source-s3
-  replication_method: n/a
-  connections:
-  - environment: production
-    name: MITx Tracking Logs → S3 Data Lake
-    status: active
-    sync_interval_hours: 12
-    streams:
-    - raw__mitx__openedx__tracking_logs
 dlt:
   source_module: ol_dlt.sources.tracking_logs
   write_disposition: append
 tables:
-- name: raw__mitx__openedx__tracking_logs
-  raw_table: raw__mitx__openedx__tracking_logs
+- name: raw__mitx__openedx__tracking_log_events
+  raw_table: raw__mitx__openedx__tracking_log_events
   sync_mode: incremental_append
   cursor_field:
-  - _ab_source_file_last_modified
+  - _file_modified_at
   modeled: true
-  raw_metadata_column:
-  - _airbyte_extracted_at
-  - _ab_source_file_last_modified

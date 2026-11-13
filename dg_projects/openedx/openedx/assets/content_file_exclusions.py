@@ -20,9 +20,11 @@ lessons. That walk needs the same tree, so the asset lands the units too, one
 row per unit, for integrations__learn__content_file_units.
 
 OlxArchive below is a port of learning_resources/etl/olx.py on mit-learn main
-as of c9f269c86 (2026-10-22, after mit-learn#4093 and #4106; unchanged in it
-through 3128467e1, 2026-11-09), less video metadata. Learn's methods that take a
-LearningResourceRun take the run id here. Units carry the sequential's
+as of 5da30ef30 (2026-11-09, mit-learn#4264, which reads blocks whose url_name
+has a colon; unchanged in it through 3e0ad0e67, 2026-11-10), less video
+metadata. Learn's methods that take a LearningResourceRun take the run id here.
+Each file row carries its ContentFile key (OlxArchive.key), since a block stored
+below its type folder can't be keyed from its path alone. Units carry the sequential's
 url_name, not Learn's jump URL, whose LMS root dbt adds. It is kept as close to
 the original as the setting allows, so a change there can be diffed across; the
 differences are noted where they occur.
@@ -42,6 +44,7 @@ import html
 import json
 import logging
 import os
+import posixpath
 import re
 import tarfile
 from bisect import bisect_left, bisect_right
@@ -75,6 +78,12 @@ from openedx.assets.content_files import write_text_snapshot
 log = logging.getLogger(__name__)
 
 STATIC_DIR = "static"
+
+# The mit-learn commit the port follows, as the outputs' code version.
+# upstream_or_code_changes only sees a code change through the code version, and
+# Dagster's code_version_changed ignores the first one an asset gets, so this
+# value re-runs nothing; changing it later re-runs every course export.
+OLX_PORT_VERSION = "mit-learn-5da30ef30"
 
 # mit-learn learning_resources/constants.py
 VALID_TEXT_FILE_TYPES = [
@@ -131,6 +140,9 @@ ABOUT_PAGE_FILES = frozenset({"overview.html", "short_description.html"})
 # Folders of course-wide pages rather than steps of the course: the about page,
 # the tabs and the handouts. Their files make up the run's context unit.
 OLX_CONTEXT_FOLDERS = ("about", "tabs", "info")
+# Top folders that hold no blocks, so a subfolder in them is not part of a
+# url_name
+OLX_NON_BLOCK_FOLDERS = frozenset({"static", "policies", *OLX_CONTEXT_FOLDERS})
 TRANSCRIPT_EXTENSIONS = frozenset({".srt", ".sjson", ".vtt"})
 OLX_STRUCTURE_TAGS = frozenset({"sequential", "vertical"})
 # Blocks whose child elements are blocks too. In any other block, like html,
@@ -326,6 +338,11 @@ def get_edx_module_id(path: str, run_id: str) -> str:
     )
 
 
+def _pathname(url_name: str) -> str:
+    """Where a block is stored under its type folder: edX writes a:b to a/b"""
+    return url_name.replace(":", "/")
+
+
 def _is_context_sequential(unit: dict[str, Any], chapter_size: int) -> bool:
     """Whether a sequential's unit belongs to the course context"""
     title = unit["title"]
@@ -492,15 +509,59 @@ class OlxArchive:
         """The root <course> pointer, or None when the tree is not an OLX export"""
         return self._parse_block("", "course")
 
+    def key(self, path: Path, run_id: str) -> str:
+        """
+        ContentFile key of a file in the tree. In an OLX tree, the folders
+        between a block file and its type folder are part of its url_name, so
+        sequential/a/b.xml is the sequential a:b.
+        """
+        parts = path.relative_to(self.root).parts if self.is_olx else ()
+        if parts and path in self._unspelled_names:
+            return get_edx_module_id(self._unspelled_names[path], run_id)
+        if len(parts) > 2 and parts[0] not in OLX_NON_BLOCK_FOLDERS:  # noqa: PLR2004
+            return get_edx_module_id(f"{parts[0]}/{':'.join(parts[1:])}", run_id)
+        return get_edx_module_id(str(path), run_id)
+
+    @cached_property
+    def _unspelled_names(self) -> dict[Path, str]:
+        """
+        <tag>/<url_name><ext> of the files of named blocks whose path drops part
+        of the url_name: when edX writes a block's : as a /, an empty, . or ..
+        part, as in a::b, :a or a:..:b, is lost from the path
+        """
+        return {
+            path: f"{tag}/{url_name}{path.suffix}"
+            for tag, url_name, _element, *_ in self._blocks
+            if ":" in url_name and {"", ".", ".."} & set(url_name.split(":"))
+            for path in self._files_named(tag, _pathname(url_name))
+        }
+
     def _parse_block(self, tag: str, url_name: str) -> Element | None:
         """
-        Parse <tag>/<url_name>.xml, returning None if missing. Malformed XML
-        raises so a course is never ingested with unverified staff-only status.
+        Parse a block's file, <tag>/<url_name>.xml with each : as a /,
+        returning None if missing. Malformed XML raises so a course is never
+        ingested with unverified staff-only status.
         """
+        path = self._block_xml(tag, url_name)
+        if path is None:
+            return None
         try:
-            return ElementTree.parse(self.root / tag / f"{url_name}.xml").getroot()
+            return ElementTree.parse(path).getroot()
         except (FileNotFoundError, NotADirectoryError):
             return None
+
+    def _in_tree(self, relative: str) -> Path | None:
+        """
+        self.root / relative with // and .. resolved, as edX's file system
+        resolves them, so the path matches the one the tree lists; None if it
+        leads outside the tree
+        """
+        relative = posixpath.normpath(relative.lstrip("/"))
+        return None if relative.split("/")[0] == ".." else self.root / relative
+
+    def _block_xml(self, tag: str, url_name: str) -> Path | None:
+        """Where a block's file would be: <tag>/<url_name>.xml, each : as a /"""
+        return self._in_tree(f"{tag}/{_pathname(url_name)}.xml")
 
     # not cached, like _live_updates: parsed trees and file text would stay in
     # memory for as long as the archive does
@@ -559,9 +620,24 @@ class OlxArchive:
         unnamed inline block has no files of its own, but can still have the
         others.
         """
-        files = self._files_named(tag, url_name) if url_name else set()
-        if tag == "html" and element.get("filename"):
-            files.update(self._files_named("html", element.get("filename")))  # type: ignore[arg-type]
+        files = self._files_named(tag, _pathname(url_name)) if url_name else set()
+        filename = element.get("filename")
+        if tag == "html" and filename:
+            # edX reads the body relative to the block's own folder
+            folder = posixpath.dirname(_pathname(url_name or ""))
+            body = posixpath.join(folder, filename)
+            bodies = self._files_named("html", body)
+            # edX reads <filename>.html, and only if that is missing, a filename
+            # already ending in .html as it is
+            if body.endswith(".html") and not any(
+                path.suffix == ".html" for path in bodies
+            ):
+                bodies |= {
+                    path
+                    for path in self._files_named("html", body.removesuffix(".html"))
+                    if path.suffix == ".html"
+                }
+            files.update(bodies)
         if tag == "video":
             # a transcript the export doesn't have is skipped
             files.update(
@@ -579,18 +655,24 @@ class OlxArchive:
         url_name with [ still finds its file. Only the name before the last dot
         counts, so notes doesn't also take notes.extra.html.
         """
-        path = self.root / folder / name
-        if path.parent not in self._listings:
+        # only the folders are normalized; the name is matched as written (a:..
+        # is the file ...xml). A url_name ending in : has no name, and its file,
+        # .xml, is never ingested.
+        parent, _, stem = f"{folder}/{name}".rpartition("/")
+        directory = self._in_tree(parent)
+        if directory is None or not stem:
+            return set()
+        if directory not in self._listings:
             listing = defaultdict(list)
             try:
-                entries = list(os.scandir(path.parent))
+                entries = list(os.scandir(directory))
             except (FileNotFoundError, NotADirectoryError):
                 entries = []
             for entry in entries:
                 if entry.is_file() and "." in entry.name:
                     listing[Path(entry.name).stem].append(Path(entry.path))
-            self._listings[path.parent] = listing
-        return set(self._listings[path.parent].get(path.name, ()))
+            self._listings[directory] = listing
+        return set(self._listings[directory].get(stem, ()))
 
     @cached_property
     def _staff_only(self) -> set[Path]:
@@ -840,16 +922,13 @@ class OlxArchive:
         course = self._resolve(course_pointer)
         course_file = self._block_file(course_pointer) or self.root / "course.xml"
         context_files = {
-            get_edx_module_id(str(path), run_id): Relation.CORE
+            self.key(path, run_id): Relation.CORE
             for folder in OLX_CONTEXT_FOLDERS
             for path in sorted((self.root / folder).rglob("*"))
             if path.is_file() and path not in self.excluded
         }
         for path in self._context_static_files():
-            context_files.setdefault(
-                get_edx_module_id(str(path), run_id),
-                Relation.SUPPLEMENTARY,
-            )
+            context_files.setdefault(self.key(path, run_id), Relation.SUPPLEMENTARY)
         units = []
         # hide_from_toc is inherited, so _children skipping a hidden chapter
         # hides its sequentials
@@ -902,8 +981,8 @@ class OlxArchive:
     def _block_file(self, pointer: Element) -> Path | None:
         """Return the file a pointer's block is stored in, or None if inline"""
         url_name = pointer.get("url_name")
-        path = self.root / pointer.tag / f"{url_name}.xml"
-        return path if url_name and path.is_file() else None
+        path = self._block_xml(pointer.tag, url_name) if url_name else None
+        return path if path is not None and path.is_file() else None
 
     def _resolve(self, pointer: Element) -> Element:
         """Return the block a pointer names: its own file if present, else it"""
@@ -919,7 +998,7 @@ class OlxArchive:
         """
         url_name = pointer.get("url_name")
         if url_name and not len(pointer) and self._block_file(pointer) is None:
-            msg = f"{pointer.tag}/{url_name}.xml is missing"
+            msg = f"{pointer.tag}/{_pathname(url_name)}.xml is missing"
             raise ValueError(msg)
 
     def _children(
@@ -974,8 +1053,7 @@ class OlxArchive:
             or url_name,
             "url_name": url_name,
             "content_files": {
-                get_edx_module_id(str(path), run_id): relation
-                for path, relation in files.items()
+                self.key(path, run_id): relation for path, relation in files.items()
             },
         }
 
@@ -1003,8 +1081,11 @@ class OlxArchive:
             pointer, tag, block_name, container, element = stack.pop()
             if element is None:
                 element = self._resolve(pointer)
+            # _resolve returns the pointer itself for an unnamed block
             own_file = (
-                None if element is pointer else self.root / tag / f"{block_name}.xml"
+                None
+                if element is pointer or not block_name
+                else self._block_xml(tag, block_name)
             )
             if _is_set("visible_to_staff_only", pointer, element):
                 continue
@@ -1025,7 +1106,9 @@ class OlxArchive:
             )
             # an inline component's text is in the file that holds it, unless
             # it is an html block whose body has a file of its own
-            has_body = tag == "html" and any(p.parent.name == "html" for p in paths)
+            has_body = tag == "html" and any(
+                p.relative_to(self.root).parts[0] == "html" for p in paths
+            )
             if (
                 own_file is None
                 and tag not in OLX_STRUCTURE_TAGS
@@ -1269,7 +1352,9 @@ def build_file_rows(
     the same export, so dbt can tell whether a course's blocks were checked.
     release_date is null for a file Learn leaves undated (any learner-visible
     path to it is undated, the run is self-paced, or the file is excluded).
-    The archive's etl_source is the row's source_system.
+    The archive's etl_source is the row's source_system. content_file_key is the
+    file's ContentFile key (OlxArchive.key), which dbt can't derive from the path
+    for a block stored below its type folder (a url_name with a colon).
     """
     excluded = archive.excluded
     release_dates = archive.release_dates
@@ -1284,6 +1369,7 @@ def build_file_rows(
                 "source_system": archive.etl_source,
                 "course_xml_version": course_xml_version,
                 "file_path": path.relative_to(archive.root).as_posix(),
+                "content_file_key": archive.key(path, course_id),
                 "excluded": path in excluded,
                 "exclusion_reason": excluded.get(path),
                 "release_date": format_release_date(release) if release else None,
@@ -1341,6 +1427,7 @@ def build_unit_rows(
         "course_file_exclusions": AssetOut(
             key=AssetKey(("openedx", "processed_data", "course_file_exclusions")),
             io_manager_key="s3file_io_manager",
+            code_version=OLX_PORT_VERSION,
             automation_condition=upstream_or_code_changes(),
             description=(
                 "Every file in a course export, flagged with whether MIT Learn "
@@ -1352,6 +1439,7 @@ def build_unit_rows(
         "course_units": AssetOut(
             key=AssetKey(("openedx", "processed_data", "course_units")),
             io_manager_key="s3file_io_manager",
+            code_version=OLX_PORT_VERSION,
             automation_condition=upstream_or_code_changes(),
             description=(
                 "The units MIT Learn breaks a course run into (one per visible "

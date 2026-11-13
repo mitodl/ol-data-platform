@@ -10,6 +10,11 @@ strategies:
   local: fixture
 loader: airbyte
 table_prefix: raw__mitlearn__app__postgres__
+# Loads QA, so QA staging dedups on dlt's column. Production is still the
+# Airbyte connection below.
+dlt:
+  source_module: ol_dlt.sources.mitlearn_app
+  write_disposition: replace
 airbyte:
   source_kind: source-postgres
   replication_method: xmin

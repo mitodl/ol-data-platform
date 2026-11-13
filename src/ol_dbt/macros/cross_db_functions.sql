@@ -6,10 +6,11 @@
 #}
 
 {#
-    json_extract_value: Cross-db extraction of a JSON value. On Trino this returns varchar
-    (JSON-formatted text), NOT a native JSON value -- safe to select directly as a persisted
-    model column. On DuckDB/StarRocks it returns a native JSON value (those connectors don't
-    have this restriction).
+    json_extract_value: Cross-db extraction of a JSON value. On Trino and StarRocks this
+    returns varchar (JSON-formatted text), NOT a native JSON value -- safe to select directly
+    as a persisted model column. StarRocks cannot write a JSON column to an Iceberg table
+    either ("Unsupported primitive column type JSON"). On DuckDB it returns a native JSON
+    value.
 
     This replaces the Trino-specific: json_query(col, 'lax $.path')
 
@@ -47,7 +48,9 @@
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
     {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
-    json_query(parse_json({{ json_col }}), {{ json_path }})
+    {# json_string serializes the JSON value, so a string keeps its quotes as on Trino; a
+       cast to varchar would unquote it #}
+    json_string(json_query(parse_json({{ json_col }}), {{ json_path }}))
 {%- endmacro %}
 
 
@@ -1192,6 +1195,27 @@
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
 
 {#
+    cast_to_timestamptz: a zone-less timestamp read as UTC, as the type the
+    *_to_timestamptz macros return. StarRocks has no zoned type and keeps UTC
+    instants as DATETIME.
+#}
+{% macro cast_to_timestamptz(timestamp_expr) -%}
+    {{ adapter.dispatch('cast_to_timestamptz', 'open_learning')(timestamp_expr) }}
+{%- endmacro %}
+
+{% macro default__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamp(6) with time zone)
+{%- endmacro %}
+
+{% macro duckdb__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as timestamptz)
+{%- endmacro %}
+
+{% macro starrocks__cast_to_timestamptz(timestamp_expr) -%}
+    cast({{ timestamp_expr }} as datetime)
+{%- endmacro %}
+
+{#
     null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has
     no `timestamp` type. A macro for the whole expression rather than
     `cast(null as {{ dbt.type_timestamp() }})`, which ol-dbt validate's raw-SQL
@@ -1343,8 +1367,21 @@
 
 {% macro starrocks__json_array_string(json_col, json_path) -%}
     {# json_col may be a varchar or a JSON value (an unnest_json_array element); the cast
-       to varchar makes parse_json accept either. #}
-    cast(json_query(parse_json(cast({{ json_col }} as varchar)), {{ json_path }}) as varchar)
+       to varchar makes parse_json accept either.
+       cast(json as varchar) drops the quotes from a JSON string ("/a" gives /a), and
+       callers test for them, so json_string() serializes the value. It writes ", " and
+       ": " between items where Trino's json_format writes none; the regexp_replace
+       matches each string literal or run of other characters and drops the whitespace
+       after it, which leaves the whitespace inside strings alone.
+       Still unlike Trino: StarRocks sorts object keys (Trino does only for a JSON
+       value, not a varchar), formats a number with a decimal point or exponent its own
+       way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
+       BMP as surrogate pairs. #}
+    regexp_replace(
+        json_string(json_query(parse_json(cast({{ json_col }} as varchar)), {{ json_path }}))
+        , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
+        , '\\1'
+    )
 {%- endmacro %}
 
 
@@ -1383,9 +1420,11 @@
     array of JSON values to unnest. Raises on malformed JSON and where the path holds
     something other than an array; use unnest_json_array for input that may be either.
 
-    Usage:
-      cross join unnest({{ json_extract_json_array('chat_json', "'$.chat_history'") }})
-      with ordinality as t (element, idx)
+    Usage (select it as a column, then unnest that column in a later CTE, since the
+    StarRocks unnest_with_ordinality names its array twice):
+      , {{ json_extract_json_array('chat_json', "'$.chat_history'") }} as chat_history
+      ...
+      cross join {{ unnest_with_ordinality('tutorbot_history.chat_history', 't', 'element', 'idx') }}
 #}
 {% macro json_extract_json_array(json_col, json_path) -%}
     {{ adapter.dispatch('json_extract_json_array', 'open_learning')(json_col, json_path) }}

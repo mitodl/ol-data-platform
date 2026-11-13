@@ -21,11 +21,21 @@ from data_loading.defs.ingestion.assets import (
     MITXONLINE_APP_DLT_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_UNIT,
+    QA_FIRST_APP_DATABASE_ENVIRONMENTS,
+    QA_FIRST_APP_DATABASES,
     XPRO_APP_DLT_ENVIRONMENTS,
 )
-from ol_dlt.sources import mitxonline_app, xpro_app
+from ol_dlt.sources import (
+    edxapp,
+    learn_ai_app,
+    mitlearn_app,
+    mitxonline_app,
+    ocw_studio_app,
+    xpro_app,
+)
+from sqlalchemy.engine import URL
 
-from ol_dlt import keyset
+from ol_dlt import database, keyset
 
 _REPO = defs.get_repository_def()
 
@@ -66,7 +76,7 @@ def _is_mitxonline_app_table(key: str) -> bool:
 
 
 @contextmanager
-def _repository_for(environment: str) -> Iterator[Any]:
+def _repository_for(environment: str, profile: str = "dev") -> Iterator[Any]:
     """Build the code location as the gRPC server would under ``environment``.
 
     ``DAGSTER_ENV`` is resolved once, at import of
@@ -76,9 +86,10 @@ def _repository_for(environment: str) -> Iterator[Any]:
     constant instead would stay green if somebody dropped the conditional it
     guards, which is the regression worth catching.
 
-    ``DLT_PROFILE`` is pinned to ``dev`` so the re-import stays hermetic: the
+    ``DLT_PROFILE`` defaults to ``dev`` so the re-import stays hermetic: the
     destination objects are constructed either way, and a production one has
-    no business being built in a test.
+    no business being built in a test. Pass ``qa`` only to catch a source that
+    fails to build under the profile QA's code server actually runs.
     """
     saved_modules = {
         name: module
@@ -95,7 +106,7 @@ def _repository_for(environment: str) -> Iterator[Any]:
                 del sys.modules[name]
 
     os.environ["DAGSTER_ENVIRONMENT"] = environment
-    os.environ["DLT_PROFILE"] = "dev"
+    os.environ["DLT_PROFILE"] = profile
     _purge()
     try:
         module = importlib.import_module("data_loading.definitions")
@@ -275,6 +286,59 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+_QA_FIRST_SPECS = {
+    "mitlearn_app": mitlearn_app.MITLEARN_APP_SPEC,
+    "learn_ai_app": learn_ai_app.LEARN_AI_APP_SPEC,
+    "ocw_studio_app": ocw_studio_app.OCW_STUDIO_APP_SPEC,
+    **{spec.name: spec for spec in edxapp.EDXAPP_SPECS.values()},
+}
+
+
+def test_every_qa_first_app_database_has_a_spec_here() -> None:
+    assert set(QA_FIRST_APP_DATABASES) == set(_QA_FIRST_SPECS)
+
+
+@pytest.mark.parametrize("environment", sorted(QA_FIRST_APP_DATABASE_ENVIRONMENTS))
+@pytest.mark.parametrize("name", sorted(_QA_FIRST_SPECS))
+def test_qa_first_app_database_loads_and_is_scheduled(
+    environment: str, name: str
+) -> None:
+    spec = _QA_FIRST_SPECS[name]
+    expected = {
+        f"ol_warehouse_raw_data/{spec.raw_table_name(table)}" for table in spec.tables
+    }
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert expected <= asset_keys
+        schedule = repo.get_schedule_def(f"{name}_ingest_schedule")
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == expected
+
+
+@pytest.mark.parametrize("environment", ["dev", "production"])
+def test_qa_first_app_databases_do_not_run_outside_their_environments(
+    environment: str,
+) -> None:
+    """Airbyte still loads these units in production under the same keys, and
+    the local lake gets them from fixtures carrying the production loader's
+    columns.
+    """
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, f"code location exposed no assets under {environment}"
+        prefixes = tuple(spec.raw_table_prefix for spec in _QA_FIRST_SPECS.values())
+        assert not [
+            key for key in asset_keys if key.split("/")[-1].startswith(prefixes)
+        ]
+        schedule_names = {s.name for s in repo.schedule_defs}
+        assert not {f"{name}_ingest_schedule" for name in _QA_FIRST_SPECS} & (
+            schedule_names
+        )
 
 
 @pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))
@@ -471,3 +535,85 @@ def test_google_ads_change_events_have_a_freshness_check() -> None:
     assert any(
         check_key.asset_key == key for check_key in _REPO.asset_checks_defs_by_key
     )
+
+
+def _course_xml_blocks_schedule_keys(repo: Any) -> set[str]:
+    schedule = repo.get_schedule_def("course_xml_blocks_ingest_daily_schedule")
+    return {
+        key.to_user_string()
+        for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+    }
+
+
+@pytest.mark.parametrize(
+    ("environment", "status"),
+    [
+        ("qa", dg.DefaultScheduleStatus.RUNNING),
+        ("production", dg.DefaultScheduleStatus.RUNNING),
+        ("dev", dg.DefaultScheduleStatus.STOPPED),
+    ],
+)
+def test_course_xml_blocks_schedule_runs_in_qa_without_edxorg(
+    environment: str, status: dg.DefaultScheduleStatus
+) -> None:
+    """edX.org's tables are `qa: mirror` and live only in production's zone."""
+    with _repository_for(environment) as repo:
+        schedule = repo.get_schedule_def("course_xml_blocks_ingest_daily_schedule")
+        assert schedule.default_status == status
+        scheduled = _course_xml_blocks_schedule_keys(repo)
+    edxorg = {
+        key for key in scheduled if key.split("/")[-1].startswith("raw__edxorg__")
+    }
+    assert "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks" in scheduled
+    if environment == "qa":
+        assert not edxorg
+    else:
+        assert edxorg == {
+            "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
+            "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
+        }
+
+
+def test_code_location_builds_under_the_qa_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """QA's code server runs with DLT_PROFILE=qa, and dlt sources are built at
+    import. A source that refuses the qa profile (an edX.org course table)
+    would stop the whole location from loading, which the dev-profile builds
+    above cannot see. Database hosts come from the Pulumi stack in QA, so the
+    connection URL is stubbed; nothing connects either way.
+    """
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda spec, profile: URL.create(spec.drivername, host="qa.invalid"),  # noqa: ARG005
+    )
+    with _repository_for("qa", profile="qa") as repo:
+        keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+    assert "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks" in keys
+    assert not {
+        key
+        for key in keys
+        if key.split("/")[-1].startswith("raw__edxorg__s3__course_")
+        and key.split("/")[-1].endswith("_blocks")
+    }
+
+
+@pytest.mark.parametrize(
+    "schedule_name",
+    [
+        "posthog_events_ingest_hourly_schedule",
+        "edxorg_program_reports_ingest_daily_schedule",
+    ],
+)
+@pytest.mark.parametrize("environment", ["dev", "qa", "production"])
+def test_production_landing_zone_schedules_are_not_defined_in_qa(
+    environment: str, schedule_name: str
+) -> None:
+    """posthog/s3 is `qa: omit` and edxorg/program_reports `qa: mirror`; both
+    read production's landing zone, and a hand-started QA PostHog schedule
+    failed hourly.
+    """
+    with _repository_for(environment) as repo:
+        names = {schedule.name for schedule in repo.schedule_defs}
+    assert (schedule_name in names) == (environment != "qa")

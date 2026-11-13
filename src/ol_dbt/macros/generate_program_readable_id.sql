@@ -9,7 +9,7 @@
         when {{ micromasters_program_id }} = 4
              --- Statistics and Data Science has multiple tracks, we need to extract the track name and add it to
              --- the readable id
-             then 'program-v1:MITx+SDS+' || replace(regexp_extract({{ program_title }}, '\((.*?)\)', 1),' ', '-')
+             then 'program-v1:MITx+SDS+' || replace({{ regexp_extract_or_null(program_title, "'\\((.*?)\\)'", 1) }},' ', '-')
         when {{ micromasters_program_id }} = 5
              --- Finance (active) and MIT Finance (retired) has the same readable ID
              then 'program-v1:MITx+FIN'
@@ -26,7 +26,7 @@
     -- DuckDB-compatible version using list_transform / string_split / list_aggregate
     case
         when {{ micromasters_program_id }} = 4
-             then 'program-v1:MITx+SDS+' || replace(regexp_extract({{ program_title }}, '\((.*?)\)', 1),' ', '-')
+             then 'program-v1:MITx+SDS+' || replace({{ regexp_extract_or_null(program_title, "'\\((.*?)\\)'", 1) }},' ', '-')
         when {{ micromasters_program_id }} = 5
              then 'program-v1:MITx+FIN'
         when {{ micromasters_program_id }} is not null then
@@ -45,7 +45,7 @@
         when {{ micromasters_program_id }} = 4
              --- Statistics and Data Science has multiple tracks, we need to extract the track name and add it to
              --- the readable id
-             then concat('program-v1:MITx+SDS+', replace(regexp_extract({{ program_title }}, '\((.*?)\)', 1), ' ', '-'))
+             then concat('program-v1:MITx+SDS+', replace({{ regexp_extract_or_null(program_title, "'\\((.*?)\\)'", 1) }}, ' ', '-'))
         when {{ micromasters_program_id }} = 5
              --- Finance (active) and MIT Finance (retired) has the same readable ID
              then 'program-v1:MITx+FIN'

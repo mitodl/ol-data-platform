@@ -98,6 +98,63 @@ models:
   - name: course_order
     description: Sequence/order of course within program curriculum
 
+- name: bridge_contract_course
+  description: >
+    Where each course sits in a MITx Online B2B contract, in the order the
+    learner dashboard shows: by the contract's program list, then by the
+    program's requirement tree. Grain: one row per (contract, course) for
+    courses in at least one of the contract's programs. A course in several of
+    the contract's programs takes its lowest (program_sort_order,
+    course_order_in_program) pair, with unordered programs last. A program
+    removed from a contract keeps its row, because the raw contract program
+    items never carry a hard delete. A course reached only through a program
+    nested in a contract program has no row, because bridge_program_course
+    holds only a program's own courses.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - contract_fk
+      - course_fk
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
+  columns:
+  - name: contract_fk
+    description: Foreign key to dim_contract.contract_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_contract')
+        field: contract_pk
+  - name: course_fk
+    description: Foreign key to dim_course.course_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: program_fk
+    description: >
+      Foreign key to dim_program.program_pk: the contract program whose
+      position the course takes.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+  - name: program_sort_order
+    description: >
+      The program's position in the contract's program list
+      (contractprogramitem_sort_order). Null when MITx Online never ordered the
+      program in the contract.
+  - name: course_order_in_program
+    description: >
+      The course's position in the program's requirement tree
+      (bridge_program_course.course_order), starting at 1.
+
 - name: bridge_course_instructor
   description: Many-to-many relationship between courses and instructors
   config:
@@ -428,3 +485,50 @@ unit_tests:
     - {program_fk: p5, course_fk: c41, is_required: true}
     - {program_fk: p6, course_fk: c41, is_required: true}
     - {program_fk: p7, course_fk: c41, is_required: true}
+- name: test_bridge_contract_course_positions
+  description: >
+    A course takes its lowest (program sort order, course order) pair among the
+    contract's programs, with a program MITx Online never ordered last. The same
+    program can sit at a different position in another contract. Only MITx
+    Online programs match the contract's program ids, so an xPRO program with
+    the same source id adds nothing, and a program outside the contract adds
+    nothing either.
+  model: bridge_contract_course
+  given:
+  - input: ref('stg__mitxonline__app__postgres__b2b_contractprogramitem')
+    rows:
+    - {contract_id: 100, program_id: 1, contractprogramitem_sort_order: 2}
+    - {contract_id: 100, program_id: 2, contractprogramitem_sort_order: 1}
+    - {contract_id: 100, program_id: 3, contractprogramitem_sort_order: null}
+    - {contract_id: 200, program_id: 1, contractprogramitem_sort_order: 1}
+  - input: ref('dim_contract')
+    rows:
+    - {contract_pk: k100, contract_id: 100}
+    - {contract_pk: k200, contract_id: 200}
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: p1, source_id: "1", platform_code: mitxonline}
+    - {program_pk: p2, source_id: "2", platform_code: mitxonline}
+    - {program_pk: p3, source_id: "3", platform_code: mitxonline}
+    - {program_pk: p4, source_id: "4", platform_code: mitxonline}
+    - {program_pk: xpro1, source_id: "1", platform_code: mitxpro}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: p1, course_fk: ca, course_order: 1}
+    - {program_fk: p1, course_fk: cb, course_order: 2}
+    - {program_fk: p1, course_fk: cc, course_order: 3}
+    - {program_fk: p2, course_fk: ca, course_order: 3}
+    - {program_fk: p3, course_fk: cc, course_order: 1}
+    - {program_fk: p3, course_fk: cd, course_order: 1}
+    - {program_fk: p4, course_fk: ce, course_order: 1}
+    - {program_fk: xpro1, course_fk: cx, course_order: 1}
+  expect:
+    rows:
+    - {contract_fk: k100, course_fk: ca, program_fk: p2, program_sort_order: 1, course_order_in_program: 3}
+    - {contract_fk: k100, course_fk: cb, program_fk: p1, program_sort_order: 2, course_order_in_program: 2}
+    - {contract_fk: k100, course_fk: cc, program_fk: p1, program_sort_order: 2, course_order_in_program: 3}
+    - {contract_fk: k100, course_fk: cd, program_fk: p3, program_sort_order: null,
+      course_order_in_program: 1}
+    - {contract_fk: k200, course_fk: ca, program_fk: p1, program_sort_order: 1, course_order_in_program: 1}
+    - {contract_fk: k200, course_fk: cb, program_fk: p1, program_sort_order: 1, course_order_in_program: 2}
+    - {contract_fk: k200, course_fk: cc, program_fk: p1, program_sort_order: 1, course_order_in_program: 3}

@@ -140,6 +140,10 @@ sources:
         gives the file, from the OLX start dates on its path down from the course;
         null when Learn leaves it undated, and in files written before the asset dated
         files
+    - name: content_file_key
+      description: str, the file's ContentFile key from Learn's OlxArchive.key, which
+        keys a block stored below its type folder (url_name a:b in <type>/a/b.xml)
+        by its url_name; null in files written before the asset keyed files
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

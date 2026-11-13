@@ -884,10 +884,13 @@ sources:
     - name: last_login
       description: timestamp, date and time when user last login on the open edX platform
 
-  - name: raw__mitxonline__openedx__tracking_logs
+  - name: raw__mitxonline__openedx__tracking_log_events
     description: MITx Online Open edX event data that are emitted by server, the browser,
       or the mobile device to capture information about user's interactions with a
-      course
+      course. Loaded by ol_dlt.sources.tracking_logs from the gzipped JSON Lines files
+      in mitxonline-production-edxapp-tracking/valid/, one append per file. It replaced
+      the Airbyte-loaded raw__mitxonline__openedx__tracking_logs, which is kept as
+      the archive (ingestion/inventory/retired.yml).
     columns:
     - name: username
       description: str, username of the open edX user who caused the event to be emitted.
@@ -932,10 +935,13 @@ sources:
       description: str, URI from the HTTP Referer request-header field
     - name: log_file
       description: str, internal used field for log file location
-    - name: _ab_source_file_url
-      description: str, url path for the raw log file
-    - name: vector_timestamp
-      description: str, time when Vector processed this record. Blank for old records.
+    - name: _source_file
+      description: str, S3 URL of the log file the event was read from
+    - name: _file_modified_at
+      description: timestamp, last-modified time of the log file the event was read
+        from
+    - name: _dlt_load_id
+      description: str, identifier of the dlt load that appended the row
     - name: environment
       description: str, internal used field to indicate environment for the event.
         e.g. mitxonline-production

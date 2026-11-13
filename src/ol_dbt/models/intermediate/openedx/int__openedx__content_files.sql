@@ -164,6 +164,7 @@ with blocks as (
     select
         candidate_files.*
         , file_exclusions.content_file_release_date as release_date
+        , file_exclusions.content_file_key as exclusions_key
     from candidate_files
     inner join checked_runs
         on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
@@ -199,14 +200,19 @@ with blocks as (
 , module_files as (
     select
         *
-        , case
+        -- Learn's OlxArchive.key, as the exclusions asset computed it. A block
+        -- stored below its type folder (url_name a:b in html/a/b.xml) is keyed
+        -- by its url_name, which the path alone can't always spell (a::b). The
+        -- path rule below is get_edx_module_id, the same key for every other
+        -- file, and covers runs whose exclusion rows predate the key.
+        , coalesce(exclusions_key, case
             when folder = 'static'
                 then concat('asset-v1:', run_key, '+type@asset+block@', file_name)
             else concat(
                 'block-v1:', run_key, '+type@', folder, '+block@'
                 , {{ regexp_replace_all('file_name', "'\\.[^.]*$'", "''") }}
             )
-        end as edx_module_id
+        end) as edx_module_id
         , {{ regexp_replace_all('original_file_name', "'\\.[^.]*$'", "''") }} as original_stem
     from keyed_files
 )
@@ -222,7 +228,10 @@ with blocks as (
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
--- video's id and display name.
+-- video's id and display name. The id is the url_name on the video file's root,
+-- else the url_name the file's path spells: Open edX exports url_name a:b to
+-- video/a/b.xml (xmodule name_to_pathname). Learn maps nothing for a root without
+-- a url_name; no production video file lacked one on 2026-11-10.
 , video_transcripts as (
     select
         blocks.courserun_readable_id
@@ -232,13 +241,16 @@ with blocks as (
             , '+type@asset+block@'
             , replace({{ html_unescape('transcript.src') }}, ' ', '_')
         ) as transcript_module_id
-        , {{ regexp_replace_all(
-            element_at_array(
-                "split(blocks.coursestructure_xml_block_path, '/')"
-                , array_length("split(blocks.coursestructure_xml_block_path, '/')")
+        , coalesce(
+            nullif({{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }}, '')
+            , replace(
+                {{ regexp_replace_all(
+                    regexp_replace_all('blocks.coursestructure_xml_block_path', "'^course/video/'", "''")
+                    , "'\\.[^.]*$'", "''"
+                ) }}
+                , '/', ':'
             )
-            , "'\\.[^.]*$'", "''"
-        ) }} as video_id
+        ) as video_id
         , blocks.coursestructure_xml_block_display_name as video_title
     from blocks
     cross join {{ unnest_regexp_matches(
@@ -283,7 +295,10 @@ with blocks as (
         , video_transcript_map.video_id
         -- get_title_for_content: a transcript takes its video's name, an XML
         -- block its display_name, an HTML file the display_name of its html/
-        -- pointer, and anything else a title made from the file name.
+        -- pointer, and anything else a title made from the file name. Learn
+        -- looks for the pointer beside the file first, but under a path that
+        -- keeps the export's top folder, which never exists, so a body below
+        -- html/ (html/a/b.html) is titled from html/b.xml too.
         , coalesce(
             nullif(case
                 when module_files.file_extension = '.xml' then module_files.xml_display_name

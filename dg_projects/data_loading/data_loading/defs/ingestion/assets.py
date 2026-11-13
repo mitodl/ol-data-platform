@@ -7,7 +7,9 @@ of wildly different sizes can load concurrently instead of one giant table
 blocking the rest of the run behind it.
 """
 
+import logging
 from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from functools import partial
 from typing import Any
 
@@ -30,16 +32,20 @@ from dagster_dlt.translator import DltResourceTranslatorData
 from ol_dlt.sources import (
     canvas_content,
     course_xml_blocks,
+    edxapp,
     edxorg_program_reports,
     edxorg_s3,
     google_ads,
     keycloak,
+    learn_ai_app,
     medium,
     mit_climate,
     mit_edx_programs,
+    mitlearn_app,
     mitpe,
     mitxonline_app,
     ocw_content,
+    ocw_studio_app,
     oll,
     openlearning,
     podcast_rss,
@@ -104,11 +110,105 @@ podcast_rss_assets = build_ingest_assets(
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
 )
-google_ads_assets = build_ingest_assets(
-    name="google_ads_ingest",
-    source=google_ads.build_source(),
-    pipeline=google_ads.google_ads_pipeline,
+
+
+# --- google_ads: other tables, then the backfill, then the lookback ---------
+#
+# Change events and snapshots load first, so a long backfill cannot hold change
+# events past the API's 30-day retention. The backfill runs through
+# load_in_batches: each batch is its own load that saves the account cursors, so
+# a killed pod resumes after the last finished batch. The lookback re-pull runs
+# only once the backfill is drained, so it never loads a backlog in one merge.
+
+_GOOGLE_ADS_DAILY_TABLES = (
+    "raw__google_ads__api__keyword_daily",
+    "raw__google_ads__api__keyword_conversions_daily",
+    "raw__google_ads__api__campaign_daily",
 )
+_GOOGLE_ADS_SOURCE = google_ads.build_source()
+_GOOGLE_ADS_TRANSLATOR = RawDataDltTranslator()
+_GOOGLE_ADS_KEYS = {
+    name: _GOOGLE_ADS_TRANSLATOR.get_asset_spec(
+        DltResourceTranslatorData(
+            resource=resource, pipeline=google_ads.google_ads_pipeline
+        )
+    ).key
+    for name, resource in _GOOGLE_ADS_SOURCE.selected_resources.items()
+}
+_GOOGLE_ADS_OTHER_TABLES = tuple(
+    name for name in _GOOGLE_ADS_KEYS if name not in _GOOGLE_ADS_DAILY_TABLES
+)
+
+
+@contextmanager
+def _source_logs_in_run_log(context: AssetExecutionContext) -> Iterator[None]:
+    class Handler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            context.log.log(record.levelno, self.format(record))
+
+    source_log = logging.getLogger(google_ads.__name__)
+    handler, level = Handler(logging.INFO), source_log.level
+    source_log.addHandler(handler)
+    source_log.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        source_log.removeHandler(handler)
+        source_log.setLevel(level)
+
+
+@dlt_assets(
+    dlt_source=_GOOGLE_ADS_SOURCE,
+    dlt_pipeline=google_ads.google_ads_pipeline,
+    name="google_ads_ingest",
+    dagster_dlt_translator=_GOOGLE_ADS_TRANSLATOR,
+)
+def google_ads_assets(
+    context: AssetExecutionContext, dlt: DagsterDltResource
+) -> Iterable[Any]:
+    """Load every Google Ads table in the order the section comment describes."""
+    pipeline = google_ads.google_ads_pipeline
+    selected = {
+        name
+        for name, key in _GOOGLE_ADS_KEYS.items()
+        if not context.is_subset or key in context.selected_asset_keys
+    }
+    other = [name for name in _GOOGLE_ADS_OTHER_TABLES if name in selected]
+    daily = [name for name in _GOOGLE_ADS_DAILY_TABLES if name in selected]
+    with _source_logs_in_run_log(context):
+        if other:
+            yield from dlt.run(
+                context=context,
+                dlt_source=google_ads.build_source().with_resources(*other),
+            )
+        if not daily:
+            return
+        backfill, batches, fetches = load_in_batches(
+            context=context,
+            dlt=dlt,
+            build_source=partial(
+                google_ads.build_source, backfill_windows=google_ads.BACKFILL_WINDOWS
+            ),
+            pipeline=pipeline,
+            resource_name=google_ads.FETCH_LOG_TABLE,
+        )
+        context.log.info(
+            "Backfill: %s window fetches across %s tables in %s batches",
+            fetches,
+            len(daily),
+            batches,
+        )
+        if _normalized_row_count(pipeline, google_ads.FETCH_LOG_TABLE):
+            context.log.warning("Backfill not drained; the lookback waits a run.")
+            yield from backfill
+            return
+        yield from dlt.run(
+            context=context,
+            dlt_source=google_ads.build_source().with_resources(*daily),
+            loader_file_format="parquet",
+        )
+
+
 keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
     source=keycloak.build_source(),
@@ -167,6 +267,51 @@ xpro_app_assets = (
     )
     if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
     else None
+)
+# App databases whose dlt source loads QA (and CI) ahead of the unit's
+# production cutover, so that QA raw holds data from the QA application (RFC
+# 12711). Production is absent for the reason MITXONLINE_APP_DLT_ENVIRONMENTS
+# gives: the unit's Airbyte connection still loads production under the same
+# asset keys. In QA the lakehouse location holds only non-materializable dbt
+# source nodes for these keys (QA Dagster GraphQL, 2026-11-10), so nothing
+# collides there.
+#
+# `dev` is absent because these units are `strategies.local: fixture`: the
+# local lake gets their raw tables from fixtures with the production loader's
+# columns, and a dlt load there would leave staging ordering by a column the
+# table lacks. A unit joins `dev` when it gains a local-dev app to read.
+#
+# Each source reads ``<NAME>_DB_HOST`` when the code location loads, and a
+# deployed profile raises without it, so ol-infrastructure has to set the host
+# before an image with the source deploys. Keyed by pipeline name, which is
+# also that variable's prefix. A unit leaves this table in the change that
+# disables its Airbyte connection and flips it to `loader: dlt`.
+QA_FIRST_APP_DATABASE_ENVIRONMENTS = frozenset({"ci", "qa"})
+QA_FIRST_APP_DATABASES: dict[str, tuple[Callable[[], Any], Any]] = {
+    "mitlearn_app": (mitlearn_app.build_source, mitlearn_app.mitlearn_app_pipeline),
+    "learn_ai_app": (learn_ai_app.build_source, learn_ai_app.learn_ai_app_pipeline),
+    "ocw_studio_app": (
+        ocw_studio_app.build_source,
+        ocw_studio_app.ocw_studio_app_pipeline,
+    ),
+    **{
+        spec.name: (
+            edxapp.source_builder(deployment),
+            edxapp.EDXAPP_PIPELINES[deployment],
+        )
+        for deployment, spec in edxapp.EDXAPP_SPECS.items()
+    },
+}
+
+qa_first_app_database_assets: dict[str, AssetsDefinition] = (
+    {
+        name: build_ingest_assets(
+            name=f"{name}_ingest", source=build_source(), pipeline=pipeline
+        )
+        for name, (build_source, pipeline) in QA_FIRST_APP_DATABASES.items()
+    }
+    if DAGSTER_ENV in QA_FIRST_APP_DATABASE_ENVIRONMENTS
+    else {}
 )
 # Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
 # history snapshots and staging to tell deleted keys from live ones. Run by hand
@@ -493,7 +638,9 @@ edxorg_s3_table_assets = [
 # The course archive assets in the edxorg and openedx code locations land one
 # JSON Lines file of parsed XML blocks per course version; nothing else loads
 # them into raw. The edxorg and openedx structure blocks are the same layout.
-# One op per table, like edxorg_s3, so they drain independently.
+# One op per table, like edxorg_s3, so they drain independently. QA has no
+# edX.org tables here: they are `qa: mirror`, and building their source under
+# the qa profile raises (XmlBlocksTable.bucket_url_for).
 course_xml_blocks_assets = [
     build_batched_assets(
         # course_xml_blocks_openedx etc. for the block tables, as before.
@@ -505,6 +652,7 @@ course_xml_blocks_assets = [
         translator=RawDataDltTranslator(),
     )
     for raw_table, table in course_xml_blocks.TABLES.items()
+    if table.ingested_under(DAGSTER_ENV)
 ]
 
 
@@ -519,12 +667,12 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
-# The Open edX tracking logs, one asset per deployment. xPro's replaced the
-# Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the
-# archive. MITx Online's and MITx's load beside their Airbyte tables until
-# staging is repointed. One listing per run: a full listing of a production
-# bucket (264,950 to 473,863 files on 2026-10-27) takes 50 to 89 s, and the
-# first runs walk ~331 (xpro), ~884 (mitxonline) and ~932 (mitx) batches.
+# The Open edX tracking logs, one asset per deployment. Each replaced the
+# Airbyte-loaded raw__<deployment>__openedx__tracking_logs, which is kept as the
+# archive (ingestion/inventory/retired.yml). One listing per run: a full
+# listing of a production bucket (264,950 to 473,863 files on 2026-10-27) takes
+# 50 to 89 s, and the first runs walked ~331 (xpro), ~884 (mitxonline) and ~932
+# (mitx) batches.
 TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
 
 
@@ -699,6 +847,7 @@ defs = Definitions(
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
             *([mitxonline_app_keyset_assets] if mitxonline_app_keyset_assets else []),
             *([xpro_app_assets] if xpro_app_assets else []),
+            *qa_first_app_database_assets.values(),
             youtube_assets,
             see_assets,
             openlearning_assets,
