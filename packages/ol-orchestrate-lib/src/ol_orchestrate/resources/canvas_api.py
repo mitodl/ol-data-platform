@@ -1,10 +1,16 @@
 from collections.abc import Generator
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
+import httpx2 as httpx
 from pydantic import Field
 
 from ol_orchestrate.resources.api_client import BaseApiClient
+
+# Resumes after a dropped connection, not retries from zero: each one picks up
+# where the file ends, so three covers three separate drops in one transfer.
+DOWNLOAD_RESUME_ATTEMPTS = 3
 
 
 class CanvasApiClient(BaseApiClient):
@@ -67,23 +73,68 @@ class CanvasApiClient(BaseApiClient):
         return response.json()
 
     def download_course_export(self, url: str, output_path: Path) -> Path:
-        """Download a file from a URL to a local path, following redirects and streaming
-        to disk.
+        """Download a course export to a local path, resuming if the body is cut off.
+
+        Exports run to gigabytes, and a connection dropped partway used to cost
+        the whole transfer: DAGSTER-2X failed 2.0 GB into a 2.5 GB export. After
+        a drop this asks for the remainder with a ``Range`` header and appends
+        it. A server that answers the range with a full 200, or with a
+        ``Content-Range`` that does not start where the file ends, gets the file
+        rewritten from the start instead.
+
+        The request asks for no content encoding. Range offsets count the bytes
+        the server sends, and ``iter_bytes`` writes them decoded, so with a
+        compressed body the size on disk would not be the offset to resume from.
 
         :param url: The URL to download the file from.
         :type url: str
         :param output_path: The local path where the file will be saved.
         :type output_path: Path
+        :returns: ``output_path``.
+        :rtype: Path
         """
-        with self.http_client.stream(
-            "GET", url, follow_redirects=True, timeout=60
-        ) as response:
-            response.raise_for_status()
-            with output_path.open("wb") as f:
-                for chunk in response.iter_bytes():
-                    if chunk:
-                        f.write(chunk)
-        return output_path
+        output_path.unlink(missing_ok=True)
+        for attempt in range(DOWNLOAD_RESUME_ATTEMPTS + 1):
+            written = output_path.stat().st_size if output_path.exists() else 0
+            headers = {"Accept-Encoding": "identity"}
+            if written:
+                headers["Range"] = f"bytes={written}-"
+            try:
+                with self.http_client.stream(
+                    "GET", url, follow_redirects=True, timeout=60, headers=headers
+                ) as response:
+                    # The connection dropped after the last byte but before the
+                    # body was terminated: the file is already whole.
+                    if (
+                        response.status_code
+                        == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE
+                        and (
+                            response.headers.get("Content-Range")
+                            == f"bytes */{written}"
+                        )
+                    ):
+                        return output_path
+                    response.raise_for_status()
+                    resumes = response.status_code == HTTPStatus.PARTIAL_CONTENT
+                    if resumes and not response.headers.get(
+                        "Content-Range", ""
+                    ).startswith(f"bytes {written}-"):
+                        output_path.unlink(missing_ok=True)
+                        continue
+                    with output_path.open("ab" if resumes else "wb") as f:
+                        for chunk in response.iter_bytes():
+                            f.write(chunk)
+            except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ReadTimeout):
+                if attempt == DOWNLOAD_RESUME_ATTEMPTS:
+                    raise
+            else:
+                return output_path
+        msg = (
+            f"Gave up on {output_path.name} after {DOWNLOAD_RESUME_ATTEMPTS + 1} "
+            "requests: the last range request got a Content-Range that did not "
+            "resume the file."
+        )
+        raise RuntimeError(msg)
 
     def get_all_items(
         self, course_id: int, endpoint: str, per_page: int = 100
