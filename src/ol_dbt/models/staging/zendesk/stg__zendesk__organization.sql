@@ -8,10 +8,10 @@ with source as (
         id as organization_id
         , url as organization_api_url
         , name as organization_name
-        , nullif(tags, array[]) as organization_tags
+        , {{ null_if_empty_array('tags') }} as organization_tags
         , nullif(notes, '') as organization_notes
         , group_id
-        , nullif(domain_names, array[]) as organization_domain_names
+        , {{ null_if_empty_array('domain_names') }} as organization_domain_names
         , shared_tickets as organization_has_shared_tickets
         , shared_comments as organization_has_shared_comments
         , {{ cast_timestamp_to_iso8601('deleted_at') }} as organization_deleted_at

@@ -22,5 +22,5 @@
         {%- endfor -%}
     {%- endif -%}
     {%- set array_expr = json_extract_varchar_array(column_name, "'$'") if text_columns else column_name -%}
-    case when {{ array_length(array_expr) }} = 0 then null else {{ array_expr }} end
+    {{ null_if_empty_array(array_expr) }}
 {% endmacro %}

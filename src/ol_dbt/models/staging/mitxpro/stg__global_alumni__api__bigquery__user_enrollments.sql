@@ -28,7 +28,7 @@ with source as (
         , if(residential_address = 'NO RESPONSE', null, residential_address) as user_address_street
         , if(residential_city = 'NO RESPONSE', null, residential_city) as user_address_city
         , if(residential_state = 'NO RESPONSE', null, residential_state) as user_address_state
-        , if("function" = 'No Response', null, "function") as user_job_function  -- noqa: ST10
+        , if({{ adapter.quote("function") }} = 'No Response', null, {{ adapter.quote("function") }}) as user_job_function  -- noqa: ST10
         , if(job_title = 'No Response', null, job_title) as user_job_title
         , if(industry = 'No Response', null, industry) as user_industry
         , {{ cast_timestamp_to_iso8601('gdpr_consent_date') }} as user_gdpr_consent_date
@@ -42,7 +42,7 @@ with source as (
 
         ---enrollment
         , if(lower(status) = 'enrolled', true, false) as is_enrolled
-        , if("deferred" = true, 'deferred', null) as enrollment_status  -- noqa: ST10
+        , if({{ adapter.quote("deferred") }} = true, 'deferred', null) as enrollment_status  -- noqa: ST10
     from most_recent_source
 )
 
