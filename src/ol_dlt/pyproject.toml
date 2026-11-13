@@ -32,7 +32,6 @@ dependencies = [
     # arguments -- a date window and a chunk size -- rather than env vars.
     "cyclopts~=5.4.0",
     "google-ads>=29,<32",
-    "pygithub>=2.8.1",
 ]
 
 [dependency-groups]

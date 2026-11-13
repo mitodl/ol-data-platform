@@ -2,12 +2,13 @@
 
 The API's ``change_event`` keeps 30 days, so the history before
 ``raw__google_ads__api__change_events`` began (2026-10-14) exists only in two
-files per course in mitodl/ad_opt_v2, read from GitHub at ``AD_OPT_V2_REF``:
+files per course in mitodl/ad_opt_v2 (``<course>/data/``), copied as they are
+into the landing zone:
 
-    <course>/data/Change history report.csv
-        -> raw__google_ads__github__change_history_report
-    <course>/data/change-history-api.jsonl
-        -> raw__google_ads__github__change_history_api
+    thirdparty/google_ads/change_history/<course>/Change history report.csv
+        -> raw__google_ads__s3__change_history_report
+    thirdparty/google_ads/change_history/<course>/change-history-api.jsonl
+        -> raw__google_ads__s3__change_history_api
 
 The report is the Google Ads UI export (UTF-16, tab-separated, two title lines,
 then ``Date & time, User, Campaign, Ad group, Changes``), from October 2024 to
@@ -20,14 +21,8 @@ The report's ``User`` column is dropped and email addresses in its text are
 masked: they name the people who made a change or were given account access,
 and the API load leaves ``user_email`` out for the same reason. Each table is
 replaced on every load, so a rerun reloads the files rather than adding rows.
-
-Credentials: the qa and production profiles read the data platform's GitHub
-App from Vault ``secret-data/pipelines/github-app``, whose installation must
-include mitodl/ad_opt_v2. Any other profile reads a local ad_opt_v2 checkout
-from the path in AD_OPT_V2_PATH.
 """
 
-import base64
 import csv
 import functools
 import io
@@ -35,37 +30,32 @@ import json
 import logging
 import re
 from collections.abc import Callable, Generator, Iterator
-from pathlib import Path
 from typing import Any
 
 import dlt
-from github import Auth, Github
+import s3fs
 
-from ol_dlt import config, vault
+from ol_dlt import config
 
 logger = logging.getLogger(__name__)
 
-AD_OPT_V2_REPO = "mitodl/ad_opt_v2"
-# The history stops changing once the daily API load took over, so pin the
-# commit the files were last updated at rather than following master.
-# pragma: allowlist nextline secret
-AD_OPT_V2_REF = "e2da8e23047e22bf693aef40e6043fe7af599b28"
-GITHUB_APP_VAULT_MOUNT = "secret-data"
-GITHUB_APP_VAULT_PATH = "pipelines/github-app"
-
+# Always the production landing zone, whatever the profile: it is where the
+# files are read from, not where rows are written to.
+LANDING_ZONE = (
+    "ol-data-lake-landing-zone-production/thirdparty/google_ads/change_history"
+)
 REPORT_FILE = "Change history report.csv"
 API_FILE = "change-history-api.jsonl"
-_FILE_PATH = re.compile(r"^(?P<course>[^/]+)/data/(?P<name>[^/]+)$")
 
-REPORT_TABLE = "raw__google_ads__github__change_history_report"
-API_TABLE = "raw__google_ads__github__change_history_api"
+REPORT_TABLE = "raw__google_ads__s3__change_history_report"
+API_TABLE = "raw__google_ads__s3__change_history_api"
 
 REPORT_COLUMNS = ("Date & time", "User", "Campaign", "Ad group", "Changes")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 MASKED_EMAIL = "<email>"
 
-# (path in the repo, content) of every change history file.
-Files = Callable[[], Iterator[tuple[str, bytes]]]
+# (course, file name, source URL, content) of every change history file.
+Files = Callable[[], Iterator[tuple[str, str, str, bytes]]]
 
 
 class ChangeHistoryReportHeaderError(Exception):
@@ -77,14 +67,14 @@ def mask_emails(text: str) -> str:
     return _EMAIL.sub(MASKED_EMAIL, text)
 
 
-def read_report(content: bytes, path: str) -> Iterator[dict[str, Any]]:
+def read_report(content: bytes, url: str) -> Iterator[dict[str, Any]]:
     """Yield one row per change in a UI change history report, without ``User``."""
     rows = csv.reader(io.StringIO(content.decode("utf-16")), delimiter="\t")
     for _ in range(2):
         next(rows)  # the report's title and date range
     header = tuple(next(rows))
     if header != REPORT_COLUMNS:
-        msg = f"{path} has the header {list(header)}, not {list(REPORT_COLUMNS)}"
+        msg = f"{url} has the header {list(header)}, not {list(REPORT_COLUMNS)}"
         raise ChangeHistoryReportHeaderError(msg)
     for row_number, (date_time, _user, campaign, ad_group, changes) in enumerate(
         rows, start=1
@@ -98,7 +88,7 @@ def read_report(content: bytes, path: str) -> Iterator[dict[str, Any]]:
         }
 
 
-def read_api_changes(content: bytes, _path: str) -> Iterator[dict[str, Any]]:
+def read_api_changes(content: bytes, _url: str) -> Iterator[dict[str, Any]]:
     """Yield one row per change group in ad_opt_v2's change-history-api.jsonl."""
     lines = (line for line in content.decode("utf-8").splitlines() if line.strip())
     for line_number, line in enumerate(lines, start=1):
@@ -113,60 +103,38 @@ def read_api_changes(content: bytes, _path: str) -> Iterator[dict[str, Any]]:
         }
 
 
-def github_files(repo: Any, ref: str = AD_OPT_V2_REF) -> Iterator[tuple[str, bytes]]:  # noqa: ANN401
-    """Yield every change history file in ``repo`` at ``ref``.
+def landing_zone_files(
+    fs: Any = None,  # noqa: ANN401
+    root: str = LANDING_ZONE,
+) -> Iterator[tuple[str, str, str, bytes]]:
+    """Yield every change history file under ``root``, one folder per course.
 
-    Read as blobs: the contents API omits the body of files over 1 MB.
+    Args:
+        fs: An fsspec filesystem; defaults to ``s3fs``, which refreshes IRSA
+            credentials itself (see ol_dlt.sources.edxorg_s3).
+        root: The folder holding one subfolder per course.
     """
-    for element in repo.get_git_tree(ref, recursive=True).tree:
-        match = _FILE_PATH.match(element.path)
-        if (
-            element.type == "blob"
-            and match
-            and match["name"] in (REPORT_FILE, API_FILE)
-        ):
-            yield element.path, base64.b64decode(repo.get_git_blob(element.sha).content)
-
-
-def local_files(root: Path) -> Iterator[tuple[str, bytes]]:
-    """Yield every change history file in a local ad_opt_v2 checkout."""
+    fs = fs or s3fs.S3FileSystem()
     for name in (REPORT_FILE, API_FILE):
-        for file in sorted(root.glob(f"*/data/{name}")):
-            yield file.relative_to(root).as_posix(), file.read_bytes()
-
-
-def default_files() -> Iterator[tuple[str, bytes]]:
-    """Read the files from GitHub when deployed, else from AD_OPT_V2_PATH."""
-    if config.active_profile() not in config.DEPLOYED_PROFILES:
-        root = config.require_secrets(
-            AD_OPT_V2_PATH=config.resolve_secret(None, "AD_OPT_V2_PATH")
-        )["AD_OPT_V2_PATH"]
-        yield from local_files(Path(root).expanduser())
-        return
-    secret = vault.read_kv_secret(GITHUB_APP_VAULT_MOUNT, GITHUB_APP_VAULT_PATH)
-    auth = Auth.AppAuth(secret["app_id"], secret["private_key"])
-    client = Github(
-        auth=auth.get_installation_auth(
-            int(secret["installation_id"]), token_permissions={"contents": "read"}
-        )
-    )
-    yield from github_files(client.get_repo(AD_OPT_V2_REPO))
+        for path in sorted(fs.glob(f"{root}/*/{name}")):
+            course = path.rstrip("/").split("/")[-2]
+            yield course, name, f"s3://{path}", fs.cat_file(path)
 
 
 @dlt.source(name="google_ads_history")
 def google_ads_history_source(
-    files: Files = default_files,
+    files: Files = landing_zone_files,
     table_format: config.TableFormat | None = None,
 ) -> Generator[Any]:
     """Load ad_opt_v2's change history files.
 
     Args:
-        files: Returns ``(path, content)`` for each file; GitHub or a local
-            checkout by default (see ``default_files``).
+        files: Returns ``(course, file name, source URL, content)`` for each
+            file; the landing zone by default.
         table_format: ``native`` or ``iceberg``; defaults to the active profile's.
     """
     resolved_format = table_format or config.active_table_format()
-    # Both tables read the same 24 files, so fetch them from GitHub once.
+    # Both tables read from the same listing, so read the files once.
     all_files = functools.cache(lambda: list(files()))
 
     def _table(name: str, file_name: str, read: Any, key: str) -> Any:  # noqa: ANN401
@@ -182,22 +150,14 @@ def google_ads_history_source(
             schema_contract=config.JSON_API_SCHEMA_CONTRACT,
         )
         def rows() -> Iterator[dict[str, Any]]:
-            for path, content in all_files():
-                match = _FILE_PATH.match(path)
-                if not match or match["name"] != file_name:
+            for course, found, url, content in all_files():
+                if found != file_name:
                     continue
                 count = 0
-                for row in read(content, path):
+                for row in read(content, url):
                     count += 1
-                    yield {
-                        "course": match["course"],
-                        **row,
-                        "_source_file": (
-                            f"https://github.com/{AD_OPT_V2_REPO}/blob/"
-                            f"{AD_OPT_V2_REF}/{path}"
-                        ),
-                    }
-                logger.info("%s: %d rows", path, count)
+                    yield {"course": course, **row, "_source_file": url}
+                logger.info("%s: %d rows", url, count)
 
         return rows
 

@@ -1,9 +1,8 @@
-import base64
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
+import fsspec
 import pytest
 
 from ol_dlt.sources.google_ads import history
@@ -34,43 +33,47 @@ API_LINES = [
         "details": ["Course - Search: Budget amount changed from $60.00 to $70.00"],
     },
 ]
-API_JSONL = "".join(json.dumps(line) + "\n" for line in API_LINES)
 
 
-def _checkout(root: Path, report: str = REPORT) -> Path:
-    data = root / "sys_think" / "data"
-    data.mkdir(parents=True)
-    (data / history.REPORT_FILE).write_bytes(report.encode("utf-16"))
-    (data / history.API_FILE).write_text(API_JSONL, encoding="utf-8")
-    (data / "keyword_windows.csv").write_text("not change history\n")
+def _landing_zone(root: Path, report: str = REPORT) -> Path:
+    for course, api_lines in (("sys_think", API_LINES), ("mm_dedp", [])):
+        folder = root / course
+        folder.mkdir(parents=True)
+        (folder / history.REPORT_FILE).write_bytes(report.encode("utf-16"))
+        (folder / history.API_FILE).write_text(
+            "".join(json.dumps(line) + "\n" for line in api_lines), encoding="utf-8"
+        )
     return root
 
 
 def _rows(root: Path, table: str) -> list[dict[str, Any]]:
-    source = history.google_ads_history_source(files=lambda: history.local_files(root))
+    source = history.google_ads_history_source(
+        files=lambda: history.landing_zone_files(fsspec.filesystem("file"), str(root))
+    )
     return list(source.resources[table])
 
 
 def test_report_rows_drop_the_user_and_mask_emails(tmp_path: Path) -> None:
-    rows = _rows(_checkout(tmp_path), history.REPORT_TABLE)
+    rows = _rows(_landing_zone(tmp_path), history.REPORT_TABLE)
 
-    assert [r["row_number"] for r in rows] == [1, 2]
-    assert {r["course"] for r in rows} == {"sys_think"}
+    sys_think = [r for r in rows if r["course"] == "sys_think"]
+    assert [r["row_number"] for r in sys_think] == [1, 2]
+    assert {r["course"] for r in rows} == {"sys_think", "mm_dedp"}
     assert all("user" not in r for r in rows)
-    assert rows[0]["changes"].splitlines() == [
+    assert sys_think[0]["changes"].splitlines() == [
         "Budget changed",
         "Course - Search: Budget amount changed from $50.00 to $60.00",
     ]
-    assert rows[1]["changes"] == 'Granted access to "<email>"'
+    assert sys_think[1]["changes"] == 'Granted access to "<email>"'
     assert "example" not in json.dumps(rows)
 
 
-def test_api_rows_keep_the_report_terms(tmp_path: Path) -> None:
-    rows = _rows(_checkout(tmp_path), history.API_TABLE)
+def test_api_rows_keep_the_report_terms_and_skip_empty_files(tmp_path: Path) -> None:
+    rows = _rows(_landing_zone(tmp_path), history.API_TABLE)
 
-    assert [(r["line_number"], r["header"]) for r in rows] == [
-        (1, "Campaign changed"),
-        (2, "Budget changed"),
+    assert [(r["course"], r["line_number"], r["header"]) for r in rows] == [
+        ("sys_think", 1, "Campaign changed"),
+        ("sys_think", 2, "Budget changed"),
     ]
     assert json.loads(rows[1]["details"]) == API_LINES[1]["details"]
 
@@ -78,34 +81,4 @@ def test_api_rows_keep_the_report_terms(tmp_path: Path) -> None:
 def test_a_changed_report_header_fails_the_load(tmp_path: Path) -> None:
     report = REPORT.replace("Ad group\t", "")
     with pytest.raises(Exception, match="has the header"):
-        _rows(_checkout(tmp_path, report), history.REPORT_TABLE)
-
-
-def test_github_files_reads_only_the_change_history_blobs() -> None:
-    blobs = {"r": REPORT.encode("utf-16"), "a": API_JSONL.encode(), "x": b"x"}
-    tree = [
-        SimpleNamespace(
-            path="sys_think/data/Change history report.csv", type="blob", sha="r"
-        ),
-        SimpleNamespace(
-            path="sys_think/data/change-history-api.jsonl", type="blob", sha="a"
-        ),
-        SimpleNamespace(
-            path="sys_think/data/keyword_windows.csv", type="blob", sha="x"
-        ),
-        SimpleNamespace(path="sys_think/data", type="tree", sha="t"),
-    ]
-    repo = SimpleNamespace(
-        get_git_tree=lambda ref, recursive: SimpleNamespace(tree=tree),
-        get_git_blob=lambda sha: SimpleNamespace(
-            content=base64.b64encode(blobs[sha]).decode()
-        ),
-    )
-
-    files = dict(history.github_files(repo))
-
-    assert sorted(files) == [
-        "sys_think/data/Change history report.csv",
-        "sys_think/data/change-history-api.jsonl",
-    ]
-    assert files["sys_think/data/change-history-api.jsonl"] == API_JSONL.encode()
+        _rows(_landing_zone(tmp_path, report), history.REPORT_TABLE)

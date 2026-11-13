@@ -4,31 +4,31 @@
 # docs/specs/INGESTION_INVENTORY_SPEC.md §3.
 #
 # ad_opt_v2's Google Ads change history, which the API keeps for 30 days only:
-# each course's UI export and API pull files, read from the mitodl/ad_opt_v2
-# repository at a pinned commit by ol_dlt.sources.google_ads.history. qa is
-# omit, as for google_ads/api.
+# each course's UI export and API pull files, copied once from mitodl/ad_opt_v2
+# into the landing zone (thirdparty/google_ads/change_history/<course>/) and
+# loaded by ol_dlt.sources.google_ads.history. qa is omit, as for google_ads/api.
 schema_version: 1
 deployment: google_ads
-layer: github
+layer: s3
 scope: scoped
 strategies:
   qa: omit
   local: fixture
 loader: dlt
-table_prefix: raw__google_ads__github__
+table_prefix: raw__google_ads__s3__
 dlt:
   source_module: ol_dlt.sources.google_ads.history
   write_disposition: replace
 tables:
-- name: raw__google_ads__github__change_history_report
-  raw_table: raw__google_ads__github__change_history_report
+- name: raw__google_ads__s3__change_history_report
+  raw_table: raw__google_ads__s3__change_history_report
   sync_mode: full_refresh_overwrite
   primary_key:
   - - course
   - - row_number
   modeled: false
-- name: raw__google_ads__github__change_history_api
-  raw_table: raw__google_ads__github__change_history_api
+- name: raw__google_ads__s3__change_history_api
+  raw_table: raw__google_ads__s3__change_history_api
   sync_mode: full_refresh_overwrite
   primary_key:
   - - course
