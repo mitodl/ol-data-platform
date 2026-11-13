@@ -1374,12 +1374,13 @@
 {%- endmacro %}
 
 {% macro starrocks__json_array_string(json_col, json_path) -%}
-    {# json_col may be a varchar or a JSON value (an unnest_json_array element); the cast
-       to varchar makes parse_json accept either. Callers test for a JSON string's quotes,
-       which json_to_varchar keeps. StarRocks sorts object keys here where Trino does only
-       for a JSON value, not a varchar. #}
+    {# json_col may be a varchar or a JSON value (an unnest_json_array element). cast(... as
+       json) parses a varchar and leaves a JSON value as it is; going through varchar would
+       unquote a JSON string element and parse its text again. Callers test for a JSON
+       string's quotes, which json_to_varchar keeps. StarRocks sorts object keys here where
+       Trino does only for a JSON value, not a varchar. #}
     {{ starrocks__json_to_varchar(
-        "json_query(parse_json(cast(" ~ json_col ~ " as varchar)), " ~ json_path ~ ")"
+        "json_query(cast(" ~ json_col ~ " as json), " ~ json_path ~ ")"
     ) }}
 {%- endmacro %}
 
