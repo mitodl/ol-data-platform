@@ -21,6 +21,7 @@ from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, database
 from ol_dlt.database import DatabaseSourceSpec, DatabaseTable
+from ol_dlt.sources.edxapp import EDXAPP_SPECS
 
 _SPEC = DatabaseSourceSpec(
     name="example",
@@ -755,3 +756,29 @@ def test_a_zero_row_read_of_a_cursor_table_merges_as_a_no_op(
     with sqlite3.connect(db_path) as connection:
         connection.execute("DELETE FROM event")
     assert _load() == [(1, "first")]
+
+
+@pytest.mark.parametrize(
+    ("table", "schema"),
+    [
+        ("coursewarehistoryextended_studentmodulehistoryextended", "edxapp_csmh"),
+        # The connection's own database.
+        ("auth_user", None),
+    ],
+)
+def test_the_loader_reads_the_table_s_own_schema(
+    table: str, schema: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """edxapp's csmh table lives in edxapp_csmh, beside the spec's edxapp."""
+    spec = EDXAPP_SPECS["mitx"]
+    selected: dict[str, object] = {}
+
+    def _sql_table(**kwargs: object) -> object:
+        selected.update(kwargs)
+        return dlt.resource([], name=str(kwargs["table"]))
+
+    monkeypatch.setattr(database, "sql_table", _sql_table)
+    database.build_table_resource(
+        spec, next(t for t in spec.tables if t.name == table), profile="dev"
+    )
+    assert (selected["schema"], selected["table"]) == (schema, table)
