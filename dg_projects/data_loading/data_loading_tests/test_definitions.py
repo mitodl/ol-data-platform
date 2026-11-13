@@ -530,8 +530,11 @@ def test_google_ads_schedule_selects_every_google_ads_table() -> None:
     assert scheduled == google_ads_keys
 
 
-def test_google_ads_change_events_have_a_freshness_check() -> None:
-    key = dg.AssetKey(["ol_warehouse_raw_data", "raw__google_ads__api__change_events"])
+@pytest.mark.parametrize(
+    "table", ["change_events", "keyword_snapshots", "keyword_daily", "campaign_daily"]
+)
+def test_google_ads_tables_have_a_freshness_check(table: str) -> None:
+    key = dg.AssetKey(["ol_warehouse_raw_data", f"raw__google_ads__api__{table}"])
     assert any(
         check_key.asset_key == key for check_key in _REPO.asset_checks_defs_by_key
     )
