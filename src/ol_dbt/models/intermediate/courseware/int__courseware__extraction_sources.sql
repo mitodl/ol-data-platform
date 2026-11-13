@@ -58,8 +58,8 @@
 
     A link to a resource also links what that resource's description links, right
     after it: 18.01SC's pages link video clips whose descriptions link the session
-    notes. The description is read from stg__ocw__s3__course_content, since
-    int__ocw__content_files drops a video with no transcript file.
+    notes. A video with no transcript has no text to read, but its description
+    is followed all the same.
 
     Answer keys are left out: a resource of type Problem Set Solutions or Exam Solutions,
     that courseware_answer_key reads as one from its file name, title and opening text,
@@ -617,20 +617,16 @@ with content as (
     cross join {{ unnest_sequence(array_length('page_hrefs.hrefs'), 'links', 'link_index') }}
 )
 
--- the resources a resource's description links, which int__ocw__content_files cannot
--- give for a video it dropped
+-- the resources a resource's description links, a video with no transcript's too
 , ocw_description_hrefs as (
     select
-        ocw_courses.courserun_readable_id
-        , substr(ocw_content.coursecontent_s3_key, 1, length(ocw_content.coursecontent_s3_key) - length('data.json'))
-            as resource_key
-        , {{ regexp_extract_all('ocw_content.coursecontent_body', ocw_resource_href, 1) }} as hrefs
-    from {{ ref('stg__ocw__s3__course_content') }} as ocw_content
-    inner join ocw_courses
-        on ocw_content.course_slug = ocw_courses.course_slug
+        courserun_readable_id
+        , content_file_key as resource_key
+        , {{ regexp_extract_all('description', ocw_resource_href, 1) }} as hrefs
+    from {{ ref('int__courseware__ocw_files') }}
     where
-        ocw_content.coursecontent_kind = 'resource'
-        and {{ array_length(regexp_extract_all('ocw_content.coursecontent_body', ocw_resource_href, 1)) }} > 0
+        content_type != 'page'
+        and {{ array_length(regexp_extract_all('description', ocw_resource_href, 1)) }} > 0
 )
 
 , ocw_description_links as (

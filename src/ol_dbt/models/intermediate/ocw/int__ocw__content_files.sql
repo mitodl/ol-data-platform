@@ -1,18 +1,27 @@
 {#
-  One row per page or resource of an OCW course that MIT Learn loads as a
-  ContentFile, derived the way Learn's OCW ETL does (transform_page,
-  transform_contentfile and transform_contentfile_legacy in
-  learning_resources/etl/ocw.py), from the same data.json files in the OCW live
-  bucket.
+  One row per page and resource of a live OCW course, from the data.json files
+  in the OCW live bucket, with the fields MIT Learn's OCW ETL derives from them
+  (transform_page, transform_contentfile and transform_contentfile_legacy in
+  learning_resources/etl/ocw.py).
 
-  Learn drops a resource that has no file to read text from. For a video that
-  file is its transcript (get_video_transcript_path): the first English entry of
-  video_files.video_transcript_resources that names a file, else the first entry
-  that names a file, else video_files.video_transcript_file. Learn raises, and
-  so drops the resource, on an entry of the list that is not an object, on a
-  language that is not a string, and on a chosen file that is not a string. A
-  resource whose file is not in the bucket is dropped as well: Learn's read of
-  it raises.
+  A resource's text comes from one file: for a video, its transcript, else its
+  file. A video's transcript (get_video_transcript_path) is the first English
+  entry of video_files.video_transcript_resources that names a file, else the
+  first entry that names a file, else video_files.video_transcript_file.
+
+  Every page and resource is kept. What Learn drops is flagged, and
+  integrations__learn__ocw_content_files applies the drops:
+    has_text_file          false for a resource whose text file is not a path
+                           in the bucket (none, or a URL elsewhere)
+    transcript_unreadable  a video whose transcript list Learn's Python raises
+                           on: an entry that is not an object, a language that
+                           is not a string, or a chosen file that is not a
+                           string. Its text file is unknown, so it has none.
+    is_3play_artifact      a 3Play Media caption or PDF transcript published as
+                           a resource of its own
+    extraction_status      missing for a resource whose file is not in the bucket
+  courserun_readable_id is null for a course with neither legacy_uid nor
+  site_uid, which Learn skips.
 
   Not reproduced: Learn passes a resource's description through nh3 with an
   allowlist of tags. The description here is the HTML OCW published.
@@ -46,6 +55,9 @@ with content as (
         , cast(null as varchar) as youtube_id
         , coursecontent_learning_resource_types as content_tags
         , cast(null as varchar) as extraction_status
+        , cast(null as boolean) as has_text_file
+        , false as transcript_unreadable
+        , false as is_3play_artifact
         , coursecontent_retrieved_on as retrieved_on
     from content
     where coursecontent_kind = 'page'
@@ -59,7 +71,7 @@ with content as (
         , coalesce(nullif(coursecontent_resource_type, ''), coursecontent_legacy_resource_type, '') = 'Video'
             as is_video
         -- Learn raises on a video_transcript_resources that is neither empty nor
-        -- a list, which drops the resource.
+        -- a list.
         , coalesce(coursecontent_video_transcript_resources, 'null') not in ('null', '""', '{}', 'false', '0')
         and {{ try_parse_json_array('coursecontent_video_transcript_resources') }} is null
             as has_unreadable_transcripts
@@ -127,7 +139,7 @@ with content as (
 
 -- Learn calls .get on every entry and .lower on the language of every entry
 -- that names a file, so an entry that is not an object or a language that is
--- not a string raises, which drops the resource.
+-- not a string raises.
 , unreadable_transcript_entries as (
     select distinct coursecontent_s3_key
     from transcript_flags
@@ -136,33 +148,21 @@ with content as (
         or (names_file and names_language and substr(language_json, 1, 1) != '"')
 )
 
-, resource_files as (
+, resource_transcripts as (
     select
         resources.*
-        , case
-            when
-                resources.is_video
-                and resources.is_current_format
-                and (
-                    resources.has_unreadable_transcripts
-                    or unreadable_transcript_entries.coursecontent_s3_key is not null
-                    -- Learn's .lstrip raises on a chosen file that is not a string.
-                    or not coalesce(transcript_resources.is_file_string, true)
-                )
-                then null
-            when resources.is_video and resources.is_current_format
-                then coalesce(transcript_resources.transcript_file, resources.coursecontent_video_transcript_file)
-            when resources.is_video then resources.coursecontent_legacy_transcript_file
-            else resources.coursecontent_file
-        end as text_file_path
-        , case
-            when resources.is_video
-                then
-                    coalesce(
-                        nullif(resources.coursecontent_file, ''), nullif(resources.coursecontent_video_archive_url, ''), ''
-                    )
-            else coalesce(resources.coursecontent_file, '')
-        end as extension_path
+        , transcript_resources.transcript_file
+        , coalesce(
+            resources.is_video
+            and resources.is_current_format
+            and (
+                resources.has_unreadable_transcripts
+                or unreadable_transcript_entries.coursecontent_s3_key is not null
+                -- Learn's .lstrip raises on a chosen file that is not a string.
+                or not coalesce(transcript_resources.is_file_string, true)
+            )
+            , false
+        ) as transcript_unreadable
     from resources
     left join transcript_resources
         on
@@ -170,6 +170,26 @@ with content as (
             and transcript_resources.transcript_rank = 1
     left join unreadable_transcript_entries
         on resources.coursecontent_s3_key = unreadable_transcript_entries.coursecontent_s3_key
+)
+
+, resource_files as (
+    select
+        *
+        , case
+            when transcript_unreadable then null
+            when is_video and is_current_format then coalesce(transcript_file, coursecontent_video_transcript_file)
+            when is_video then coursecontent_legacy_transcript_file
+            else coursecontent_file
+        end as text_file_path
+        , case
+            when is_video
+                then
+                    coalesce(
+                        nullif(coursecontent_file, ''), nullif(coursecontent_video_archive_url, ''), ''
+                    )
+            else coalesce(coursecontent_file, '')
+        end as extension_path
+    from resource_transcripts
 )
 
 , resource_content_files as (
@@ -201,12 +221,12 @@ with content as (
         end as youtube_id
         , coursecontent_learning_resource_types as content_tags
         , coursecontent_text_extraction_status as extraction_status
+        -- Learn's test: the path is split on "courses" to make the key it reads.
+        , coalesce(text_file_path, '') like '%courses%' as has_text_file
+        , transcript_unreadable
+        , coalesce(coursecontent_title, '') in ('3play caption file', '3play pdf file') as is_3play_artifact
         , coursecontent_retrieved_on as retrieved_on
     from resource_files
-    where
-        coalesce(coursecontent_title, '') not in ('3play caption file', '3play pdf file')
-        and coalesce(text_file_path, '') like '%courses%'
-        and coalesce(coursecontent_text_extraction_status, '') != 'missing'
 )
 
 , content_files as (
@@ -235,9 +255,10 @@ select
     , content_files.youtube_id
     , content_files.content_tags
     , content_files.extraction_status
+    , content_files.has_text_file
+    , content_files.transcript_unreadable
+    , content_files.is_3play_artifact
     , content_files.retrieved_on
 from content_files
--- Learn skips a course with neither uid, and a ContentFile belongs to a run.
 inner join courses
     on content_files.course_slug = courses.course_slug
-where courses.courserun_readable_id is not null
