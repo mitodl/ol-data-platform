@@ -107,8 +107,8 @@ mit_edx_programs_assets = build_ingest_assets(
     source=mit_edx_programs.build_source(),
     pipeline=mit_edx_programs.mit_edx_programs_pipeline,
 )
-# ad_opt_v2's change history files, copied once into the landing zone. Each load
-# replaces both tables, so the daily google_ads schedule just reloads them.
+# ad_opt_v2's change history files, copied once into the landing zone. Loaded by
+# hand only: each load replaces both tables.
 google_ads_history_assets = build_ingest_assets(
     name="google_ads_history_ingest",
     source=google_ads_history.build_source(),

@@ -6,7 +6,8 @@
 # ad_opt_v2's Google Ads change history, which the API keeps for 30 days only:
 # each course's UI export and API pull files, copied once from mitodl/ad_opt_v2
 # into the landing zone (thirdparty/google_ads/change_history/<course>/) and
-# loaded by ol_dlt.sources.google_ads.history. qa is omit, as for google_ads/api.
+# loaded by ol_dlt.sources.google_ads.history. qa is omit: a one-time load of
+# production history from the production landing zone.
 schema_version: 1
 deployment: google_ads
 layer: s3

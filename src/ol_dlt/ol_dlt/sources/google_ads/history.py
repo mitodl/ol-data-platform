@@ -17,17 +17,14 @@ from the API between that download and 2026-10-20, already in the report's
 terms (a header line and detail lines per change). Staging combines both with
 the API table, as ad_opt_v2's parse_change_history does.
 
-The report's ``User`` column is dropped and email addresses in its text are
-masked: they name the people who made a change or were given account access,
-and the API load leaves ``user_email`` out for the same reason. Each table is
-replaced on every load, so a rerun reloads the files rather than adding rows.
+Rows load as the files hold them. Each table is replaced on every load, so a
+rerun reloads the files rather than adding rows.
 """
 
 import csv
 import io
 import json
 import logging
-import re
 from collections.abc import Callable, Generator, Iterator
 from typing import Any
 
@@ -50,8 +47,6 @@ REPORT_TABLE = "raw__google_ads__s3__change_history_report"
 API_TABLE = "raw__google_ads__s3__change_history_api"
 
 REPORT_COLUMNS = ("Date & time", "User", "Campaign", "Ad group", "Changes")
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-MASKED_EMAIL = "<email>"
 
 # (course, source URL, content) of every file with the given name.
 Files = Callable[[str], Iterator[tuple[str, str, bytes]]]
@@ -61,13 +56,8 @@ class ChangeHistoryReportHeaderError(Exception):
     """A change history report's header is not ``REPORT_COLUMNS``."""
 
 
-def mask_emails(text: str) -> str:
-    """Replace every email address in ``text`` with ``MASKED_EMAIL``."""
-    return _EMAIL.sub(MASKED_EMAIL, text)
-
-
 def read_report(content: bytes, url: str) -> Iterator[dict[str, Any]]:
-    """Yield one row per change in a UI change history report, without ``User``."""
+    """Yield one row per change in a UI change history report."""
     rows = csv.reader(io.StringIO(content.decode("utf-16")), delimiter="\t")
     for _ in range(2):
         next(rows)  # the report's title and date range
@@ -75,15 +65,16 @@ def read_report(content: bytes, url: str) -> Iterator[dict[str, Any]]:
     if header != REPORT_COLUMNS:
         msg = f"{url} has the header {list(header)}, not {list(REPORT_COLUMNS)}"
         raise ChangeHistoryReportHeaderError(msg)
-    for row_number, (date_time, _user, campaign, ad_group, changes) in enumerate(
+    for row_number, (date_time, user, campaign, ad_group, changes) in enumerate(
         rows, start=1
     ):
         yield {
             "row_number": row_number,
             "date_time": date_time,
+            "user": user,
             "campaign": campaign,
             "ad_group": ad_group,
-            "changes": mask_emails(changes),
+            "changes": changes,
         }
 
 
@@ -97,8 +88,8 @@ def read_api_changes(content: bytes, _url: str) -> Iterator[dict[str, Any]]:
             "timestamp": group["timestamp"],
             "campaign": group["campaign"],
             "ad_group": group["ad_group"],
-            "header": mask_emails(group["header"]),
-            "details": json.dumps([mask_emails(d) for d in group["details"]]),
+            "header": group["header"],
+            "details": json.dumps(group["details"]),
         }
 
 
@@ -142,7 +133,7 @@ def google_ads_history_source(
     """
     resolved_format = table_format or config.active_table_format()
 
-    def _table(name: str, file_name: str, read: Any, key: str) -> Any:  # noqa: ANN401
+    def _table(name: str, file_name: str, read: Any, key: str, time: str) -> Any:  # noqa: ANN401
         @dlt.resource(
             name=name,
             write_disposition="replace",
@@ -151,6 +142,8 @@ def google_ads_history_source(
             columns={
                 **config.DLT_LOAD_ID_COLUMN,
                 "_source_file": {"data_type": "text"},
+                # Kept as written: the account's local time, with no offset.
+                time: {"data_type": "text"},
             },
             schema_contract=config.JSON_API_SCHEMA_CONTRACT,
         )
@@ -164,8 +157,8 @@ def google_ads_history_source(
 
         return rows
 
-    yield _table(REPORT_TABLE, REPORT_FILE, read_report, "row_number")
-    yield _table(API_TABLE, API_FILE, read_api_changes, "line_number")
+    yield _table(REPORT_TABLE, REPORT_FILE, read_report, "row_number", "date_time")
+    yield _table(API_TABLE, API_FILE, read_api_changes, "line_number", "timestamp")
 
 
 google_ads_history_pipeline = config.pipeline_for(

@@ -55,19 +55,18 @@ def _rows(root: Path, table: str) -> list[dict[str, Any]]:
     return list(source.resources[table])
 
 
-def test_report_rows_drop_the_user_and_mask_emails(tmp_path: Path) -> None:
+def test_report_rows_load_as_the_file_holds_them(tmp_path: Path) -> None:
     rows = _rows(_landing_zone(tmp_path), history.REPORT_TABLE)
 
     sys_think = [r for r in rows if r["course"] == "sys_think"]
     assert [r["row_number"] for r in sys_think] == [1, 2]
     assert {r["course"] for r in rows} == {"sys_think", "mm_dedp"}
-    assert all("user" not in r for r in rows)
+    assert sys_think[0]["user"] == "person@example.com"
     assert sys_think[0]["changes"].splitlines() == [
         "Budget changed",
         "Course - Search: Budget amount changed from $50.00 to $60.00",
     ]
-    assert sys_think[1]["changes"] == 'Granted access to "<email>"'
-    assert "example" not in json.dumps(rows)
+    assert sys_think[1]["changes"] == 'Granted access to "new.person@example.org"'
 
 
 def test_api_rows_keep_the_report_terms_and_skip_empty_files(tmp_path: Path) -> None:

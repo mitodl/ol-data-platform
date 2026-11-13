@@ -527,7 +527,6 @@ def test_google_ads_schedule_selects_every_google_ads_api_table() -> None:
         if key.path[-1].startswith("raw__google_ads__api__")
     }
     assert "ol_warehouse_raw_data/raw__google_ads__api__change_events" in scheduled
-    # The change history files load by hand.
     assert scheduled == google_ads_keys
 
 
