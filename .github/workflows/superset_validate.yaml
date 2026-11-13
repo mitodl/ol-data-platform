@@ -1,5 +1,5 @@
 ---
-name: Superset validate
+name: archento123 valide
 
 # Credential-free PR gate for the exported Superset assets (src/ol_superset/assets):
 # YAML syntax, dashboard → chart → dataset UUID chains, chart↔dataset column-case
