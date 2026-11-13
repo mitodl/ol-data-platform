@@ -86,5 +86,13 @@ def test_a_changed_report_header_fails_the_load(tmp_path: Path) -> None:
 
 
 def test_a_missing_landing_zone_fails_the_load(tmp_path: Path) -> None:
-    with pytest.raises(Exception, match="No Change history report.csv"):
+    with pytest.raises(Exception, match="No course folders"):
         _rows(tmp_path, history.REPORT_TABLE)
+
+
+def test_a_course_missing_a_file_fails_the_load(tmp_path: Path) -> None:
+    root = _landing_zone(tmp_path)
+    (root / "mm_dedp" / history.API_FILE).unlink()
+
+    with pytest.raises(Exception, match=r"No change-history-api\.jsonl in .*mm_dedp"):
+        _rows(root, history.API_TABLE)

@@ -107,16 +107,22 @@ def landing_zone_files(
         root: The folder holding one subfolder per course.
 
     Raises:
-        FileNotFoundError: No course folder holds the file, which would
-            otherwise load nothing and report success.
+        FileNotFoundError: There are no course folders, or one lacks the file.
+            Each load replaces the table, so a missing file would otherwise
+            drop that course's history and still report success.
     """
     fs = fs or s3fs.S3FileSystem()
-    paths = sorted(fs.glob(f"{root}/*/{name}"))
-    if not paths:
-        msg = f"No {name} under {root}"
+    courses = sorted(path for path in fs.glob(f"{root}/*") if fs.isdir(path))
+    if not courses:
+        msg = f"No course folders under {root}"
         raise FileNotFoundError(msg)
-    for path in paths:
-        yield path.rstrip("/").split("/")[-2], f"s3://{path}", fs.cat_file(path)
+    missing = [course for course in courses if not fs.exists(f"{course}/{name}")]
+    if missing:
+        msg = f"No {name} in {', '.join(missing)}"
+        raise FileNotFoundError(msg)
+    for course in courses:
+        path = f"{course}/{name}"
+        yield course.rstrip("/").split("/")[-1], f"s3://{path}", fs.cat_file(path)
 
 
 @dlt.source(name="google_ads_history")
@@ -140,7 +146,6 @@ def google_ads_history_source(
             primary_key=["course", key],
             table_format=resolved_format,
             columns={
-                **config.DLT_LOAD_ID_COLUMN,
                 "_source_file": {"data_type": "text"},
                 # Kept as written: the account's local time, with no offset.
                 time: {"data_type": "text"},
@@ -167,5 +172,5 @@ google_ads_history_pipeline = config.pipeline_for(
 
 
 def build_source() -> Any:  # noqa: ANN401
-    """Instantiate the source for the Dagster wrapper."""
-    return google_ads_history_source()
+    """Instantiate the source with nullable ``_dlt_load_id`` columns."""
+    return config.with_nullable_load_id(google_ads_history_source())
