@@ -37,6 +37,12 @@ sources:
       scope.
   - name: bridge_program_course
     description: "Program-to-course membership. Grain: one row per (program, course)."
+  - name: bridge_contract_course
+    description: >
+      Where each course sits in a MITx Online B2B contract: the program's
+      position in the contract and the course's position in that program.
+      Grain: one row per (contract, course) for courses in at least one of the
+      contract's programs.
   - name: tfact_enrollment
     description: >
       Enrollment fact. Grain: one row per enrollment. Read only where a view

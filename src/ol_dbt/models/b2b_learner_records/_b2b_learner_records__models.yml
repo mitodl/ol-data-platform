@@ -484,3 +484,15 @@ models:
       Course run end, ISO-8601 in UTC with no offset, as courserun_start_on. Null
       for
       self-paced runs.
+  - name: program_sort_order
+    description: >
+      The position of the run's program in the contract's program list, from
+      bridge_contract_course. Null when the run's course is in none of the
+      contract's programs, or when MITx Online never ordered the program. Sort
+      on it, then course_order_in_program, nulls last, to match the learner
+      dashboard.
+  - name: course_order_in_program
+    description: >
+      The position of the run's course in that program's requirement tree,
+      starting at 1, from bridge_contract_course. Null when the run's course is
+      in none of the contract's programs.

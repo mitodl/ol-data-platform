@@ -261,7 +261,9 @@
         {"name": "courserun_readable_id"},
         {"name": "courserun_title"},
         {"name": "courserun_start_on"},
-        {"name": "courserun_end_on"}
+        {"name": "courserun_end_on"},
+        {"name": "program_sort_order"},
+        {"name": "course_order_in_program"}
       ]
     }
   }
