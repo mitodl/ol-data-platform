@@ -232,6 +232,10 @@ tables:
   namespace: public
   primary_key:
   - - id
+  # Same as dj_session_key above: learn_ai_app (QA) excludes it, production
+  # Airbyte still syncs it.
+  excluded_columns:
+  - password
   modeled: true
 - name: users_user_groups
   raw_table: raw__learn_ai__app__postgres__users_user_groups
