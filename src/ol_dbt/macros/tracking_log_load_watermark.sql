@@ -1,7 +1,9 @@
-{% macro tracking_log_load_watermark(load_column='_dlt_load_id', stored_column='useractivity_load_id') %}
+{% macro tracking_log_load_watermark(
+    load_column='_dlt_load_id', stored_column='useractivity_load_id', lookback_seconds=10800
+) %}
     {#-
         The incremental filter for a tracking-log user_activity model: raw rows from
-        loads newer than the newest load already in {{ this }}.
+        loads at or after the newest load already in {{ this }}, less a lookback.
 
         An event-time watermark (`time` > max(useractivity_timestamp)) skips every row
         whose file lands after a build has already passed its event time, which
@@ -13,13 +15,21 @@
         integer part, so text order is load order. The stored maximum is inlined as a
         literal, so Iceberg can skip every raw file whose load id range is below it.
 
+        The bound is the stored maximum less `lookback_seconds` (3 hours), compared
+        with >=. A load that commits after a newer one (an overlapping manual run), or
+        one load written in several commits with a build in between, would otherwise
+        be skipped. The rows re-read from the lookback replace themselves through the
+        model's unique_key and delete+insert.
+
         The first build after the column is added has no stored load id. That build
         falls back to the event-time watermark, as before; the following builds use
         the load id.
 
         For a one-off backfill of rows an earlier event-time watermark skipped, pass
         `--vars '{tracking_log_reprocess_from: "YYYY-MM-DD"}'`. That reprocesses every
-        raw row whose event date is on or after it. The model's unique_key and
+        raw row whose event date (the raw text's first 10 characters, so start a day
+        early for events logged with a non-UTC offset) is on or after it, through
+        today. That scans the whole raw table. The model's unique_key and
         delete+insert replace the rows that are already there.
     -#}
     {%- set reprocess_from = var('tracking_log_reprocess_from', none) -%}
@@ -35,7 +45,7 @@
         {%- if stored_load_id is none -%}
             {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
         {%- else -%}
-            {{ load_column }} > '{{ stored_load_id }}'
+            {{ load_column }} >= '{{ "%.6f" | format(stored_load_id | float - lookback_seconds) }}'
         {%- endif -%}
     {%- endif -%}
 {% endmacro %}
