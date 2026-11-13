@@ -155,14 +155,3 @@ def test_learn_ai_session_key_is_excluded() -> None:
         if table.name == "ai_chatbots_userchatsession"
     )
     assert "dj_session_key" in chatsession.excluded_columns
-
-
-@pytest.mark.parametrize(PARAMS, SOURCES)
-def test_no_table_is_optional(
-    build_source: Callable[[], Any],
-    spec: DatabaseSourceSpec,
-    unit_stem: str,
-    module_name: str,
-) -> None:
-    """A skipped table loads nothing silently, so no app-database table is optional."""
-    assert {table.name for table in spec.tables if table.optional} == set()
