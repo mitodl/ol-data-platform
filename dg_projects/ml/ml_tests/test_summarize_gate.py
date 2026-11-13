@@ -118,7 +118,9 @@ def _summary(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
 
 def test_the_suite_summarizes_through_the_deployed_call() -> None:
     template = TextTemplate(template=summarize.SUMMARY_PROMPT, version="v4")
-    prompt = ManagedPrompt(name="feedback-summary", template=template, source="opik")
+    prompt = ManagedPrompt(
+        name="feedback-summary", template=template, source="registry"
+    )
     context = GateContext(
         app="dagster-ml",
         use_case="feedback-summary",

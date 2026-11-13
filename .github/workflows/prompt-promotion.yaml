@@ -26,7 +26,7 @@ permissions: {}
 
 jobs:
   pointers:
-    uses: mitodl/ol-llm/.github/workflows/prompt-promotion.yml@5b80e69a290d82e4facbb8f0f09be00e3244eeff # ol-llm-v0.0.13
+    uses: mitodl/ol-llm/.github/workflows/prompt-promotion.yml@8d7e62eeb2f9b566e4445afc39d8ed298caaf6f6 # ol-llm-v0.0.14
     permissions:
       contents: read
     with:
