@@ -201,6 +201,31 @@ def test_every_b2b_view_shows_rows_from_the_fixture() -> None:
         )
 
 
+def test_contract_member_enrollment_lists_current_members_and_hides_unshared_ones() -> None:
+    """Every current member is listed, except one with an enrollment they have not agreed to share.
+
+    Learners 1-5 consented and are listed with their active enrollments, and 9, with no
+    enrollment, gets one row with no course run. 6 declined, and 7 and 8 have no recorded
+    decision, so all three are hidden. A removed member drops off.
+    """
+    db = _duckdb_with(resolve_parameters(parse_dimensional_fixture(B2B_FIXTURE), B2B_VALUES))
+    sql = _rendered_b2b_views()["mv_b2b_contract_member_enrollment"]
+
+    def rows() -> set[tuple[str, str | None, Any]]:
+        return set(db.execute(f"select user_pk, courserun_pk, completion_status from ({sql})").fetchall())  # noqa: S608
+
+    listed = rows()
+    assert {user for user, _, _ in listed} == {f"fixture-user-{n}" for n in (1, 2, 3, 4, 5, 9)}
+    assert ("fixture-user-9", None, None) in listed
+    assert len(listed) == 11
+
+    db.execute(
+        f"update ol_data_lake_local.{LOCAL_DIMENSIONAL_SCHEMA}.bridge_user_contract"  # noqa: S608
+        " set membership_is_current = false where user_fk in ('fixture-user-1', 'fixture-user-9')"
+    )
+    assert {user for user, _, _ in rows()} == {f"fixture-user-{n}" for n in (2, 3, 4, 5)}
+
+
 class _Cursor:
     def __init__(self, statements: list[tuple[str, Any]]) -> None:
         self.statements = statements

@@ -37,3 +37,4 @@ exposures:
   - ref('mv_b2b_learner_enrollment')
   - ref('mv_b2b_learner')
   - ref('mv_b2b_contract_courserun')
+  - ref('mv_b2b_contract_member_enrollment')

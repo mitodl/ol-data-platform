@@ -263,6 +263,40 @@
         {"name": "courserun_start_on"},
         {"name": "courserun_end_on"}
       ]
+    },
+    "mv_b2b_contract_member_enrollment": {
+      "columns": [
+        {"name": "organization_key"},
+        {"name": "sso_organization_id"},
+        {"name": "contract_pk"},
+        {"name": "contract_id"},
+        {"name": "courserun_pk"},
+        {"name": "courserun_readable_id"},
+        {"name": "courserun_title"},
+        {"name": "courserun_start_on"},
+        {"name": "courserun_end_on"},
+        {"name": "user_pk"},
+        {"name": "user_global_id"},
+        {"name": "email"},
+        {"name": "full_name"},
+        {"name": "enrollment_created_on"},
+        {"name": "enrollment_is_active"},
+        {"name": "enrollment_mode"},
+        {"name": "is_passing"},
+        {"name": "grade_value"},
+        {"name": "letter_grade"},
+        {"name": "certificate_issued_on"},
+        {"name": "certificate_is_revoked"},
+        {"name": "last_active_on"},
+        {"name": "completion_status"},
+        {"name": "needs_attention_since"},
+        {"name": "content_progress"},
+        {"name": "days_active"},
+        {"name": "videos_played"},
+        {"name": "problems_attempted"},
+        {"name": "chatbot_interactions"},
+        {"name": "outcomes_shared"}
+      ]
     }
   }
 }
