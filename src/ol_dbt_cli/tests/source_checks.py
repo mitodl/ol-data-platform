@@ -11,19 +11,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def make_dbt_dir(tmp_path: Path) -> Path:
-    """Lay out an empty dbt project with ``models/`` and ``macros/`` in *tmp_path*.
-
-    :param tmp_path: The directory to use as the project root.
-    :returns: *tmp_path*.
-    :rtype: Path
-    """
-    for name in ("models", "macros"):
-        (tmp_path / name).mkdir()
-    (tmp_path / "dbt_project.yml").write_text("name: p\n")
-    return tmp_path
-
-
 def error_messages(check: Callable[[Path, ValidationReport], None], check_name: str, dbt_dir: Path) -> list[str]:
     """Run *check* over *dbt_dir* and return its messages, asserting each is an ERROR of *check_name*.
 

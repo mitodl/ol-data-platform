@@ -7,14 +7,9 @@ from pathlib import Path
 import pytest
 
 from ol_dbt_cli.lib.null_ordering import NULL_ORDERING_CHECK, ascending_sort_keys, check_null_ordering
-from tests.source_checks import error_messages, make_dbt_dir
+from tests.source_checks import error_messages
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
-@pytest.fixture
-def dbt_dir(tmp_path: Path) -> Path:
-    return make_dbt_dir(tmp_path)
 
 
 def _messages(dbt_dir: Path) -> list[str]:
