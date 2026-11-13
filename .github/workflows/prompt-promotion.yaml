@@ -1,0 +1,42 @@
+---
+name: Prompt promotion
+
+# Moves Opik's production label to the versions dg_projects/ml/prompts.toml
+# points at (ol-infrastructure docs/plans/llm-opik-lifecycle-spec.md section
+# 2.3). A pull request checks the pointed versions and their committed exports, a
+# merge to main promotes them, and the weekday schedule reports a label someone
+# moved in the Opik UI. See
+# https://github.com/mitodl/ol-llm/blob/main/docs/prompt-promotion.md.
+on:
+  pull_request:
+    paths:
+    - "dg_projects/ml/prompts.toml"
+    - "dg_projects/ml/ml/prompts/**"
+    - ".github/workflows/prompt-promotion.yaml"
+  push:
+    branches:
+    - main
+    paths:
+    - "dg_projects/ml/prompts.toml"
+  schedule:
+  - cron: "17 13 * * 1-5"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pointers:
+    uses: mitodl/ol-llm/.github/workflows/prompt-promotion.yml@5b80e69a290d82e4facbb8f0f09be00e3244eeff # ol-llm-v0.0.13
+    permissions:
+      contents: read
+    with:
+      pointers: prompts.toml
+      working-directory: dg_projects/ml
+      opik-url: ${{ vars.OPIK_URL }}
+      keycloak-token-url: ${{ vars.OPIK_KEYCLOAK_TOKEN_URL }}
+    secrets:
+      OPIK_KEYCLOAK_CLIENT_ID: ${{ secrets.OPIK_EVALUATION_CLIENT_ID }}
+      OPIK_KEYCLOAK_CLIENT_SECRET: ${{ secrets.OPIK_EVALUATION_CLIENT_SECRET }}
+      # Secrets of the prompt-promotion environment, which only main deploys to.
+      OPIK_PROMOTION_CLIENT_ID: ${{ secrets.OPIK_PROMOTION_CLIENT_ID }}
+      OPIK_PROMOTION_CLIENT_SECRET: ${{ secrets.OPIK_PROMOTION_CLIENT_SECRET }}
