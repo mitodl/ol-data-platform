@@ -61,6 +61,7 @@ with openedx_documents as (
         and content_type != 'page'
         -- the resources Learn loads, which this review has listed from the start; a
         -- resource with no text file, a 3Play caption file or a missing file is not
+        -- listed
         and has_text_file
         and not is_3play_artifact
         and coalesce(extraction_status, '') != 'missing'
