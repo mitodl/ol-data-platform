@@ -7,6 +7,7 @@ materialization reads what the first wrote. The embedder counts its calls and
 returns a vector made from the text, so a test can tell which texts were sent.
 """
 
+import math
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -1040,9 +1041,50 @@ def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdra
 
     evaluation = check_content_files(tables)
 
+    # Similarity 0.82, under the floor: not a vector of this text.
     assert not evaluation.passed
     assert evaluation.severity == AssetCheckSeverity.ERROR
     assert evaluation.metadata["below_min_cosine"].value == 1
+    assert evaluation.metadata["below_floor_cosine"].value == 1
+
+
+def test_a_vector_a_little_unlike_learns_warns_and_is_named(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    noisy = learn_chunk("block-v1:b", "Second.", skew=1.5)
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [learn_chunk("block-v1:a", "First file."), noisy],
+    )
+
+    evaluation = check_content_files(tables)
+
+    # Similarity 0.978: the providers' noise, as on CTL.SC0x's Thai transcripts.
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.WARN
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (metadata["below_min_cosine"], metadata["below_floor_cosine"]) == (1, 0)
+    assert metadata[f"{AZURE_MODEL}/lowest_cosine_points"] == {
+        str(noisy.id): pytest.approx(math.sqrt(50 / 52.25))
+    }
+
+
+def test_most_vectors_a_little_unlike_learns_is_an_error(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file.", skew=2.0),
+            learn_chunk("block-v1:b", "Second.", skew=1.5),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.ERROR
+    assert "most of those compared" in evaluation.description
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (metadata["below_min_cosine"], metadata["below_floor_cosine"]) == (2, 0)
 
 
 def test_a_chunk_without_a_vector_warns(tables, learn_qdrant):
