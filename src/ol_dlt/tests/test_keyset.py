@@ -122,6 +122,31 @@ def test_edxapp_specs_connect_over_pymysql_with_tls(
     assert spec.vault_mount_for("qa") == f"mariadb-{unit.split('/')[0]}"
 
 
+@pytest.mark.parametrize(
+    ("table", "schema"),
+    [
+        ("coursewarehistoryextended_studentmodulehistoryextended", "edxapp_csmh"),
+        # The connection's own database.
+        ("auth_user", None),
+    ],
+)
+def test_a_keyset_reads_the_table_s_own_schema(
+    table: str, schema: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """edxapp's csmh table lives in edxapp_csmh, beside the spec's edxapp."""
+    selected: dict[str, object] = {}
+
+    def _sql_table(**kwargs: object) -> object:
+        selected.update(kwargs)
+        return dlt.resource([], name=str(kwargs["table"]))
+
+    monkeypatch.setattr(keyset, "sql_table", _sql_table)
+    keyset.build_keyset_resource(
+        KEYSET_SPECS["mitx/mysql"], KeysetTable(name=table, key="id"), profile="dev"
+    )
+    assert (selected["schema"], selected["table"]) == (schema, table)
+
+
 def _sqlite_source(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> None:
     monkeypatch.setattr(
         database,

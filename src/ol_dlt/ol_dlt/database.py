@@ -183,6 +183,13 @@ class DatabaseSourceSpec:
         """Return the raw warehouse table name for ``table``."""
         return f"{self.raw_table_prefix}{table.name}"
 
+    def schema_for(self, table_name: str) -> str | None:
+        """Return the schema ``table_name`` is read from: its own, else the spec's."""
+        for table in self.tables:
+            if table.name == table_name and table.db_schema:
+                return table.db_schema
+        return self.db_schema
+
     def vault_mount_for(self, profile: str) -> str:
         """Return the Vault mount serving this database under ``profile``."""
         return self.vault_mount.format(profile=profile)
@@ -386,7 +393,7 @@ def build_table_resource(
     resource = sql_table(
         credentials=_credentials_for(spec, resolved_profile),
         table=table.name,
-        schema=table.db_schema or spec.db_schema,
+        schema=spec.schema_for(table.name),
         incremental=incremental,
         chunk_size=table.chunk_size,
         # pyarrow reflects source types faithfully instead of re-inferring them
