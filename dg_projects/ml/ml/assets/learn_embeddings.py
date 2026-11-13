@@ -3,9 +3,11 @@
 Content files are partitioned by (etl_source, course run), so a run whose files
 changed is chunked and embedded alone. learn_content_file_text stands for a run's
 files and is observed, not materialized: learn_content_file_text_sensor registers
-each run and reports a digest of its files' keys and checksums as the data
-version, and the chunk and vector assets run for the partitions whose version
-moved. Topics are one small table, rebuilt when the topic model is.
+each run and reports a digest of its files' keys, source paths, checksums, types
+and extensions, the run's resource and platform code, and
+CONTENT_FILE_DOC_KEY_VERSION as the data version, and the chunk and vector assets
+run for the partitions whose version moved. Topics are one small table, rebuilt
+when the topic model is.
 
 The vector assets send a model only the texts with no stored vector in the
 strategy model's vector space, so a re-run over unchanged chunks embeds nothing.
@@ -221,8 +223,9 @@ def content_file_text_versions(
             group_name=GROUP_NAME,
             description=(
                 "The content files of one MIT Learn course run, versioned by a "
-                "digest of their keys and checksums and the run's resource and "
-                "platform code."
+                "digest of their keys, source paths, checksums, types and "
+                "extensions, the run's resource and platform code, and "
+                "CONTENT_FILE_DOC_KEY_VERSION."
             ),
         )
     ],
