@@ -317,6 +317,10 @@ models:
       8601 string
     tests:
     - not_null
+  - name: useractivity_load_id
+    description: str, dlt load id (_dlt_load_id) of the raw row, the load's unix timestamp
+      as text. The incremental watermark; null on rows built before the column was
+      added
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
