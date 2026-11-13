@@ -40,8 +40,8 @@ sources:
   - name: tfact_enrollment
     description: >
       Enrollment fact. Grain: one row per enrollment. Read only where a view
-      needs the enrollment's program_fk; the rest read
-      afact_learner_courserun_progress.
+      needs the enrollment's program_fk, or every enrollment rather than one
+      per (user, course run); the rest read afact_learner_courserun_progress.
   - name: tfact_certificate
     description: >
       Certificate fact. Grain: one row per certificate. Read only for program

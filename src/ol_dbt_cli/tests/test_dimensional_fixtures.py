@@ -219,6 +219,14 @@ def test_contract_member_enrollment_lists_current_members_and_hides_unshared_one
     assert ("fixture-user-9", None, None) in listed
     assert len(listed) == 11
 
+    # afact_learner_courserun_progress keeps one enrollment per (user, run), so an older one
+    # under the contract can be missing from it. tfact_enrollment keeps every enrollment.
+    db.execute(
+        f"insert into ol_data_lake_local.{LOCAL_DIMENSIONAL_SCHEMA}.tfact_enrollment"  # noqa: S608
+        " (user_fk, courserun_fk, contract_fk) values ('fixture-user-9', 'fixture-run-1', 'fixture-contract')"
+    )
+    assert "fixture-user-9" not in {user for user, _, _ in rows()}
+
     db.execute(
         f"update ol_data_lake_local.{LOCAL_DIMENSIONAL_SCHEMA}.bridge_user_contract"  # noqa: S608
         " set membership_is_current = false where user_fk in ('fixture-user-1', 'fixture-user-9')"

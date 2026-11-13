@@ -40,9 +40,12 @@ with activity as (
     group by user_fk, courserun_fk
 ),
 
+-- Every enrollment, not afact_learner_courserun_progress: that keeps one per (user, run),
+-- so an older enrollment under this contract can be missing from it.
 contract_enrollments as (
     select distinct user_fk, contract_fk
-    from {{ source('dimensional', 'afact_learner_courserun_progress') }}
+    from {{ source('dimensional', 'tfact_enrollment') }}
+    where contract_fk is not null
 ),
 
 members as (
