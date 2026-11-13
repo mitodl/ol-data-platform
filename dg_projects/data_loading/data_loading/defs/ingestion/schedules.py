@@ -14,6 +14,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
     TRACKING_LOGS_DEPLOYMENTS,
+    google_ads_assets,
     mitxonline_app_assets,
     qa_first_app_database_assets,
     tracking_logs_table,
@@ -80,13 +81,13 @@ youtube_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
-# One @dlt_assets run loads every raw__google_ads__api__* table, so target the
-# group. Daily reports stop at yesterday (UTC); 10:00 UTC is after midnight in
+# One @dlt_assets run loads every raw__google_ads__api__* table, so target that
+# asset. Daily reports stop at yesterday (UTC); 10:00 UTC is after midnight in
 # the accounts' US time zones. Stopped by default; start google_ads_freshness_sensor
-# with it.
+# with it. The change history files never change, so they load by hand only.
 google_ads_ingest_schedule = dg.ScheduleDefinition(
     name="google_ads_ingest_daily_schedule",
-    target=dg.AssetSelection.groups("google_ads"),
+    target=dg.AssetSelection.assets(google_ads_assets),
     cron_schedule="0 10 * * *",
     execution_timezone="Etc/UTC",
     default_status=dg.DefaultScheduleStatus.STOPPED,
