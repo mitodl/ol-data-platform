@@ -5,6 +5,7 @@
     unique_key=['user_username', 'useractivity_context_object', 'useractivity_event_source',
     'useractivity_event_type', 'useractivity_event_object', 'useractivity_timestamp'],
     incremental_strategy='delete+insert',
+    on_schema_change='append_new_columns',
     views_enabled=false
 ) }}
 
@@ -19,7 +20,7 @@ with source as (
         and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
-        and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
+        and {{ tracking_log_load_watermark() }} --noqa
 
         -- load the API enrollments from before this model kept them, without a full refresh.
         -- a separate scan with a literal bound is fast; an "or" in the filter above made each run 4x slower
@@ -66,6 +67,7 @@ with source as (
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('time', "'(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp -- noqa
+        , _dlt_load_id as useractivity_load_id
     from most_recent_source
 )
 
