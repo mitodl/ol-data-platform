@@ -6,10 +6,7 @@ with it builds and holds wrong values. Trino and DuckDB concatenate. Strings go
 through ``dbt.concat``, which renders ``a || b`` on Trino and DuckDB and
 ``concat(a, b)`` on StarRocks.
 
-The check reads source files, not compiled SQL, because PR CI compiles for
-DuckDB only and what matters is what StarRocks would be sent. A macro body
-written for another engine is exempt: ``trino__x`` and ``duckdb__x`` always,
-and ``default__x`` when the project also defines ``starrocks__x``.
+What is scanned and what is exempt is described in ``ol_dbt_cli.lib.operators``.
 """
 
 from __future__ import annotations
@@ -17,21 +14,15 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-import yaml
-
-from ol_dbt_cli.lib.sql_source import other_engine_spans, sql_code, starrocks_macro_names, yaml_sql_strings
-from ol_dbt_cli.lib.validation import Severity, ValidationReport
+from ol_dbt_cli.lib.operators import check_operator
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
+
+    from ol_dbt_cli.lib.validation import ValidationReport
 
 PIPE_CONCAT_CHECK = "pipe_concat"
 
-# Directories of the dbt project whose SQL reaches the warehouse. Seeds carry
-# no SQL files, but their YAML can hold test expressions.
-_SQL_DIRS = ("models", "macros", "tests", "snapshots", "analyses")
-_YAML_DIRS = (*_SQL_DIRS, "seeds")
 _DETAIL = (
     "StarRocks evaluates || as a logical OR and returns NULL or 1 without an error. "
     "Concatenate strings with {{ dbt.concat([a, b]) }}; append to an array with a dispatched macro."
@@ -40,47 +31,10 @@ _DETAIL = (
 _PIPES = re.compile(r"\|\|")
 
 
-def _pipe_offsets(sql: str) -> Iterator[int]:
-    return (match.start() for match in _PIPES.finditer(sql_code(sql)))
-
-
 def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
     """Report every ``||`` in the project's SQL and YAML that StarRocks would evaluate.
 
     :param dbt_dir: The dbt project directory.
     :param report: The report to add an ERROR to for each occurrence.
     """
-    sql_files = sorted(path for name in _SQL_DIRS for path in (dbt_dir / name).rglob("*.sql"))
-    yaml_files = [
-        dbt_dir / "dbt_project.yml",
-        *sorted(
-            path for name in _YAML_DIRS for pattern in ("*.yml", "*.yaml") for path in (dbt_dir / name).rglob(pattern)
-        ),
-    ]
-    sources = {path: path.read_text() for path in sql_files}
-    starrocks_macros = starrocks_macro_names(sources.values())
-
-    for path, source in sources.items():
-        exempt = other_engine_spans(source, starrocks_macros)
-        for offset in _pipe_offsets(source):
-            if any(start <= offset < end for start, end in exempt):
-                continue
-            line = source.count("\n", 0, offset) + 1
-            report.add(
-                PIPE_CONCAT_CHECK,
-                Severity.ERROR,
-                path.stem,
-                f"{path.relative_to(dbt_dir).as_posix()}:{line} uses the || operator",
-                _DETAIL,
-            )
-
-    for path in yaml_files:
-        for key_path, value in yaml_sql_strings(yaml.safe_load(path.read_text())):
-            if next(_pipe_offsets(value), None) is not None:
-                report.add(
-                    PIPE_CONCAT_CHECK,
-                    Severity.ERROR,
-                    path.stem,
-                    f"{path.relative_to(dbt_dir).as_posix()} uses the || operator in {key_path}: {value.strip()}",
-                    _DETAIL,
-                )
+    check_operator(dbt_dir, report, check=PIPE_CONCAT_CHECK, pattern=_PIPES, operator="the || operator", detail=_DETAIL)

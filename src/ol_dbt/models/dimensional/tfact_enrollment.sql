@@ -578,17 +578,17 @@ with mitxonline_enrollments as (
         )
         or ewf.enrollment_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sfk.stored_user_fk is distinct from ewf.user_fk
+        or {{ is_distinct_from('sfk.stored_user_fk', 'ewf.user_fk') }}
         -- course run re-resolved: re-select rows whose resolved courserun_fk no longer matches
-        or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
+        or {{ is_distinct_from('sfk.stored_courserun_fk', 'ewf.courserun_fk') }}
         -- contract added or re-resolved, including every B2B row on the run that adds the column
-        or sfk.stored_contract_fk is distinct from ewf.contract_fk
+        or {{ is_distinct_from('sfk.stored_contract_fk', 'ewf.contract_fk') }}
         -- unenrolled, reactivated, or mode/status changed with no timestamp to show it
-        or sfk.stored_is_active is distinct from ewf.enrollment_is_active
-        or sfk.stored_mode is distinct from ewf.enrollment_mode
-        or sfk.stored_status is distinct from ewf.enrollment_status
+        or {{ is_distinct_from('sfk.stored_is_active', 'ewf.enrollment_is_active') }}
+        or {{ is_distinct_from('sfk.stored_mode', 'ewf.enrollment_mode') }}
+        or {{ is_distinct_from('sfk.stored_status', 'ewf.enrollment_status') }}
         -- is_verified added or its rule changed, including every row on the run that adds the column
-        or sfk.stored_is_verified is distinct from ewf.is_verified
+        or {{ is_distinct_from('sfk.stored_is_verified', 'ewf.is_verified') }}
         or sfk.stored_has_copies
     )
     {% endif %}

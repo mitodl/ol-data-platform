@@ -28,7 +28,11 @@ the Trino body is `default__`. A few (e.g. `json_query_string`, `date_parse`,
 
 Model and snapshot SQL in `models/` and `snapshots/` has no direct calls left to
 `json_query`, `from_iso8601_timestamp`, `array_join`, `regexp_like`, `element_at` or
-`cardinality`. Every use goes through a macro.
+`cardinality`, and no `is distinct from` (StarRocks has no such syntax; use
+`is_distinct_from(left, right)`, which renders `not (left <=> right)` there). Every use
+goes through a macro. DuckDB, which PR CI compiles and unit tests on, accepts
+`is [not] distinct from`, so the `distinct_from` check of `ol-dbt validate` (run in dbt
+PR CI) fails on it instead.
 
 ## Ascending sort keys say `nulls last`
 
