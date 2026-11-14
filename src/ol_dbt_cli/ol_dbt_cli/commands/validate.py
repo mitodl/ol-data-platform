@@ -44,6 +44,7 @@ from ol_dbt_cli.lib.dimensional_layering import (
     load_baseline,
     write_baseline,
 )
+from ol_dbt_cli.lib.distinct_from import DISTINCT_FROM_CHECK, check_distinct_from
 from ol_dbt_cli.lib.exposure_contracts import (
     DEFAULT_EXPOSURES_DIR,
     EXPOSURE_CONTRACT_CHECK,
@@ -1032,7 +1033,7 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "null_ordering, cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
+                "null_ordering, distinct_from, cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
             ),
         ),
     ] = None,
@@ -1044,8 +1045,8 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, null_ordering, cohort_policy, raw_json_calls, "
-                "exposure_contract, glossary_terms. "
+                "data_contract, metric_registry, pipe_concat, null_ordering, distinct_from, cohort_policy, "
+                "raw_json_calls, exposure_contract, glossary_terms. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1219,6 +1220,8 @@ def validate(
     18. null_ordering        — every ascending sort key in a window or an ordered aggregate says
                                NULLS FIRST or NULLS LAST, since StarRocks sorts NULLs first
                                and Trino last (ERROR)
+    19. distinct_from        — no model, macro, test or YAML expression uses IS [NOT] DISTINCT
+                               FROM, which StarRocks rejects as a syntax error (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1289,6 +1292,7 @@ def validate(
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
         NULL_ORDERING_CHECK,
+        DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
@@ -1303,6 +1307,7 @@ def validate(
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
         NULL_ORDERING_CHECK,
+        DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
@@ -1641,6 +1646,10 @@ def validate(
     # Global like pipe_concat: a sort key is as wrong in a macro as in a model.
     if NULL_ORDERING_CHECK not in skipped:
         check_null_ordering(dbt_dir, report)
+
+    # Global like pipe_concat: the operator is as wrong in a macro as in a model.
+    if DISTINCT_FROM_CHECK not in skipped:
+        check_distinct_from(dbt_dir, report)
 
     # Global because the declarations live in YAML, which --changed-only does not select.
     if COHORT_POLICY_CHECK not in skipped:
