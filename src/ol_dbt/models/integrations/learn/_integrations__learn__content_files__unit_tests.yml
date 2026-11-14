@@ -2,13 +2,13 @@
 unit_tests:
 - name: test_integrations__learn__content_files_applies_learns_rules
   description: >
-    Of a run's files, Learn loads those of a run its export's exclusions check
-    covered, less the excluded ones, of its text file types, outside a draft
-    directory and the asset manifests, and with text or a failed extraction. Of
-    files that share a key it keeps one: a file with text before a failed one, a
-    file that is not XML before XML, then the first path. The row takes the
-    latest release date of every file of the key, empty or not. Its URL is
-    get_url_from_module_id's on the source's LMS.
+    Of an MITx Online or xPRO run's files, Learn loads those of a run its
+    export's exclusions check covered, less the excluded ones, of its text file
+    types, outside a draft directory and the asset manifests, and with text or a
+    failed extraction. Of files that share a key it keeps one: a file with text
+    before a failed one, a file that is not XML before XML, then the first path.
+    The row takes the latest release date of every file of the key, empty or
+    not. Its URL is get_url_from_module_id's on the source's LMS.
   model: integrations__learn__content_files
   given:
   - input: ref('int__openedx__content_files')
@@ -30,6 +30,10 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/Dash
         2010.pdf, file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf",
       content: null, extraction_status: failed, is_exclusion_checked: true, is_excluded: false}
+    # Dropped: residential MITx, which is not a Learn source.
+    - {courserun_readable_id: "course-v1:MITx+Z+R1", source_system: mitx, source_path: course/static/notes.pdf,
+      file_extension: .pdf, edx_module_id: "asset-v1:MITx+Z+R1+type@asset+block@notes.pdf",
+      content: Notes, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
     # Dropped: excluded, not a Learn text type, an asset manifest, a draft, no text.
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/answer_key.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@answer_key.pdf",

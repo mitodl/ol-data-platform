@@ -1,9 +1,9 @@
 {#
-  One row per file of an MITx Online or xPRO course run's export that has text
-  to read: every OLX block file from course_xml_blocks, and every document and
-  transcript the openedx location extracts from the course's static files. A
-  file whose extraction failed or found no text keeps its row, with
-  extraction_status saying so.
+  One row per file of an Open edX course run's export (MITx Online, xPRO and
+  residential MITx) that has text to read: every OLX block file from
+  course_xml_blocks, and every document and transcript the openedx location
+  extracts from the course's static files. A file whose extraction failed or
+  found no text keeps its row, with extraction_status saying so.
 
   Each file carries what MIT Learn's ContentFile needs, derived the way Learn's
   process_olx_path does (learning_resources/etl/utils.py): its key
@@ -34,17 +34,14 @@
 
 with blocks as (
     select * from {{ ref('stg__openedx__s3__course_xml_blocks') }}
-    where coursestructure_xml_source_system in ('mitxonline', 'xpro')
 )
 
 , documents as (
     select * from {{ ref('stg__openedx__s3__course_document_text') }}
-    where content_file_source_system in ('mitxonline', 'xpro')
 )
 
 , transcripts as (
     select * from {{ ref('stg__openedx__s3__course_transcript_text') }}
-    where content_file_source_system in ('mitxonline', 'xpro')
 )
 
 , block_files as (

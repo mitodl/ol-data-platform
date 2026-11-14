@@ -66,7 +66,9 @@
 with olx_documents as (
     select * from {{ ref('int__openedx__content_files') }}
     where
-        is_exclusion_checked
+        -- MIT Learn's Open edX sources; residential MITx (mitx) is not one
+        source_system in ('mitxonline', 'xpro')
+        and is_exclusion_checked
         and not is_excluded
         and file_extension in ('{{ valid_text_file_types | join("', '") }}')
         and source_path not in ('{{ non_content_olx_files | join("', '") }}')
