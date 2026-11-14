@@ -34,6 +34,11 @@
     -#}
     {%- set reprocess_from = var('tracking_log_reprocess_from', none) -%}
     {%- if reprocess_from is not none -%}
+        {%- if not modules.re.fullmatch('[0-9]{4}-[0-9]{2}-[0-9]{2}', reprocess_from | string) -%}
+            {{ exceptions.raise_compiler_error(
+                "tracking_log_reprocess_from must be a YYYY-MM-DD date, got: " ~ reprocess_from
+            ) }}
+        {%- endif -%}
         substr({{ adapter.quote('time') }}, 1, 10) >= '{{ reprocess_from }}'
     {%- else -%}
         {%- set stored_load_id = none -%}
