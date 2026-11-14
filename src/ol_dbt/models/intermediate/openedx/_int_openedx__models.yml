@@ -143,12 +143,13 @@ unit_tests:
       coursestructure_xml_block_display_name: Test Course, coursestructure_xml_block_path: course/course/R1.xml,
       coursestructure_xml_raw_xml: '<course display_name="Test Course"><chapter url_name="week_1"
         /></course>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
-    # A residential MITx file of the same run id is its own source's: the xpro
-    # run's exclusion rows don't cover it.
+    # A residential MITx file with the same run id, path and key as an xpro one
+    # is its own source's: it neither shares the xpro file's key nor takes its
+    # exclusion row.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
-      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
-      coursestructure_xml_block_display_name: Hidden, coursestructure_xml_block_path: course/chapter/other.xml,
-      coursestructure_xml_raw_xml: '<chapter display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: problem,
+      coursestructure_xml_block_display_name: Hidden, coursestructure_xml_block_path: course/problem/staff_check.xml,
+      coursestructure_xml_raw_xml: '<problem display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
   - input: ref('stg__openedx__s3__course_document_text')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -247,8 +248,8 @@ unit_tests:
         \ clip-en.srt", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt",
       shares_edx_module_id: false, title: "Intro Video", is_exclusion_checked: true,
       is_excluded: false, exclusion_reason: null}
-    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/chapter/other.xml",
-      edx_module_id: "block-v1:X+Y+R1+type@chapter+block@other", shares_edx_module_id: false,
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/problem/staff_check.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@problem+block@staff_check", shares_edx_module_id: false,
       title: "Hidden", is_exclusion_checked: false, is_excluded: null, exclusion_reason: null}
 
 - name: test_int__openedx__content_files_xml_text_as_tika_reads_it

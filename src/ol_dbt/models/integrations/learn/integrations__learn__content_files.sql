@@ -23,6 +23,8 @@
   with its Learn key, title and exclusion flags. Learn's own rules for which of
   them become ContentFiles are applied here, as Learn's process_olx_path and
   documents_from_olx apply them (learning_resources/etl/utils.py):
+  - only Learn's Open edX sources, MITx Online and xPRO. The intermediate also
+    has residential MITx (mitx), which is not a Learn ETL source;
   - only runs whose export has been through the exclusions check, less the files
     excluded_olx_paths drops. Without the check a run's files would include ones
     Learn hides, and a scoped pull would publish them;
@@ -66,7 +68,6 @@
 with olx_documents as (
     select * from {{ ref('int__openedx__content_files') }}
     where
-        -- MIT Learn's Open edX sources; residential MITx (mitx) is not one
         source_system in ('mitxonline', 'xpro')
         and is_exclusion_checked
         and not is_excluded
