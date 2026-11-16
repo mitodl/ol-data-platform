@@ -248,7 +248,12 @@ def _orphan_file_pass(
     named = ", ".join(databases)
     examined = [t for result in results for t in result.examined]
     refused = [t for result in results for t in result.refused]
-    failures = [f for result in results for f in result.failures]
+    # The pass names only the table, so add the database it was in.
+    failures = [
+        f"{result.database}.{failure}"
+        for result in results
+        for failure in result.failures
+    ]
     unreadable = sorted({d for result in results for d in result.unreadable_databases})
     attempted = sum(len(result.tables) + len(result.failures) for result in results)
     delete_errors = [error for t in examined for error in t.delete_errors]
@@ -284,7 +289,7 @@ def _orphan_file_pass(
         "tables_refused": MetadataValue.int(len(refused)),
         "refused_details": MetadataValue.json(
             [
-                f"{table.table}: {table.refused}"
+                f"{table.database}.{table.table}: {table.refused}"
                 for table in refused[:METADATA_DETAIL_ROWS]
             ]
         ),

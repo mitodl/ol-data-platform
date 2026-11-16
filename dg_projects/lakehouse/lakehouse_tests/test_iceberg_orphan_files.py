@@ -5,6 +5,7 @@ Finding and deleting orphan files is tested in
 left here is the Dagster side: where deletion may run, and what a run reports.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -68,14 +69,16 @@ def _result(**overrides: Any) -> DatabaseOrphanFiles:
 
 
 def _returning(
-    monkeypatch: pytest.MonkeyPatch, result: DatabaseOrphanFiles
+    monkeypatch: pytest.MonkeyPatch,
+    result: DatabaseOrphanFiles | Callable[[str], DatabaseOrphanFiles],
 ) -> list[dict[str, Any]]:
+    """Fake the pass with one result, or one per database from a callable."""
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(module, "_aws_clients", lambda: ("glue", "s3"))
 
     def fake_pass(_glue: str, _catalog_factory: Any, _store: Any, **kwargs: Any):
         calls.append(kwargs)
-        return result
+        return result(kwargs["database"]) if callable(result) else result
 
     monkeypatch.setattr(module, "remove_database_orphan_files", fake_pass)
     return calls
@@ -201,7 +204,7 @@ def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     ]
     assert metadata["tables_refused"] == 1
     assert metadata["refused_details"] == [
-        "raw__shared: directory overlaps with mart.other"
+        f"{DATABASE}.raw__shared: directory overlaps with mart.other"
     ]
     assert metadata["unreadable_glue_databases"] == ["ol_warehouse_production_mart"]
 
@@ -247,7 +250,7 @@ def test_a_few_failed_tables_are_reported_and_do_not_fail_the_run(
     metadata = _metadata(IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS))
 
     assert metadata["failure_count"] == 1
-    assert metadata["failure_details"] == ["ghost: NoSuchTable"]
+    assert metadata["failure_details"] == [f"{DATABASE}.ghost: NoSuchTable"]
 
 
 def test_failures_over_the_threshold_fail_the_run(monkeypatch: pytest.MonkeyPatch):
@@ -335,21 +338,15 @@ def _by_database(
     monkeypatch: pytest.MonkeyPatch, results: dict[str, DatabaseOrphanFiles]
 ) -> list[dict[str, Any]]:
     """Fake the pass per database; a database not in ``results`` has no tables."""
-    calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(module, "_aws_clients", lambda: ("glue", "s3"))
-
-    def fake_pass(_glue: str, _catalog_factory: Any, _store: Any, **kwargs: Any):
-        calls.append(kwargs)
-        database = kwargs["database"]
-        return results.get(
+    return _returning(
+        monkeypatch,
+        lambda database: results.get(
             database,
             DatabaseOrphanFiles(
                 database=database, tables=[], failures=[], unreadable_databases=[]
             ),
-        )
-
-    monkeypatch.setattr(module, "remove_database_orphan_files", fake_pass)
-    return calls
+        ),
+    )
 
 
 def _dbt_table(database: str, table: str, eligible_bytes: int) -> TableOrphanFiles:
@@ -455,7 +452,7 @@ def test_dbt_layer_pass_totals_every_database(
     assert metadata["tables_examined"] == 21
     assert metadata["eligible_bytes"] == 7_000
     assert metadata["failure_count"] == 1
-    assert metadata["failure_details"] == ["int__c: boom"]
+    assert metadata["failure_details"] == [f"{intermediate}.int__c: boom"]
     details = metadata["orphan_details"]
     assert (details[0]["database"], details[0]["table"]) == (intermediate, "int__b")
     assert {row["database"] for row in details[1:]} == {staging}
