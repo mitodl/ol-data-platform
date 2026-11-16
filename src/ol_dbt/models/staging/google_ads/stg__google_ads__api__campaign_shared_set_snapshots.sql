@@ -18,5 +18,4 @@ select
     , shared_set__type as shared_set_type
     , campaign_shared_set__status as campaign_shared_set_status
     , retrieved_at as campaign_shared_set_snapshot_retrieved_at
-    , _dlt_load_id as campaign_shared_set_snapshot_dlt_load_id
 from current_source

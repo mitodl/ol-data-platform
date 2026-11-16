@@ -25,8 +25,6 @@ models:
     description: str, the account's time zone; report dates are in it
   - name: account_retrieved_at
     description: timestamp, when the load read the account list
-  - name: account_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
 
 - name: stg__google_ads__api__keyword_daily
   description: Keyword Search performance per day and ad network, from the latest
@@ -80,8 +78,6 @@ models:
     description: double, share of eligible impressions received; null when unset
   - name: keyword_daily_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
-  - name: keyword_daily_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -142,8 +138,6 @@ models:
     description: double, conversions of every action
   - name: keyword_conversion_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
-  - name: keyword_conversion_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -193,8 +187,6 @@ models:
     description: double, share of eligible impressions lost to ad rank
   - name: campaign_daily_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
-  - name: campaign_daily_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -237,8 +229,6 @@ models:
     description: str, JSON of the changed resource after the change
   - name: change_event_retrieved_at
     description: timestamp, when the load last read the event
-  - name: change_event_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -283,8 +273,6 @@ models:
     description: bigint, campaigns sharing the budget; over 1 is a shared budget
   - name: campaign_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
-  - name: campaign_snapshot_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -329,8 +317,6 @@ models:
     description: boolean, true for a negative keyword
   - name: keyword_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
-  - name: keyword_snapshot_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -369,8 +355,6 @@ models:
     description: str, the targeted location for a LOCATION criterion
   - name: campaign_criterion_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
-  - name: campaign_criterion_snapshot_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -407,8 +391,6 @@ models:
     description: str, link status
   - name: campaign_shared_set_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
-  - name: campaign_shared_set_snapshot_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -443,8 +425,6 @@ models:
     description: str, match type
   - name: shared_criterion_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
-  - name: shared_criterion_snapshot_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -477,8 +457,6 @@ models:
     description: timestamp, when the fetch ran
     tests:
     - not_null
-  - name: fetch_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -515,8 +493,6 @@ models:
       account access changes name people by email
   - name: change_source_file
     description: str, the landing-zone file the row came from
-  - name: change_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -550,8 +526,6 @@ models:
     description: str, JSON array of the change's detail lines
   - name: change_source_file
     description: str, the landing-zone file the row came from
-  - name: change_dlt_load_id
-    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:

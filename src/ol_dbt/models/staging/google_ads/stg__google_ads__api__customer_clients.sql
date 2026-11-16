@@ -11,5 +11,4 @@ select
     , customer_client__currency_code as account_currency_code
     , customer_client__time_zone as account_time_zone
     , retrieved_at as account_retrieved_at
-    , _dlt_load_id as account_dlt_load_id
 from source

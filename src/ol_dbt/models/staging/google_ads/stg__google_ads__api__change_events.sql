@@ -23,5 +23,4 @@ select
     , change_event__old_resource as change_old_resource
     , change_event__new_resource as change_new_resource
     , retrieved_at as change_event_retrieved_at
-    , _dlt_load_id as change_event_dlt_load_id
 from source

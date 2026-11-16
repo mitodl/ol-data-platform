@@ -26,5 +26,4 @@ select
     , metrics__conversions as conversions
     , metrics__all_conversions as all_conversions
     , retrieved_at as keyword_conversion_retrieved_at
-    , _dlt_load_id as keyword_conversion_dlt_load_id
 from current_source

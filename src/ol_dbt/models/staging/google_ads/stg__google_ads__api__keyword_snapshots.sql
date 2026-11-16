@@ -22,5 +22,4 @@ select
     , ad_group_criterion__status as keyword_status
     , ad_group_criterion__negative as keyword_is_negative
     , retrieved_at as keyword_snapshot_retrieved_at
-    , _dlt_load_id as keyword_snapshot_dlt_load_id
 from current_source

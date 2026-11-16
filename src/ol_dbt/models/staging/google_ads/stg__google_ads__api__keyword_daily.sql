@@ -29,5 +29,4 @@ select
     , {{ google_ads_micros('metrics__cost_micros') }} as cost
     , metrics__search_impression_share as search_impression_share
     , retrieved_at as keyword_daily_retrieved_at
-    , _dlt_load_id as keyword_daily_dlt_load_id
 from current_source

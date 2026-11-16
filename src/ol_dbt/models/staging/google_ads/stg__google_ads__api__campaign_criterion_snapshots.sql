@@ -19,5 +19,4 @@ select
     , campaign_criterion__keyword__match_type as keyword_match_type
     , campaign_criterion__location__geo_target_constant as location_geo_target_constant
     , retrieved_at as campaign_criterion_snapshot_retrieved_at
-    , _dlt_load_id as campaign_criterion_snapshot_dlt_load_id
 from current_source

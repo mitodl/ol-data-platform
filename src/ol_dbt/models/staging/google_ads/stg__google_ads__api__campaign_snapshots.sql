@@ -30,5 +30,4 @@ select
     , {{ google_ads_micros('campaign_budget__amount_micros') }} as campaign_budget_amount
     , campaign_budget__reference_count as campaign_budget_reference_count
     , retrieved_at as campaign_snapshot_retrieved_at
-    , _dlt_load_id as campaign_snapshot_dlt_load_id
 from current_source

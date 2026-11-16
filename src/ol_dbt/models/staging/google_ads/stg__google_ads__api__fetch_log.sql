@@ -8,5 +8,4 @@ select
     , cast(window_start as date) as fetch_window_start
     , cast(window_end as date) as fetch_window_end
     , retrieved_at as fetch_retrieved_at
-    , _dlt_load_id as fetch_dlt_load_id
 from source

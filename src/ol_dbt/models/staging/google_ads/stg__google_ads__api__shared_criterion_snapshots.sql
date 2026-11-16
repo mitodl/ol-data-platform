@@ -17,5 +17,4 @@ select
     , shared_criterion__keyword__text as keyword_text
     , shared_criterion__keyword__match_type as keyword_match_type
     , retrieved_at as shared_criterion_snapshot_retrieved_at
-    , _dlt_load_id as shared_criterion_snapshot_dlt_load_id
 from current_source
