@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract x course_run. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x contract x course_run. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- Learners are attributed to the contract they enrolled under
 -- (afact_learner_courserun_progress.contract_fk), not to every contract that offers the run.
 -- active_learners and active_rate_pct are the old names for actively_enrolled_learners and

@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x contract. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- A seat is a learner with a course enrollment made under the contract
 -- (afact_learner_courserun_progress.contract_fk, carried from tfact_enrollment), and
 -- certified_learners counts those learners who hold the run's certificate (is_certified),

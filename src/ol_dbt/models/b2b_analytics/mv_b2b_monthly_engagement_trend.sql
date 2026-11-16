@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x year_month. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x year_month. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- Rows come from the dimensional facts through the contract each learner enrolled under
 -- (see macros/b2b_engagement.sql), the same learners and counters the learner-records
 -- views publish. Before this it read organization_administration_report, which keys
