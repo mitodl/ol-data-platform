@@ -6,8 +6,7 @@
 -- record always has a higher id than any previously hard-deleted enrollment.
 with
     source as (
-        select *
-        from {{ source("ol_warehouse_raw_data", "raw__mitxonline__app__postgres__courses_courserunenrollment") }}
+        {{ live_raw_rows("raw__mitxonline__app__postgres__courses_courserunenrollment") }}
     )
 
     {{ deduplicate_raw_table(order_by="id", partition_columns="user_id, run_id") }},

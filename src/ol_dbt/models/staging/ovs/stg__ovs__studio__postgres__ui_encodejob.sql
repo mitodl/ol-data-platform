@@ -1,4 +1,12 @@
-with source as (
+with elastictranscoder_encodejob as (
+    {{ live_raw_rows('raw__ovs__postgres__dj_elastictranscoder_encodejob') }}
+)
+
+, ui_encodejob as (
+    {{ live_raw_rows('raw__ovs__postgres__ui_encodejob') }}
+)
+
+, source as (
 
     select
         id
@@ -10,7 +18,7 @@ with source as (
         , last_modified
         , cast({{ json_query_string("replace(message, '''', '\"')", "'$.Output.Duration'") }} as decimal(38, 4))
             as video_duration
-    from {{ source('ol_warehouse_raw_data', 'raw__ovs__postgres__dj_elastictranscoder_encodejob') }}
+    from elastictranscoder_encodejob
 
     union all
 
@@ -25,7 +33,7 @@ with source as (
         , {{ json_strict_value(
             'message', "'$.outputGroupDetails[0].outputDetails[0].durationInMs'", 'decimal(38, 4)'
         ) }} / 1000.0 as video_duration
-    from {{ source('ol_warehouse_raw_data', 'raw__ovs__postgres__ui_encodejob') }}
+    from ui_encodejob
 
 )
 

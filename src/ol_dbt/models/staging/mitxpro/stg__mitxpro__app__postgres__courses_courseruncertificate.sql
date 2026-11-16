@@ -1,7 +1,7 @@
 -- MIT xPro Users Course Certificate Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courseruncertificate') }}
+    {{ live_raw_rows('raw__xpro__app__postgres__courses_courseruncertificate') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__xpro__app__postgres__courses_courseruncertificate', partition_columns='id') }}

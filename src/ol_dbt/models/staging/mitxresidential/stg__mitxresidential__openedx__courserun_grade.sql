@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__mysql__grades_persistentcoursegrade') }}
+    {{ live_raw_rows('raw__mitx__openedx__mysql__grades_persistentcoursegrade') }}
 )
 
 , cleaned as (

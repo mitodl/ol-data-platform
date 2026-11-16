@@ -1,6 +1,6 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__ovs__postgres__ui_video') }}
+    {{ live_raw_rows('raw__ovs__postgres__ui_video') }}
 
 )
 

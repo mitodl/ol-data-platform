@@ -2,8 +2,8 @@
     Return a predicate over `relation` (the raw table) that drops the records
     the source has deleted, or none when the table needs no filter or cannot
     be filtered now. raw_history_snapshot applies it so that a deleted record
-    leaves the snapshot's input and gets a dbt_is_deleted row; staging is meant
-    to apply the same predicate to its keyset tables.
+    leaves the snapshot's input and gets a dbt_is_deleted row, and staging
+    applies it through live_raw_rows, so the two agree on what is deleted.
 
     Which tables, and how, comes from raw_delete_filter_map(), generated from
     the ingestion inventory by `ol-dbt inventory history --write`
@@ -31,14 +31,17 @@
     `latest_load`: a dlt merge feed that re-reads the whole source each load
     keeps rows the source dropped, so only the newest load's rows are kept.
 
-    The checks that query the keyset run only for `snapshot` and `build`.
+    The checks that query the keyset run for `snapshot`, `build` and `run`, the
+    commands that write a filtered table, so an empty keyset raises before a
+    staging model is written empty.
 -#}
 {% macro raw_delete_filter(raw_table, relation) %}
     {%- set spec = raw_delete_filter_map().get(raw_table) -%}
     {%- if spec is none or not execute -%}
         {{ return(none) }}
     {%- endif -%}
-    {%- set loader_time = spec['loader_time_column'] -%}
+    {#- A lake another loader fills (dlt in QA for an Airbyte unit) stamps its own column. -#}
+    {%- set loader_time = spec.get('lake_loader_time_columns', {}).get(raw_data_lake(), spec['loader_time_column']) -%}
     {%- if spec['kind'] == 'latest_load' -%}
         {{ return(loader_time ~ " = (select max(" ~ loader_time ~ ") from " ~ relation ~ ")") }}
     {%- endif -%}
@@ -52,7 +55,7 @@
         {{ log("raw_delete_filter " ~ raw_table ~ ": no keyset table yet, so deletes are not filtered", info=true) }}
         {{ return(none) }}
     {%- endif -%}
-    {%- if flags.WHICH in ['snapshot', 'build'] -%}
+    {%- if flags.WHICH in ['snapshot', 'build', 'run'] -%}
         {%- set check_sql -%}
             select
                 count(*)
@@ -80,12 +83,32 @@
     {%- endif -%}
     {%- set loaded_at = dlt_load_id_timestamp(loader_time) if loader_time == '_dlt_load_id' else loader_time -%}
     {%- set trusted_after = dbt.dateadd(
-        'minute', -var('raw_keyset_trust_margin_minutes', 60), 'max(_keyset_read_started_at)'
+        'minute', -var('raw_keyset_trust_margin_minutes', 60), 'max(live_keys._keyset_read_started_at)'
     ) -%}
+    {#- Qualified, so a keyset without the key column fails rather than the
+        subquery binding the raw table's column and keeping every row. -#}
     {{ return(
-        "(" ~ spec['key'] ~ " in (select " ~ spec['key'] ~ " from " ~ keyset ~ ")"
-        ~ " or " ~ loaded_at ~ " > (select " ~ trusted_after ~ " from " ~ keyset ~ "))"
+        "(" ~ spec['key'] ~ " in (select live_keys." ~ spec['key'] ~ " from " ~ keyset ~ " as live_keys)"
+        ~ " or " ~ loaded_at ~ " > (select " ~ trusted_after ~ " from " ~ keyset ~ " as live_keys))"
     ) }}
+{% endmacro %}
+
+
+{#-
+    Select every column of a raw table, less the records raw_delete_filter
+    says the source deleted. A staging model reads a table in
+    raw_delete_filter_map() through this rather than through source(), and
+    `ol-dbt validate`'s raw_delete_filter check refuses one that doesn't, so
+    staging serves the same records the raw history snapshot keeps open.
+    `relation` defaults to the table's ol_warehouse_raw_data source.
+-#}
+{% macro live_raw_rows(raw_table, relation=none) %}
+    {%- set relation = relation if relation is not none else source('ol_warehouse_raw_data', raw_table) -%}
+    {%- set delete_filter = raw_delete_filter(raw_table, relation) -%}
+    select * from {{ relation }}
+    {%- if delete_filter %}
+    where {{ delete_filter }}
+    {%- endif %}
 {% endmacro %}
 
 

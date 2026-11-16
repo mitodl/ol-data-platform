@@ -211,6 +211,24 @@ class TestSettings:
             24,
         )
 
+    def test_keyset_filter_has_no_lake_column_when_every_lake_uses_the_production_loader(self) -> None:
+        spec = _by_name([_unit(DB_UNIT)])["auth_user"].delete_filter
+        assert spec is not None
+        assert spec.lake_loader_time_columns == ()
+
+    def test_keyset_filter_names_the_column_of_a_lake_dlt_loads(self) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_app", "write_disposition": "merge"}
+        units = [_unit(data)]
+        spec = _by_name(units)["auth_user"].delete_filter
+        assert spec is not None
+        assert spec.lake_loader_time_columns == (("qa", "_dlt_load_id"),)
+        assert (
+            "'raw__mitxonline__openedx__mysql__auth_user': {'kind': 'keyset', "
+            "'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 24, "
+            "'lake_loader_time_columns': {'qa': '_dlt_load_id'}},"
+        ) in render_history(units)[DELETE_FILTER_MACRO_PATH]
+
     def test_full_read_needs_no_filter(self) -> None:
         assert _by_name([_unit(DB_UNIT)])["course_overviews"].delete_filter is None
 

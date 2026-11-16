@@ -1,8 +1,7 @@
 -- DEDP proctor exam grades from MicroMasters DB
 
 with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__grades_proctoredexamgrade') }}
+    {{ live_raw_rows('raw__micromasters__app__postgres__grades_proctoredexamgrade') }}
 )
 
 , cleaned as (

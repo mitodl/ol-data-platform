@@ -1,7 +1,7 @@
 -- MITx Online's record of which course run an order pays for
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__courses_paidcourserun') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__courses_paidcourserun') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__courses_paidcourserun', partition_columns='id') }}

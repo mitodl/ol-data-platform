@@ -1,7 +1,7 @@
 -- MIT xPro Users Course Grades Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courserungrade') }}
+    {{ live_raw_rows('raw__xpro__app__postgres__courses_courserungrade') }}
 )
 
 , cleaned as (
