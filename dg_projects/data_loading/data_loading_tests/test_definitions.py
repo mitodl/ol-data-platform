@@ -155,6 +155,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__youtube__api__videos",
         "ol_warehouse_raw_data/raw__google_ads__api__keyword_daily",
         "ol_warehouse_raw_data/raw__google_ads__api__change_events",
+        "ol_warehouse_raw_data/raw__google_ads__s3__change_history_report",
+        "ol_warehouse_raw_data/raw__google_ads__s3__change_history_api",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
@@ -515,7 +517,7 @@ def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
     assert tags["dagster/max_runtime"] == str(11 * 60 * 60)
 
 
-def test_google_ads_schedule_selects_every_google_ads_table() -> None:
+def test_google_ads_schedule_selects_every_google_ads_api_table() -> None:
     schedule = _REPO.get_schedule_def("google_ads_ingest_daily_schedule")
     scheduled = {
         key.to_user_string()
