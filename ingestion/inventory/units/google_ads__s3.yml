@@ -27,11 +27,19 @@ tables:
   primary_key:
   - - course
   - - row_number
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__s3__change_history_api
   raw_table: raw__google_ads__s3__change_history_api
   sync_mode: full_refresh_overwrite
   primary_key:
   - - course
   - - line_number
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."

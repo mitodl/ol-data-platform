@@ -1,0 +1,54 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__google_ads__api__customer_clients
+    description: >
+      Every account under the MIT Open Learning Google Ads manager account, from
+      the API's customer_client resource. Replaced on each load.
+  - name: raw__google_ads__api__keyword_daily
+    description: >
+      Keyword × day × ad network Search performance per client account, from the
+      API's keyword_view. Days with impressions only. Merged on the key; dates past
+      an account's cursor are appended in batches.
+  - name: raw__google_ads__api__keyword_conversions_daily
+    description: >
+      Keyword × day × ad network × conversion action conversions per client
+      account, from the API's keyword_view. Days with conversions only.
+  - name: raw__google_ads__api__campaign_daily
+    description: >
+      Campaign × day performance, budget and lost impression share per client
+      account, from the API's campaign resource.
+  - name: raw__google_ads__api__change_events
+    description: >
+      Changes made in each client account (campaigns, budgets, ad groups,
+      keywords, criteria), from the API's change_event, which keeps 30 days.
+      Merged on the event, so history builds up from 2026-10-14.
+  - name: raw__google_ads__api__campaign_snapshots
+    description: Each day's campaigns, status, dates, bidding strategy and budget.
+  - name: raw__google_ads__api__keyword_snapshots
+    description: Each day's ad group keywords, including negatives.
+  - name: raw__google_ads__api__campaign_criterion_snapshots
+    description: Each day's campaign negative keywords and location targets.
+  - name: raw__google_ads__api__campaign_shared_set_snapshots
+    description: Each day's links between campaigns and shared negative keyword lists.
+  - name: raw__google_ads__api__shared_criterion_snapshots
+    description: Each day's keywords in the shared negative keyword lists.
+  - name: raw__google_ads__api__fetch_log
+    description: >
+      One row per account window a report or snapshot table re-read, with that
+      fetch's retrieved_at. A data row is current when its retrieved_at is the
+      latest fetch covering its date.
+  - name: raw__google_ads__s3__change_history_report
+    description: >
+      ad_opt_v2's Google Ads UI change history exports, one row per change, from
+      October 2024 to each file's download date. Loaded once from the landing zone.
+  - name: raw__google_ads__s3__change_history_api
+    description: >
+      The API change events ad_opt_v2 saved between each export's download and
+      2026-10-20, in the export's header and detail lines. Loaded once.

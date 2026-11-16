@@ -22,7 +22,11 @@ tables:
   sync_mode: full_refresh_overwrite_deduped
   primary_key:
   - - customer_client__id
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__keyword_daily
   raw_table: raw__google_ads__api__keyword_daily
   sync_mode: incremental_deduped_history
@@ -34,7 +38,11 @@ tables:
   - - segments__ad_network_type
   - - ad_group__id
   - - ad_group_criterion__criterion_id
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__keyword_conversions_daily
   raw_table: raw__google_ads__api__keyword_conversions_daily
   sync_mode: incremental_deduped_history
@@ -47,7 +55,11 @@ tables:
   - - ad_group__id
   - - ad_group_criterion__criterion_id
   - - segments__conversion_action
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__campaign_daily
   raw_table: raw__google_ads__api__campaign_daily
   sync_mode: incremental_deduped_history
@@ -57,7 +69,11 @@ tables:
   - - customer_id
   - - segments__date
   - - campaign__id
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__change_events
   raw_table: raw__google_ads__api__change_events
   sync_mode: incremental_deduped_history
@@ -66,7 +82,11 @@ tables:
   primary_key:
   - - customer_id
   - - change_event__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__campaign_snapshots
   raw_table: raw__google_ads__api__campaign_snapshots
   sync_mode: incremental_deduped_history
@@ -76,7 +96,11 @@ tables:
   - - customer_id
   - - snapshot_date
   - - campaign__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__keyword_snapshots
   raw_table: raw__google_ads__api__keyword_snapshots
   sync_mode: incremental_deduped_history
@@ -86,7 +110,11 @@ tables:
   - - customer_id
   - - snapshot_date
   - - ad_group_criterion__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__campaign_criterion_snapshots
   raw_table: raw__google_ads__api__campaign_criterion_snapshots
   sync_mode: incremental_deduped_history
@@ -96,7 +124,11 @@ tables:
   - - customer_id
   - - snapshot_date
   - - campaign_criterion__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__campaign_shared_set_snapshots
   raw_table: raw__google_ads__api__campaign_shared_set_snapshots
   sync_mode: incremental_deduped_history
@@ -106,7 +138,11 @@ tables:
   - - customer_id
   - - snapshot_date
   - - campaign_shared_set__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__shared_criterion_snapshots
   raw_table: raw__google_ads__api__shared_criterion_snapshots
   sync_mode: incremental_deduped_history
@@ -116,7 +152,11 @@ tables:
   - - customer_id
   - - snapshot_date
   - - shared_criterion__resource_name
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
 - name: raw__google_ads__api__fetch_log
   raw_table: raw__google_ads__api__fetch_log
   sync_mode: incremental_deduped_history
@@ -128,4 +168,8 @@ tables:
   - - window_start
   - - window_end
   - - retrieved_at
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: "Raw keeps this history already. Snapshots append daily, change tables\
+      \ keep every event, and fetch_log records each report re-pull."
