@@ -97,9 +97,8 @@ google_ads_ingest_schedule = dg.ScheduleDefinition(
 )
 
 # Sloan Executive Education, ahead of the lakehouse's non_airbyte_staging_daily
-# at 06:00. RUNNING by default in production, where the delivery location's
-# sloan_course_metadata extract has run daily against the same API since before
-# this load existed. The API has no QA instance.
+# at 06:00. RUNNING by default in production. The API has no QA instance, so a
+# QA tick would call the partner's production endpoint.
 see_ingest_schedule = dg.ScheduleDefinition(
     name="see_ingest_daily_schedule",
     target=dg.AssetSelection.keys(

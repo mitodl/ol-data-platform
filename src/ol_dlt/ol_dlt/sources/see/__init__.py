@@ -5,10 +5,9 @@ returns them. Both endpoints return the whole catalog as one JSON array, so each
 table is fully replaced on every run, behind
 ``config.guard_against_replace_truncation``.
 
-Records are loaded whole. The delivery code location's ``sloan_course_metadata``
-asset keeps a hand-picked subset of fields, and that subset drops the offering's
-``Format``, which MIT Learn's Sloan ETL (learning_resources/etl/sloan.py) reads to
-decide a run's availability, pace and format.
+Records are loaded whole, including the offering's ``Format``, which MIT Learn's
+Sloan ETL (learning_resources/etl/sloan.py) reads to decide a run's availability,
+pace and format.
 
 Data flow:
     SEE_API_URL/courses           -> raw__see__api__courses
@@ -32,7 +31,7 @@ from ol_dlt import config, oauth
 
 logger = logging.getLogger(__name__)
 
-# The OAuth client the delivery location's sloan_api resource already reads.
+# The OAuth client the delivery location's sloan_api resource used to read.
 SEE_OAUTH_VAULT_PATH = "pipelines/sloan/oauth-client"
 # The same in every environment; mit-learn's SEE_API_URL in ol-infrastructure.
 SEE_API_URL = "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/"
