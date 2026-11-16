@@ -31,7 +31,9 @@
     `latest_load`: a dlt merge feed that re-reads the whole source each load
     keeps rows the source dropped, so only the newest load's rows are kept.
 
-    The checks that query the keyset run only for `snapshot` and `build`.
+    The checks that query the keyset run for `snapshot`, `build` and `run`, the
+    commands that write a filtered table, so an empty keyset raises before a
+    staging model is written empty.
 -#}
 {% macro raw_delete_filter(raw_table, relation) %}
     {%- set spec = raw_delete_filter_map().get(raw_table) -%}
@@ -53,7 +55,7 @@
         {{ log("raw_delete_filter " ~ raw_table ~ ": no keyset table yet, so deletes are not filtered", info=true) }}
         {{ return(none) }}
     {%- endif -%}
-    {%- if flags.WHICH in ['snapshot', 'build'] -%}
+    {%- if flags.WHICH in ['snapshot', 'build', 'run'] -%}
         {%- set check_sql -%}
             select
                 count(*)
@@ -81,11 +83,13 @@
     {%- endif -%}
     {%- set loaded_at = dlt_load_id_timestamp(loader_time) if loader_time == '_dlt_load_id' else loader_time -%}
     {%- set trusted_after = dbt.dateadd(
-        'minute', -var('raw_keyset_trust_margin_minutes', 60), 'max(_keyset_read_started_at)'
+        'minute', -var('raw_keyset_trust_margin_minutes', 60), 'max(live_keys._keyset_read_started_at)'
     ) -%}
+    {#- Qualified, so a keyset without the key column fails rather than the
+        subquery binding the raw table's column and keeping every row. -#}
     {{ return(
-        "(" ~ spec['key'] ~ " in (select " ~ spec['key'] ~ " from " ~ keyset ~ ")"
-        ~ " or " ~ loaded_at ~ " > (select " ~ trusted_after ~ " from " ~ keyset ~ "))"
+        "(" ~ spec['key'] ~ " in (select live_keys." ~ spec['key'] ~ " from " ~ keyset ~ " as live_keys)"
+        ~ " or " ~ loaded_at ~ " > (select " ~ trusted_after ~ " from " ~ keyset ~ " as live_keys))"
     ) }}
 {% endmacro %}
 

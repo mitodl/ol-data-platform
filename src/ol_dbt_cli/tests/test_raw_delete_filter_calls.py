@@ -66,8 +66,16 @@ def test_passes_a_filtered_read_and_any_read_of_another_table(staging: Path, sql
     assert _messages(staging.parents[1]) == []
 
 
-def test_a_live_raw_rows_call_in_a_comment_does_not_count(staging: Path) -> None:
-    (staging / "stg.sql").write_text("{# " + LIVE_READ + " #}\n" + SOURCE_READ)
+@pytest.mark.parametrize("comment", ["{# " + LIVE_READ + " #}", "-- " + LIVE_READ])
+def test_a_live_raw_rows_call_in_a_comment_does_not_count(staging: Path, comment: str) -> None:
+    (staging / "stg.sql").write_text(comment + "\n" + SOURCE_READ)
+    assert len(_messages(staging.parents[1])) == 1
+
+
+def test_an_unfiltered_read_beside_a_filtered_one_is_reported(staging: Path) -> None:
+    (staging / "stg.sql").write_text(
+        "with live as (" + LIVE_READ + ")\n, everything as (" + SOURCE_READ + ")\nselect * from live"
+    )
     assert len(_messages(staging.parents[1])) == 1
 
 

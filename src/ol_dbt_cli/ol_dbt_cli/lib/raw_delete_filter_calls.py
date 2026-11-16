@@ -10,9 +10,11 @@ records the snapshot has closed, so staging and history disagree on what exists
 
 The table list comes from the generated macro rather than the inventory, because
 that file is what dbt reads at run time, and `ol-dbt inventory history` already
-fails CI when it and the inventory disagree. ``source()`` may still appear, e.g.
-to hand a relation to ``relation_has_column``, as long as the model also reads the
-table through ``live_raw_rows('<table>'``.
+fails CI when it and the inventory disagree. A ``{{ ... }}`` expression that
+calls ``source()`` for such a table is always reported, since it reads the table
+unfiltered. ``source()`` in a ``{% set %}``, e.g. to hand a relation to
+``relation_has_column``, passes when the model also calls
+``live_raw_rows('<table>'``. SQL and Jinja comments are ignored.
 """
 
 from __future__ import annotations
@@ -31,6 +33,8 @@ RAW_DELETE_FILTER_CHECK = "raw_delete_filter"
 
 _MAP_ENTRY = re.compile(r"'(?P<table>raw__\w+)':\s*\{'kind'")
 _SOURCE = re.compile(r"source\(\s*['\"][^'\"]+['\"]\s*,\s*['\"](?P<table>raw__\w+)['\"]\s*\)")
+_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
+_SQL_COMMENT = re.compile(r"--[^\n]*")
 _DETAIL = (
     "The table is in raw_delete_filter_map(), so raw still holds records the source deleted. "
     "Read it with {{ live_raw_rows('<raw table>') }} (or live_raw_rows('<raw table>', <relation>)) "
@@ -61,9 +65,10 @@ def check_raw_delete_filter(dbt_dir: Path, report: ValidationReport) -> None:
     if not tables:
         return
     for path in sorted((dbt_dir / "models" / "staging").rglob("*.sql")):
-        code = without_jinja_comments(path.read_text())
+        code = _SQL_COMMENT.sub("", without_jinja_comments(path.read_text()))
+        direct = {m.group("table") for e in _EXPRESSION.finditer(code) for m in _SOURCE.finditer(e.group(0))}
         for table in sorted({m.group("table") for m in _SOURCE.finditer(code)} & tables):
-            if re.search(rf"live_raw_rows\(\s*['\"]{table}['\"]", code):
+            if table not in direct and re.search(rf"live_raw_rows\(\s*['\"]{table}['\"]", code):
                 continue
             report.add(
                 RAW_DELETE_FILTER_CHECK,
