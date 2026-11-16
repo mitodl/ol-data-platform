@@ -346,7 +346,8 @@ with mitx_users as (
             ), '')
             , nullif(trim(concat(coalesce(learn_user.user_first_name, ''), ' ', coalesce(learn_user.user_last_name, ''))), '')
         ) as full_name
-        , learn_profile.user_current_education as highest_education
+        -- A blank education is null, so the coalesce with the MITx value below can fall through.
+        , nullif(trim(learn_profile.user_current_education), '') as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
     from learn_user

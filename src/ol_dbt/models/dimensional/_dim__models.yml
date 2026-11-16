@@ -2449,6 +2449,76 @@ unit_tests:
     - {email: nogiven@example.com, full_name: Lovelace}
     - {email: nonames@example.com, full_name: Right Fallback}
     - {email: token@example.com, full_name: My familyName}
+- name: test_dim_user_highest_education_falls_through_a_blank_learn_value
+  description: >
+    A Learn profile education that is blank or whitespace is treated as missing,
+    so the MITx value is used. A Learn value still wins over the MITx one, and
+    with no value on either side the education is null.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_global_id: gid-1, user_email: empty@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 2, user_global_id: gid-2, user_email: spaces@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 3, user_global_id: gid-3, user_email: learn@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 4, user_global_id: gid-4, user_email: none@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows:
+    - {user_id: 1, user_current_education: ''}
+    - {user_id: 2, user_current_education: '  '}
+    - {user_id: 3, user_current_education: Doctorate}
+    - {user_id: 4, user_current_education: ''}
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_global_id: gid-1, user_mitxonline_id: 901, user_mitxonline_username: empty,
+      user_mitxonline_email: empty@example.com, user_highest_education: Bachelor's
+        degree}
+    - {user_global_id: gid-2, user_mitxonline_id: 902, user_mitxonline_username: spaces,
+      user_mitxonline_email: spaces@example.com, user_highest_education: Master's
+        or professional degree}
+    - {user_global_id: gid-3, user_mitxonline_id: 903, user_mitxonline_username: learn,
+      user_mitxonline_email: learn@example.com, user_highest_education: Secondary/high
+        school}
+    - {user_global_id: gid-4, user_mitxonline_id: 904, user_mitxonline_username: none,
+      user_mitxonline_email: none@example.com}
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows: []
+  - input: ref('int__bootcamps__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - {email: empty@example.com, highest_education: Bachelor's degree}
+    - {email: spaces@example.com, highest_education: Master's or professional degree}
+    - {email: learn@example.com, highest_education: Doctorate}
+    - {email: none@example.com, highest_education: null}
 - name: test_dim_user_address_parts_come_from_one_account
   description: >
     Street, city and postal code are filled from a single account. The
