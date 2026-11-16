@@ -216,7 +216,7 @@ models:
     tests:
     - not_null
   - name: change_event_at
-    description: timestamp, when the change was made
+    description: timestamp, when the change was made, in UTC
   - name: change_resource_type
     description: str, what changed, e.g. CAMPAIGN_BUDGET or AD_GROUP_CRITERION
   - name: change_resource_name
@@ -270,9 +270,9 @@ models:
   - name: campaign_channel_type
     description: str, advertising channel
   - name: campaign_start_at
-    description: timestamp, when the campaign starts
+    description: timestamp, when the campaign starts, in UTC
   - name: campaign_end_at
-    description: timestamp, when the campaign ends; null when it has no end
+    description: timestamp, when the campaign ends, in UTC; null when it has no end
   - name: campaign_bidding_strategy_type
     description: str, bidding strategy
   - name: campaign_budget_resource_name
@@ -501,7 +501,7 @@ models:
     tests:
     - not_null
   - name: change_at
-    description: timestamp, when the change was made, in the account's local time
+    description: timestamp, when the change was made, in UTC
     tests:
     - not_null
   - name: change_user
@@ -537,7 +537,7 @@ models:
     tests:
     - not_null
   - name: change_at
-    description: timestamp, when the change was made, in the account's local time
+    description: timestamp, when the change was made, in UTC
     tests:
     - not_null
   - name: campaign_name

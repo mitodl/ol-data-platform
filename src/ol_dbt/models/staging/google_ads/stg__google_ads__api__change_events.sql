@@ -1,11 +1,17 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__change_events') }}
+    select
+        change_events.*
+        , customer_clients.customer_client__time_zone as account_time_zone
+    from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__change_events') }} as change_events
+    left join {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__customer_clients') }} as customer_clients
+        on change_events.customer_id = cast(customer_clients.customer_client__id as varchar)
 )
 
 select
     customer_id as account_id
     , change_event__resource_name as change_event_resource_name
-    , change_event__change_date_time as change_event_at
+    , {{ google_ads_local_to_utc('change_event__change_date_time', 'account_time_zone', labeled_utc=true) }}
+    as change_event_at
     , change_event__change_resource_type as change_resource_type
     , change_event__change_resource_name as change_resource_name
     , change_event__resource_change_operation as change_operation

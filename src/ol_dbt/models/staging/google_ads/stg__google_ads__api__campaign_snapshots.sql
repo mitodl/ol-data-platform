@@ -1,5 +1,10 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__campaign_snapshots') }}
+    select
+        campaign_snapshots.*
+        , customer_clients.customer_client__time_zone as account_time_zone
+    from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__campaign_snapshots') }} as campaign_snapshots
+    left join {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__customer_clients') }} as customer_clients
+        on campaign_snapshots.customer_id = cast(customer_clients.customer_client__id as varchar)
 )
 
 {{ google_ads_current_rows(
@@ -16,8 +21,9 @@ select
     , campaign__name as campaign_name
     , campaign__status as campaign_status
     , campaign__advertising_channel_type as campaign_channel_type
-    , campaign__start_date_time as campaign_start_at
-    , {{ cast_to_timestamptz("cast(nullif(campaign__end_date_time, '') as timestamp)") }} as campaign_end_at
+    , {{ google_ads_local_to_utc('campaign__start_date_time', 'account_time_zone', labeled_utc=true) }}
+    as campaign_start_at
+    , {{ google_ads_local_to_utc("nullif(campaign__end_date_time, '')", 'account_time_zone') }} as campaign_end_at
     , campaign__bidding_strategy_type as campaign_bidding_strategy_type
     , campaign_budget__resource_name as campaign_budget_resource_name
     , {{ google_ads_micros('campaign_budget__amount_micros') }} as campaign_budget_amount

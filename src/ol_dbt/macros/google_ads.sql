@@ -61,3 +61,21 @@
         where key_rank = 1
     )
 {% endmacro %}
+
+
+{% macro google_ads_local_to_utc(local_timestamp, time_zone, labeled_utc=false) -%}
+    {#- Google Ads gives times in the account's zone. Set labeled_utc when dlt already marked the value UTC. -#}
+    {{ adapter.dispatch('google_ads_local_to_utc', 'open_learning')(local_timestamp, time_zone, labeled_utc) }}
+{%- endmacro %}
+
+{% macro trino__google_ads_local_to_utc(local_timestamp, time_zone, labeled_utc) -%}
+    with_timezone(cast({{ local_timestamp }} as timestamp(6)), {{ time_zone }}) at time zone 'UTC'
+{%- endmacro %}
+
+{% macro duckdb__google_ads_local_to_utc(local_timestamp, time_zone, labeled_utc) -%}
+    {%- if labeled_utc -%}
+        timezone({{ time_zone }}, {{ local_timestamp }} at time zone 'UTC')
+    {%- else -%}
+        timezone({{ time_zone }}, cast({{ local_timestamp }} as timestamp))
+    {%- endif -%}
+{%- endmacro %}
