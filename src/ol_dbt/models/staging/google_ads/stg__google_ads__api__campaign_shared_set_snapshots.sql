@@ -2,7 +2,11 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__campaign_shared_set_snapshots') }}
 )
 
-{{ google_ads_current_rows('raw__google_ads__api__campaign_shared_set_snapshots', 'snapshot_date') }}
+{{ google_ads_current_rows(
+    'raw__google_ads__api__campaign_shared_set_snapshots'
+    , 'snapshot_date'
+    , ['customer_id', 'snapshot_date', 'campaign_shared_set__resource_name']
+) }}
 
 select
     customer_id

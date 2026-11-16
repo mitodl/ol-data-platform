@@ -2,7 +2,11 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__keyword_conversions_daily') }}
 )
 
-{{ google_ads_current_rows('raw__google_ads__api__keyword_conversions_daily', 'segments__date') }}
+{{ google_ads_current_rows(
+    'raw__google_ads__api__keyword_conversions_daily'
+    , 'segments__date'
+    , ['customer_id', 'segments__date', 'segments__ad_network_type', 'ad_group__id', 'ad_group_criterion__criterion_id', 'segments__conversion_action']
+) }}
 
 select
     customer_id

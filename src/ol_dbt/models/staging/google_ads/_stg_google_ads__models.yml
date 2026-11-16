@@ -440,8 +440,7 @@ models:
         - retrieved_at
 
 - name: stg__google_ads__s3__change_history_report
-  description: ad_opt_v2's Google Ads UI change history exports, one row per change,
-    without the user and with emails in the change text masked.
+  description: ad_opt_v2's Google Ads UI change history exports, one row per change.
   columns:
   - name: change_course
     description: str, ad_opt_v2's course folder the export came from, e.g. sys_think
@@ -455,12 +454,15 @@ models:
     description: timestamp, when the change was made, in the account's local time
     tests:
     - not_null
+  - name: change_user
+    description: str, email of the person who made the change
   - name: campaign_name
     description: str, campaign name; empty for account-level changes
   - name: ad_group_name
     description: str, ad group name
   - name: change_text
-    description: str, the change as the UI wrote it, a header line then detail lines
+    description: str, the change as the UI wrote it, a header line then detail lines;
+      account access changes name people by email
   - name: change_source_file
     description: str, the landing-zone file the row came from
   tests:

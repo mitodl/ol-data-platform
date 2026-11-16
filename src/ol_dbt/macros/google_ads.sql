@@ -4,17 +4,8 @@
 {%- endmacro %}
 
 
-{% macro google_ads_current_rows(raw_table, date_column) %}
-    {#
-        Emit a `current_source` CTE holding the rows of `source` from the latest fetch
-        that covered their date (`date_column`) in raw__google_ads__api__fetch_log.
-
-        A re-pull merges the rows Google still returns and leaves a row Google
-        retracted with an older retrieved_at, because a merge never deletes. A
-        snapshot run twice on one day appends both copies. Either way the stale row's
-        retrieved_at is older than the newest fetch of its date, so it drops here.
-        Fetch windows are expanded to days first, so rows join on (account, date).
-    #}
+{% macro google_ads_current_rows(raw_table, date_column, key_columns) %}
+    {#- `current_source`: each key's row from the latest fetch of its date in fetch_log. -#}
     , fetch_windows as (
         select
             customer_id
@@ -25,26 +16,38 @@
         where table_name = '{{ raw_table }}'
     )
 
-    , latest_fetch as (
+    , fetch_days as (
         select
             fetch_windows.customer_id
-            , cast({{ dbt.dateadd('day', 'fetch_days.day_offset - 1', 'fetch_windows.window_start') }} as date)
+            , fetch_windows.retrieved_at
+            , cast({{ dbt.dateadd('day', 'days.day_offset - 1', 'fetch_windows.window_start') }} as date)
             as fetched_date
-            , max(fetch_windows.retrieved_at) as retrieved_at
         from fetch_windows
         cross join
             {{ unnest_sequence(
                 date_diff("'day'", 'fetch_windows.window_start', 'fetch_windows.window_end') ~ ' + 1'
-                , 'fetch_days'
+                , 'days'
                 , 'day_offset'
             ) }}
-        group by
-            fetch_windows.customer_id
-            , cast({{ dbt.dateadd('day', 'fetch_days.day_offset - 1', 'fetch_windows.window_start') }} as date)
     )
 
-    , current_source as (
-        select source.*
+    , latest_fetch as (
+        select
+            customer_id
+            , fetched_date
+            , max(retrieved_at) as retrieved_at
+        from fetch_days
+        group by customer_id, fetched_date
+    )
+
+    , fetched_rows as (
+        select
+            source.*
+            -- A load appended twice has two copies from one fetch; keep the last load's.
+            , row_number() over (
+                partition by {% for column in key_columns %}source.{{ column }}{{ ", " if not loop.last }}{% endfor %}
+                order by source._dlt_load_id desc
+            ) as key_rank
         from source
         inner join latest_fetch
             on
@@ -52,10 +55,9 @@
                 and cast(source.{{ date_column }} as date) = latest_fetch.fetched_date
                 and source.retrieved_at = latest_fetch.retrieved_at
     )
+
+    , current_source as (
+        select * from fetched_rows
+        where key_rank = 1
+    )
 {% endmacro %}
-
-
-{% macro google_ads_mask_emails(column_name) -%}
-    {#- The change history names people by email; staging keeps the change, not who. -#}
-    {{ regexp_replace_all(column_name, "'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+'", "'<email>'") }}
-{%- endmacro %}

@@ -30,8 +30,7 @@ tables:
   modeled: true
   history:
     in_scope: false
-    reason: "Raw keeps this history already. Snapshots append daily, change tables\
-      \ keep every event, and fetch_log records each report re-pull."
+    reason: A one-time load of files that do not change.
 - name: raw__google_ads__s3__change_history_api
   raw_table: raw__google_ads__s3__change_history_api
   sync_mode: full_refresh_overwrite
@@ -41,5 +40,4 @@ tables:
   modeled: true
   history:
     in_scope: false
-    reason: "Raw keeps this history already. Snapshots append daily, change tables\
-      \ keep every event, and fetch_log records each report re-pull."
+    reason: A one-time load of files that do not change.

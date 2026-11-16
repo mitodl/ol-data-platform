@@ -8,7 +8,7 @@ select
     , cast("timestamp" as timestamp) as change_at
     , campaign as campaign_name
     , ad_group as ad_group_name
-    , {{ google_ads_mask_emails('header') }} as change_header
-    , {{ google_ads_mask_emails('details') }} as change_details
+    , header as change_header
+    , details as change_details
     , _source_file as change_source_file
 from source
