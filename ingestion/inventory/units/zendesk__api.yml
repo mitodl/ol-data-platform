@@ -14,6 +14,8 @@ table_prefix: raw__thirdparty__zendesk_support__
 # brands and organizations are read whole on each sync, so a record missing
 # from one was deleted. users syncs incrementally and never drops a row from
 # raw; a deleted user shows in its own `active` and `permanently_deleted`.
+# macros also syncs incrementally, so a macro deleted in Zendesk stays in raw as
+# its last version and its history snapshot records no delete.
 history:
   absence: deleted
 airbyte:
@@ -131,7 +133,7 @@ tables:
       description: copy
 - name: macros
   raw_table: raw__thirdparty__zendesk_support__macros
-  sync_mode: incremental_append
+  sync_mode: incremental_deduped_history
   cursor_field:
   - updated_at
   primary_key:

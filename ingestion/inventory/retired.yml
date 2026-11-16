@@ -1226,3 +1226,24 @@ retired:
     with its _airbyte_* and _ab_source_file_* columns.
   frozen: true
   modeled: false
+- deployment: mitlearn
+  layer: app_postgres
+  raw_tables:
+  - raw__mitlearn__app__postgres__social_auth_association
+  - raw__mitlearn__app__postgres__social_auth_code
+  - raw__mitlearn__app__postgres__social_auth_nonce
+  - raw__mitlearn__app__postgres__social_auth_partial
+  - raw__mitlearn__app__postgres__social_auth_usersocialauth
+  retired_on: '2026-11-16'
+  reason: >-
+    MIT Learn removed python-social-auth, unused since its APISIX login cutover,
+    and dropped all five tables in users/migrations/0013_drop_social_auth_tables
+    (mitodl/mit-learn#4215, merged 2026-11-02). "MIT Learn Production → S3 Data
+    Lake" stopped carrying the streams, and the production drift check has
+    failed on them since its 2026-11-06 run. Nothing had changed in them for
+    longer: the last _airbyte_extracted_at in all five is 2025-03-29.
+    association holds 28,886 rows and usersocialauth 194, and code, nonce and
+    partial are empty (measured in production raw on 2026-11-16). dbt never
+    modeled them. They stay in place, read-only.
+  frozen: true
+  modeled: false

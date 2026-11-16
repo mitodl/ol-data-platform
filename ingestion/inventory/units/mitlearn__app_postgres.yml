@@ -108,11 +108,6 @@ airbyte:
     - silk_request
     - silk_response
     - silk_sqlquery
-    - social_auth_association
-    - social_auth_code
-    - social_auth_nonce
-    - social_auth_partial
-    - social_auth_usersocialauth
     - testimonials_attestation
     - testimonials_attestation_channels
     - testimonials_attestation_offerors
@@ -705,41 +700,6 @@ tables:
   modeled: false
 - name: silk_sqlquery
   raw_table: raw__mitlearn__app__postgres__silk_sqlquery
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: social_auth_association
-  raw_table: raw__mitlearn__app__postgres__social_auth_association
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: social_auth_code
-  raw_table: raw__mitlearn__app__postgres__social_auth_code
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: social_auth_nonce
-  raw_table: raw__mitlearn__app__postgres__social_auth_nonce
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: social_auth_partial
-  raw_table: raw__mitlearn__app__postgres__social_auth_partial
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: social_auth_usersocialauth
-  raw_table: raw__mitlearn__app__postgres__social_auth_usersocialauth
   sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
