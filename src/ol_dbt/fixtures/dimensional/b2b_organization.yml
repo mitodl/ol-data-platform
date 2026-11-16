@@ -12,11 +12,13 @@
 # Online's manager API. See "B2B views" in docs/LOCAL_LAKE.md.
 #
 # Each table has only the columns the views read. One organization, one
-# contract, two course runs in one program, and eight learners, which keeps
+# contract, two course runs in one program, and nine learners, which keeps
 # every per-run and per-month cohort the dashboard shows at or above
 # ol-analytics-api's anonymization floor of 5. Statuses cover certified,
 # passed, in progress, not started and an unenrolled learner; consent covers
-# shared, refused and undecided. needs_attention_since follows
+# shared, refused and undecided. Learner 9 is a contract member with no
+# enrollment, who appears only in mv_b2b_learner and
+# mv_b2b_contract_member_enrollment. needs_attention_since follows
 # afact_learner_courserun_progress: the enrollment day when not started, the
 # last active day plus needs_attention_quiet_days (30) when in progress.
 schema_version: 1
@@ -152,6 +154,10 @@ tables:
       user_global_id: 00000000-0000-4000-8000-000000000008
       email: fixture.learner8@example.com
       full_name: Fixture Learner 8
+    - user_pk: fixture-user-9
+      user_global_id: 00000000-0000-4000-8000-000000000009
+      email: fixture.learner9@example.com
+      full_name: Fixture Learner 9
   bridge_user_organization:
     columns:
       organization_fk: string
@@ -181,6 +187,9 @@ tables:
       userorganization_is_manager: false
     - organization_fk: fixture-org
       user_fk: fixture-user-8
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-9
       userorganization_is_manager: false
   bridge_user_contract:
     columns:
@@ -233,6 +242,10 @@ tables:
       membership_is_current: true
     - organization_fk: fixture-org
       user_fk: fixture-user-8
+      contract_fk: fixture-contract
+      membership_is_current: true
+    - organization_fk: fixture-org
+      user_fk: fixture-user-9
       contract_fk: fixture-contract
       membership_is_current: true
   afact_learner_courserun_progress:

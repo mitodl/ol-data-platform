@@ -484,3 +484,158 @@ models:
       Course run end, ISO-8601 in UTC with no offset, as courserun_start_on. Null
       for
       self-paced runs.
+
+- name: mv_b2b_contract_member_enrollment
+  description: >
+    One row per current contract member and active enrollment under that
+    contract, plus one row for each member with no active enrollment, whose
+    course run and enrollment columns are null. The grain is org x contract x
+    course_run x learner, with course_run null on that member row.
+    INDIVIDUALLY IDENTIFYING: this backs ol-analytics-api's b2b_dashboard
+    /learners, the MIT Learn Learners page, which lists every current contract
+    member with a status (mitodl/hq#14364). /learner-progress and the dashboard
+    counts keep reading mv_b2b_learner_enrollment, so they do not change. Rows
+    start from bridge_user_contract where membership_is_current, so a learner
+    removed from the contract is not here, and an unredeemed seat assignment
+    has no membership and is not here either. A member with any enrollment
+    under the contract, active or not, is left out unless they consented to
+    data sharing for it, so the group who enrolled before the consent prompt
+    stays hidden until they agree. A member with no enrollment is listed
+    whatever their consent. The enrollment columns mean what they mean in
+    mv_b2b_learner_enrollment, and come from the same sources. This is a
+    manual-refresh materialized view.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - contract_pk
+      - courserun_pk
+      - user_pk
+      config:
+        severity: warn
+  columns:
+  - name: organization_key
+    description: >
+      The organization identifier, joined in from dim_organization for
+      platform='mitxonline' only.
+  - name: sso_organization_id
+    description: >
+      The Keycloak organization UUID (dim_organization.sso_organization_id).
+      This is the identifier the ol-analytics-api filters organizations on.
+  - name: contract_pk
+    description: The surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
+      the contract identifier the API exposes.
+  - name: courserun_pk
+    description: >
+      The surrogate key of the course run. Null on the row of a member with no
+      active enrollment under the contract, which is how a reader tells that
+      row apart from an enrollment.
+  - name: courserun_readable_id
+    description: >
+      The course run identifier, for example course-v1:MITxT+14.310x+2T2026.
+      The API exposes it as courserun_id. Null on a member's row with no
+      enrollment.
+  - name: courserun_title
+    description: >
+      The course run's display title. It is mutable, so key on
+      courserun_readable_id instead. Null on a member's row with no enrollment.
+  - name: courserun_start_on
+    description: >
+      Course run start, ISO-8601 in UTC with no offset, as in
+      mv_b2b_learner_enrollment. Null on a member's row with no enrollment.
+  - name: courserun_end_on
+    description: >
+      Course run end, ISO-8601 in UTC with no offset. Null for self-paced runs
+      and on a member's row with no enrollment.
+  - name: user_pk
+    description: >
+      The dim_user surrogate key. It is an internal join key only, and the API
+      must not expose it.
+  - name: user_global_id
+    description: >
+      The Keycloak user id, which the API exposes as learner_id. It is never
+      null, because users without one are filtered out.
+  - name: email
+    description: >
+      dim_user.email. It is not a join key; see mv_b2b_learner_enrollment.
+  - name: full_name
+    description: >
+      dim_user.full_name, trimmed, with a blank name folded into null, as in
+      mv_b2b_learner_enrollment. It is often null.
+  - name: enrollment_created_on
+    description: >
+      When this run's enrollment was created, in ISO-8601. The API exposes it
+      as enrolled_on. Null on a member's row with no enrollment.
+  - name: enrollment_is_active
+    description: >
+      True on every enrollment row, since only active enrollments are here.
+      Null on a member's row with no enrollment.
+  - name: enrollment_mode
+    description: >
+      The enrollment mode, such as audit or verified. Null on a member's row
+      with no enrollment.
+  - name: is_passing
+    description: >
+      tfact_grade.is_passing, as in mv_b2b_learner_enrollment. Null where no
+      grade exists and on a member's row with no enrollment.
+  - name: grade_value
+    description: >
+      tfact_grade.grade_value, on a scale of 0 to 1. The API exposes it as
+      grade.
+  - name: letter_grade
+    description: tfact_grade.letter_grade. It is frequently null.
+  - name: certificate_issued_on
+    description: >
+      When the learner's current course certificate was issued, in ISO-8601.
+      Null where no certificate exists.
+  - name: certificate_is_revoked
+    description: >
+      Whether the learner's current course certificate was revoked. Null where
+      no certificate exists.
+  - name: last_active_on
+    description: >
+      The date of the learner's most recent day of tracked activity in this
+      course run, as in mv_b2b_learner_enrollment. Null when the learner has no
+      activity in the run.
+  - name: completion_status
+    description: >
+      afact_learner_courserun_progress.completion_status: certified, passed,
+      in_progress or not_started. Never null on an enrollment row, and null on
+      a member's row with no enrollment, which the API reports as not enrolled.
+  - name: needs_attention_since
+    description: >
+      The date from which the learner needs attention in this run, as in
+      mv_b2b_learner_enrollment. Null when passed, certified, in_progress on a
+      grade alone, and on a member's row with no enrollment.
+  - name: content_progress
+    description: >
+      The share of the run's current course structure the learner has
+      completed, between 0 and 1, as in mv_b2b_learner_enrollment.
+  - name: days_active
+    description: >
+      The number of distinct days on which the learner had tracked activity in
+      this course run. 0 when the learner had none, and null on a member's row
+      with no enrollment.
+  - name: videos_played
+    description: >
+      Distinct video blocks played per day, summed over the learner's active
+      days, as in mv_b2b_learner_enrollment. The API exposes it as
+      videos_watched. Null on a member's row with no enrollment.
+  - name: problems_attempted
+    description: >
+      Distinct problem blocks submitted per day, summed over the learner's
+      active days, as in mv_b2b_learner_enrollment. Null on a member's row with
+      no enrollment.
+  - name: chatbot_interactions
+    description: >
+      Distinct (session, block) chatbot submits per day, summed over the
+      learner's active days, as in mv_b2b_learner_enrollment. Null on a
+      member's row with no enrollment.
+  - name: outcomes_shared
+    description: >
+      The member's data-sharing decision for this contract, from
+      bridge_user_contract. True on every enrollment row, because a member with
+      an enrollment and any other decision is left out. On a member's row with
+      no enrollment it is the recorded decision, or null when none is recorded.
