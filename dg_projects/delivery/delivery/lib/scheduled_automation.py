@@ -78,11 +78,6 @@ NON_AIRBYTE_STAGING_CRON = "0 6 * * *"
 LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS = 300
 
 INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
-    # Extraction, not delivery: fetches the Sloan Executive Education API and
-    # writes both outputs through s3file_io_manager. Production-only because
-    # there is one Sloan API, not one per environment, so a QA tick would call
-    # the partner's production endpoint. RUNNING in production.
-    "learning_resource_api_schedule": frozenset({"production"}),
     # Every 10 minutes, discovering new OVS videos; feeds the discovery sensor
     # below, so a tick here is what fans out webhook delivery. RUNNING in
     # production.

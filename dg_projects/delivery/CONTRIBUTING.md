@@ -13,8 +13,9 @@ StarRocks over the MySQL protocol, and MV-serve is built and refreshed in
 WAREHOUSE; both are dbt-built surfaces governed by the contract docs. Do not
 add pull-side assets here.
 
-Extraction assets that predate the split (`sloan_course_metadata`, `video_api`,
-`video_metadata`) still live here and move on to INGEST later.
+OVS extraction (`video_api`, `video_metadata`) stays here because each video's
+metadata and webhook run as one job, and a job cannot span code locations. Any
+other extraction goes to `data_loading` (see "Adding a dlt Pipeline").
 
 ## Prerequisites
 
@@ -36,7 +37,7 @@ uv sync
 uv run dagster dev
 ```
 
-Open http://localhost:3000. You should see assets for Sloan, OVS Videos, and
+Open http://localhost:3000. You should see assets for OVS Videos and
 Open Learning Library. All assets load even without real credentials because the code
 location uses **resilient loading** — failed Vault auth falls back to a mock
 instance, and assets gracefully skip actual API calls when credentials are absent.
@@ -186,9 +187,8 @@ uv run pytest delivery_tests/ -v
 delivery/
 ├── delivery/
 │   ├── assets/             # One file per data source
-│   │   ├── sloan_api.py         # Reference implementation — read this first
 │   │   ├── ovs_videos.py        # Sensor-driven partitioned asset
-│   │   └── open_learning_library.py  # Open Learning Library REST asset
+│   │   └── open_learning_library.py  # Reference implementation — read this first
 │   ├── lib/                # Shared utilities (not assets)
 │   ├── sensors/            # Discovery and cleanup sensors
 │   └── definitions.py      # Wires everything together
@@ -201,7 +201,10 @@ delivery/
 
 ## Pattern 1: Adding a REST API Webhook Asset
 
-Follow the Sloan asset (`assets/sloan_api.py`) as the canonical reference.
+Follow the Open Learning Library asset (`assets/open_learning_library.py`) as
+the canonical reference. It reads an `integrations__learn__*` model and POSTs it
+to MIT Learn. If the source's data is not in the warehouse yet, load it in
+`data_loading` first (see "Adding a dlt Pipeline").
 
 ### 1. Create the asset file
 
@@ -377,7 +380,7 @@ data (courses, programs, content files) over the webhook API.
 
 | Convention | Example |
 |---|---|
-| Asset group name matches source | `group_name="sloan_executive_education"` |
+| Asset group name matches source | `group_name="ovs_videos"` |
 | `io_manager_key` for large files | `"s3file_io_manager"` |
 | `io_manager_key` for media/binary | `"yt_s3file_io_manager"` |
 | Sensor names | `<source>_discovery_sensor`, `<source>_stale_cleanup_sensor`, `<source>_delivery_sensor` |

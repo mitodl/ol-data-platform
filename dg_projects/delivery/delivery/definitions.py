@@ -12,8 +12,8 @@ the access-forge GitHub repository, each B2B organization's administration
 report to the B2B partners bucket, and a notice of each Canvas course export
 (made in data_loading) to MIT Learn's content_files webhook.
 
-The extraction halves of these pipelines (sloan_course_metadata, video_api,
-video_metadata) still live here and move on to INGEST later.
+OVS extraction (video_api, video_metadata) stays here because each video's
+metadata and webhook run as one job, and a job cannot span code locations.
 
 It also registers the deployment-wide failure notification sensors, which
 watch every code location and must be registered from exactly one.
@@ -44,7 +44,6 @@ from ol_orchestrate.lib.utils import (
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.github import GithubApiClientFactory
-from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
 from delivery.assets.b2b_organization import export_b2b_organization_data
@@ -62,7 +61,6 @@ from delivery.assets.ovs_videos import (
     video_metadata,
     video_webhook,
 )
-from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
     NON_AIRBYTE_STAGING_CRON,
     automate_where_registered,
@@ -132,18 +130,6 @@ course_content_metadata, canvas_course_export_webhook_sensor = (
         condition=upstream_or_code_changes(),
         default_status=DefaultSensorStatus.RUNNING,
     )
-)
-
-# Daily schedule for learning resource API extraction
-extract_api_daily_schedule = ScheduleDefinition(
-    name="learning_resource_api_schedule",
-    target=AssetSelection.assets(sloan_course_metadata),
-    cron_schedule="@daily",
-    execution_timezone="Etc/UTC",
-    # RUNNING in the learning_resources location at the time of the move to
-    # delivery. Instigator state is keyed on (location_name, repository_name,
-    # name), so the new location starts with none and would default to STOPPED.
-    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 instructor_onboarding_schedule = ScheduleDefinition(
@@ -224,7 +210,6 @@ defs = Definitions(
             kv_version="1",
             vault=vault,
         ),
-        "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
         # commits the access-forge instructor user list
         "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
@@ -238,7 +223,6 @@ defs = Definitions(
     },
     assets=with_failure_hooks(
         [
-            sloan_course_metadata,
             video_api,
             video_metadata,
             video_webhook,
@@ -262,7 +246,6 @@ defs = Definitions(
     # delivery.lib.scheduled_automation.
     schedules=instigators_for_environment(
         [
-            extract_api_daily_schedule,
             ovs_videos_api_schedule,
             instructor_onboarding_schedule,
         ]
