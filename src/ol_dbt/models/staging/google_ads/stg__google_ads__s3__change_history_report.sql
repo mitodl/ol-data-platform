@@ -6,7 +6,8 @@ select
     course as change_course
     , row_number as change_row_number
     -- The account's local time; the UI puts a narrow no-break space before AM/PM.
-    , {{ date_parse("replace(date_time, chr(8239), ' ')", "'%b %d, %Y, %I:%i:%s %p'") }} as change_at
+    , {{ cast_to_timestamptz(date_parse("replace(date_time, chr(8239), ' ')", "'%b %d, %Y, %I:%i:%s %p'")) }}
+    as change_at
     , user as change_user
     , campaign as campaign_name
     , ad_group as ad_group_name

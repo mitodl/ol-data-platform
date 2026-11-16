@@ -17,7 +17,7 @@ select
     , campaign__status as campaign_status
     , campaign__advertising_channel_type as campaign_channel_type
     , campaign__start_date_time as campaign_start_at
-    , cast(nullif(campaign__end_date_time, '') as timestamp) as campaign_end_at
+    , {{ cast_to_timestamptz("cast(nullif(campaign__end_date_time, '') as timestamp)") }} as campaign_end_at
     , campaign__bidding_strategy_type as campaign_bidding_strategy_type
     , campaign_budget__resource_name as campaign_budget_resource_name
     , {{ google_ads_micros('campaign_budget__amount_micros') }} as campaign_budget_amount

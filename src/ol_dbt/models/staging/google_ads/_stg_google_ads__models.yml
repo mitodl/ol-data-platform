@@ -42,6 +42,8 @@ models:
     - not_null
   - name: ad_network_type
     description: str, SEARCH or SEARCH_PARTNERS
+    tests:
+    - not_null
   - name: campaign_id
     description: bigint, campaign id
   - name: campaign_name
@@ -52,10 +54,14 @@ models:
     description: str, advertising channel, e.g. SEARCH
   - name: ad_group_id
     description: bigint, ad group id
+    tests:
+    - not_null
   - name: ad_group_name
     description: str, ad group name
   - name: keyword_criterion_id
     description: bigint, the keyword's criterion id within the ad group
+    tests:
+    - not_null
   - name: keyword_text
     description: str, keyword text
   - name: keyword_match_type
@@ -100,8 +106,12 @@ models:
     - not_null
   - name: ad_network_type
     description: str, SEARCH or SEARCH_PARTNERS
+    tests:
+    - not_null
   - name: conversion_action_resource_name
     description: str, the conversion action's resource name
+    tests:
+    - not_null
   - name: conversion_action_name
     description: str, the conversion action's name, e.g. a purchase or a lead
   - name: campaign_id
@@ -114,10 +124,14 @@ models:
     description: str, advertising channel
   - name: ad_group_id
     description: bigint, ad group id
+    tests:
+    - not_null
   - name: ad_group_name
     description: str, ad group name
   - name: keyword_criterion_id
     description: bigint, the keyword's criterion id
+    tests:
+    - not_null
   - name: keyword_text
     description: str, keyword text
   - name: keyword_match_type
@@ -245,6 +259,8 @@ models:
     - not_null
   - name: campaign_resource_name
     description: str, campaign resource name
+    tests:
+    - not_null
   - name: campaign_id
     description: bigint, campaign id
   - name: campaign_name
@@ -291,6 +307,8 @@ models:
     - not_null
   - name: keyword_resource_name
     description: str, the keyword's resource name
+    tests:
+    - not_null
   - name: campaign_id
     description: bigint, campaign id
   - name: ad_group_id
@@ -335,6 +353,8 @@ models:
     - not_null
   - name: campaign_criterion_resource_name
     description: str, the criterion's resource name
+    tests:
+    - not_null
   - name: campaign_id
     description: bigint, campaign id
   - name: campaign_criterion_type
@@ -373,6 +393,8 @@ models:
     - not_null
   - name: campaign_shared_set_resource_name
     description: str, the link's resource name
+    tests:
+    - not_null
   - name: campaign_id
     description: bigint, campaign id
   - name: shared_set_id
@@ -409,6 +431,8 @@ models:
     - not_null
   - name: shared_criterion_resource_name
     description: str, the keyword's resource name
+    tests:
+    - not_null
   - name: shared_set_id
     description: bigint, shared list id
   - name: shared_criterion_type
@@ -443,8 +467,12 @@ models:
     - not_null
   - name: fetch_window_start
     description: date, first date the fetch covered
+    tests:
+    - not_null
   - name: fetch_window_end
     description: date, last date the fetch covered
+    tests:
+    - not_null
   - name: fetch_retrieved_at
     description: timestamp, when the fetch ran
     tests:

@@ -14,8 +14,8 @@ The report is the Google Ads UI export (UTF-16, tab-separated, two title lines,
 then ``Date & time, User, Campaign, Ad group, Changes``), from October 2024 to
 when it was downloaded. The JSONL is what ad_opt_v2's pull_change_events saved
 from the API between that download and 2026-10-20, already in the report's
-terms (a header line and detail lines per change). The intermediate models
-combine both with the API table, as ad_opt_v2's parse_change_history does.
+terms (a header line and detail lines per change). A later intermediate model
+is to combine both with the API table, as ad_opt_v2's parse_change_history does.
 
 Rows load as the files hold them. Each table is replaced on every load, so a
 rerun reloads the files rather than adding rows.

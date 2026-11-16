@@ -5,7 +5,7 @@ with source as (
 select
     course as change_course
     , line_number as change_line_number
-    , cast("timestamp" as timestamp) as change_at
+    , {{ cast_to_timestamptz('cast("timestamp" as timestamp)') }} as change_at
     , campaign as campaign_name
     , ad_group as ad_group_name
     , header as change_header
