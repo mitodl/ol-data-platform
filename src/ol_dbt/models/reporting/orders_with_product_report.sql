@@ -32,12 +32,12 @@ with orders as (
     inner join program_course
         on program.program_pk = program_course.program_fk
     inner join course
-        on 
+        on
             program_course.course_fk = course.course_pk
             and course.is_current = true
             and course.course_is_live = true
     inner join course_enrollment_detail
-        on 
+        on
             course.course_readable_id = course_enrollment_detail.course_readable_id
             and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
     group by
