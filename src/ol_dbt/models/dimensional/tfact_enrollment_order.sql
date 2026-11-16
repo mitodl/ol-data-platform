@@ -217,7 +217,7 @@ with enrollment as (
             order by
                 -- A learner can hold a refunded order and a later fulfilled one for the
                 -- same enrollment, and the refund can be the most recently updated.
-                case when order_state = 'fulfilled' then 0 else 1 end asc
+                case when order_state = 'fulfilled' then 0 else 1 end asc nulls last
                 , match_priority asc nulls last
                 , order_updated_on desc nulls last
                 -- order_updated_on is order-level and shared by every line on a
