@@ -306,7 +306,7 @@ with mitxonline_problem_events as (
         stored.platform = 'mitxonline'
         and stored.event_timestamp <= watermarks.max_ts
         and users.user_pk is not null
-        and users.user_pk is distinct from stored.user_fk
+        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
 )
 
 , stale_key_mitxpro as (
@@ -339,7 +339,7 @@ with mitxonline_problem_events as (
         stored.platform = 'mitxpro'
         and stored.event_timestamp <= watermarks.max_ts
         and users.user_pk is not null
-        and users.user_pk is distinct from stored.user_fk
+        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
 )
 
 , stale_key_residential as (
@@ -372,7 +372,7 @@ with mitxonline_problem_events as (
         stored.platform = 'residential'
         and stored.event_timestamp <= watermarks.max_ts
         and users.user_pk is not null
-        and users.user_pk is distinct from stored.user_fk
+        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
 )
 
 , stale_key_edxorg as (
@@ -405,7 +405,7 @@ with mitxonline_problem_events as (
         stored.platform = 'edxorg'
         and stored.event_timestamp <= watermarks.max_ts
         and users.user_pk is not null
-        and users.user_pk is distinct from stored.user_fk
+        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
 )
 
 , stale_key_rows as (

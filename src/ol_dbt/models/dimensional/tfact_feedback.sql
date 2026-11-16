@@ -159,8 +159,8 @@ left join {{ this }} as existing
         existing.feedback_pk is not null
         and redacted.source_record_ref is not null
         and (
-            existing.feedback_text is distinct from redacted.text_redacted
-            or existing.feedback_title is distinct from redacted.title_redacted
+            {{ is_distinct_from('existing.feedback_text', 'redacted.text_redacted') }}
+            or {{ is_distinct_from('existing.feedback_title', 'redacted.title_redacted') }}
         )
     )
     -- Re-key: a stored key that no longer matches the current resolution won't move
@@ -172,14 +172,15 @@ left join {{ this }} as existing
     or (
         existing.feedback_pk is not null
         and (
-            existing.user_fk
-                is distinct from coalesce(users_by_global_id.user_pk, users_by_email.user_pk)
-            or existing.courserun_fk is distinct from dim_course_run.courserun_pk
-            or existing.content_block_fk is distinct from dim_course_content.content_block_pk
-            or existing.subject_type is distinct from unioned.subject_type
+            {{ is_distinct_from(
+                'existing.user_fk', 'coalesce(users_by_global_id.user_pk, users_by_email.user_pk)'
+            ) }}
+            or {{ is_distinct_from('existing.courserun_fk', 'dim_course_run.courserun_pk') }}
+            or {{ is_distinct_from('existing.content_block_fk', 'dim_course_content.content_block_pk') }}
+            or {{ is_distinct_from('existing.subject_type', 'unioned.subject_type') }}
         )
     )
     -- A turn not stored yet, or renumbered upstream: neither moves updated_at.
     or existing.feedback_pk is null
-    or existing.turn_index is distinct from unioned.turn_index
+    or {{ is_distinct_from('existing.turn_index', 'unioned.turn_index') }}
 {% endif %}
