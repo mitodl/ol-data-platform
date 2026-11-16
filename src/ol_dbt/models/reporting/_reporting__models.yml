@@ -1981,6 +1981,9 @@ models:
     data_type: varchar
     description: string, name of the product associated with the order line item.
       May be null for bootcamps and edX.org.
+  - name: verified_enrollment_count
+    description: numeric, count of verified enrollments for the user in the associated 
+      program on the corresponding platform.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
