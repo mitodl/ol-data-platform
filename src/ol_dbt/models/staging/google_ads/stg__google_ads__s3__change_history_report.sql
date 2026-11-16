@@ -4,12 +4,14 @@ with source as (
 
 select
     course as change_course
-    , row_number as change_row_number
+    , {{ adapter.quote('row_number') }} as change_row_number
     -- The UI puts a narrow no-break space before AM/PM.
-    -- The files have no account id; every account's zone is America/New_York.
-    , {{ google_ads_local_to_utc(date_parse("replace(date_time, chr(8239), ' ')", "'%b %d, %Y, %I:%i:%s %p'"), "'America/New_York'") }}
+    , {{ google_ads_local_to_utc(
+        date_parse("replace(date_time, " ~ codepoint_char(8239) ~ ", ' ')", "'%b %d, %Y, %I:%i:%s %p'")
+        , google_ads_default_time_zone()
+    ) }}
     as change_at
-    , user as change_user
+    , {{ adapter.quote('user') }} as change_user
     , campaign as campaign_name
     , ad_group as ad_group_name
     , changes as change_text

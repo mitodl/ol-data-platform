@@ -5,8 +5,7 @@ with source as (
 select
     course as change_course
     , line_number as change_line_number
-    -- The files have no account id; every account's zone is America/New_York.
-    , {{ google_ads_local_to_utc('"timestamp"', "'America/New_York'") }} as change_at
+    , {{ google_ads_local_to_utc(adapter.quote('timestamp'), google_ads_default_time_zone()) }} as change_at
     , campaign as campaign_name
     , ad_group as ad_group_name
     , header as change_header

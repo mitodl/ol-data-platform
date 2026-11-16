@@ -1,7 +1,8 @@
 with source as (
     select
         campaign_snapshots.*
-        , customer_clients.customer_client__time_zone as account_time_zone
+        , coalesce(customer_clients.customer_client__time_zone, {{ google_ads_default_time_zone() }})
+        as account_time_zone
     from {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__campaign_snapshots') }} as campaign_snapshots
     left join {{ source('ol_warehouse_raw_data', 'raw__google_ads__api__customer_clients') }} as customer_clients
         on campaign_snapshots.customer_id = cast(customer_clients.customer_client__id as varchar)
