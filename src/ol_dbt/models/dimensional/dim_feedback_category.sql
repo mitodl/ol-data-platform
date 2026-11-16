@@ -85,7 +85,7 @@ with ticket as (
         , row_number() over (
             partition by category_slug
             order by
-                case category_source when 'seed' then 0 else 1 end
+                case category_source when 'seed' then 0 else 1 end nulls last
                 , updated_at desc
         ) as category_rank
     from combined

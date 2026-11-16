@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract x year_month. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x contract x year_month. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 --
 -- The contract-scoped sibling of mv_b2b_monthly_engagement_trend, which stays
 -- at org x year_month. Both exist because the MIT Learn dashboard mirrors

@@ -1,8 +1,7 @@
 -- DEDP course final grades combined from course run and exam from MicroMaster DB
 
 with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__grades_combinedfinalgrade') }}
+    {{ live_raw_rows('raw__micromasters__app__postgres__grades_combinedfinalgrade') }}
 )
 
 , cleaned as (

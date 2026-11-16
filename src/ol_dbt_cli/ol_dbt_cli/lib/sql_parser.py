@@ -80,6 +80,13 @@ def _make_jinja_env(
         source_placeholder_map[placeholder] = source_key
         return markupsafe.Markup(placeholder)  # noqa: S704
 
+    def _live_raw_rows(raw_table: str, relation: object = None) -> markupsafe.Markup:
+        # The macro selects the raw source less its deleted records. Offline that
+        # is the source itself, which lineage and fixture scaffolding need to see.
+        if relation is None:
+            relation = _source(LIVE_RAW_ROWS_SOURCE_NAME, raw_table)
+        return markupsafe.Markup(f"select * from {relation}")  # noqa: S608, S704 — offline placeholder SQL, never executed
+
     def _config(**_kwargs: object) -> markupsafe.Markup:
         return markupsafe.Markup("")  # noqa: S704
 
@@ -111,6 +118,7 @@ def _make_jinja_env(
         {
             "ref": _ref,
             "source": _source,
+            "live_raw_rows": _live_raw_rows,
             "config": _config,
             "var": _var,
             "env_var": _env_var,
@@ -269,6 +277,10 @@ def _render_jinja(
 _REF_RE = re.compile(r"\{\{\s*ref\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
 # Replace {{ source('schema', 'table') }} with source_schema_table
 _SOURCE_RE = re.compile(r"\{\{\s*source\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
+# The dbt source live_raw_rows (macros/raw_delete_filter.sql) reads its raw table from.
+LIVE_RAW_ROWS_SOURCE_NAME = "ol_warehouse_raw_data"
+# Replace {{ live_raw_rows('table'[, relation]) }} with a select from the source placeholder
+_LIVE_RAW_ROWS_RE = re.compile(r"\{\{\s*live_raw_rows\s*\(\s*['\"]([^'\"]+)['\"][^}]*\)\s*\}\}")
 # Replace {{ config(...) }} blocks — may be multiline, strip entirely
 _CONFIG_RE = re.compile(r"\{\{\s*config\s*\(.*?\)\s*\}\}", re.DOTALL)
 # Replace {{ duckdb_init() }} and similar zero-arg macro calls
@@ -477,10 +489,20 @@ def _strip_jinja_regex(sql: str) -> JinjaStripResult:
         source_placeholder_map[placeholder] = source_key
         return placeholder
 
+    def _replace_live_raw_rows(m: re.Match[str]) -> str:
+        table = m.group(1)
+        source_key = f"{LIVE_RAW_ROWS_SOURCE_NAME}.{table}"
+        placeholder = f"source_{_to_identifier(LIVE_RAW_ROWS_SOURCE_NAME)}_{_to_identifier(table)}"
+        if source_key not in source_names:
+            source_names.append(source_key)
+        source_placeholder_map[placeholder] = source_key
+        return f"select * from {placeholder}"  # noqa: S608 — offline placeholder SQL, never executed
+
     cleaned = _CONFIG_RE.sub("", sql)
     cleaned = _JINJA_CONTROL_RE.sub("", cleaned)
     cleaned = _REF_RE.sub(_replace_ref, cleaned)
     cleaned = _SOURCE_RE.sub(_replace_source, cleaned)
+    cleaned = _LIVE_RAW_ROWS_RE.sub(_replace_live_raw_rows, cleaned)
     # All Jinja replacements use UNQUOTED identifiers so that templates that already have
     # surrounding SQL quotes (e.g. `like '{{ var("x") }}'`) produce valid SQL (the outer
     # quotes are preserved as string delimiters and the placeholder becomes the content).

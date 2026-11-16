@@ -51,7 +51,7 @@ with problem_events as (
                     , problem_events.openedx_user_id
                     , problem_events.courserun_readable_id
                     , cc.parent_block_id
-                order by problem_events.event_timestamp
+                order by problem_events.event_timestamp nulls last
             ) as prev_event_timestamp
     from problem_events
     inner join overall_grade

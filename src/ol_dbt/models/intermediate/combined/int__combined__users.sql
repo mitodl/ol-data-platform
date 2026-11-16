@@ -50,18 +50,18 @@ with mitxonline_users as (
                 user_gdpr_consent_date desc
                 , enrollment_created_on desc
                 , enrollment_updated_on desc
-                , user_id asc
-                , user_email asc
-                , user_full_name asc
-                , user_address_country asc
-                , user_gender asc
-                , user_company asc
-                , user_job_title asc
-                , user_industry asc
-                , user_address_street asc
-                , user_address_city asc
-                , user_address_state asc
-                , user_address_postal_code asc
+                , user_id asc nulls last
+                , user_email asc nulls last
+                , user_full_name asc nulls last
+                , user_address_country asc nulls last
+                , user_gender asc nulls last
+                , user_company asc nulls last
+                , user_job_title asc nulls last
+                , user_industry asc nulls last
+                , user_address_street asc nulls last
+                , user_address_city asc nulls last
+                , user_address_state asc nulls last
+                , user_address_postal_code asc nulls last
         ) as row_num
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
 )
@@ -85,18 +85,18 @@ with mitxonline_users as (
             order by
                 user_gdpr_consent_date desc
                 , courserun_start_on desc
-                , user_id asc
-                , user_email asc
-                , user_full_name asc
-                , user_address_country asc
-                , user_gender asc
-                , user_company asc
-                , user_job_title asc
-                , user_industry asc
-                , user_address_street asc
-                , user_address_city asc
-                , user_address_state asc
-                , user_address_postal_code asc
+                , user_id asc nulls last
+                , user_email asc nulls last
+                , user_full_name asc nulls last
+                , user_address_country asc nulls last
+                , user_gender asc nulls last
+                , user_company asc nulls last
+                , user_job_title asc nulls last
+                , user_industry asc nulls last
+                , user_address_street asc nulls last
+                , user_address_city asc nulls last
+                , user_address_state asc nulls last
+                , user_address_postal_code asc nulls last
         ) as row_num
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
 )

@@ -1,8 +1,9 @@
 """Read the SQL in the dbt project's source files past comments, quoted text and Jinja.
 
 The checks that read source files rather than compiled SQL (``pipe_concat``,
-``raw_json_calls``) look for an operator or a function call in the SQL a file
-hands to the warehouse, and a match inside a comment or a string literal is not one.
+``raw_json_calls``, ``null_ordering``) look for an operator, a function call or a
+sort key in the SQL a file hands to the warehouse, and a match inside a comment or
+a string literal is not one.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
 # A Jinja block ends only at a closing delimiter outside its strings, so a hook
 # such as `post_hook="update t set v = a || {{ this }}"` is consumed whole.
@@ -39,11 +40,12 @@ _MACRO = re.compile(
     r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
     re.DOTALL,
 )
+_OTHER_ENGINE_PREFIXES = ("trino__", "duckdb__")
 # YAML keys whose values are prose or fixture data, never SQL.
 _NON_SQL_KEYS = frozenset({"description", "rows", "meta", "tags"})
 
 
-def sql_code(source: str) -> str:
+def sql_code(source: str, *, keep_identifiers: bool = False) -> str:
     """Return *source* with its comments, quoted text and Jinja blanked out.
 
     Blanking keeps every offset and newline, so a match in the result indexes
@@ -52,31 +54,95 @@ def sql_code(source: str) -> str:
     ``{{ from_iso8601_timestamp("created_on || 'Z'") }}``.
 
     :param source: The text of a SQL file, or a SQL string from YAML.
+    :param keep_identifiers: Fill a double-quoted identifier with ``_`` rather than
+        blanking it, so ``"created_on"`` still reads as a term without matching a keyword.
     :returns: *source* with only its SQL code left in place.
     :rtype: str
     """
     chars = list(source)
     for match in _TOKEN.finditer(source):
         start, end = match.span()
-        chars[start:end] = _NOT_NEWLINE.sub(" ", match.group())
+        identifier = keep_identifiers and match.group().startswith('"')
+        chars[start:end] = _NOT_NEWLINE.sub("_" if identifier else " ", match.group())
         if match.group("jinja"):
             for string in _JINJA_STRING.finditer(match.group("jinja")):
                 group = "single" if string.group("single") is not None else "double"
                 string_start, string_end = string.span(group)
-                chars[start + string_start : start + string_end] = sql_code(string.group(group))
+                chars[start + string_start : start + string_end] = sql_code(
+                    string.group(group), keep_identifiers=keep_identifiers
+                )
     return "".join(chars)
+
+
+def jinja_statement_spans(source: str) -> list[tuple[int, int]]:
+    """Return the spans of the ``{% ... %}`` statements in *source*.
+
+    A statement inside a comment or a quoted SQL string is part of that token, so it is not one.
+
+    :param source: The text of a SQL file, or a SQL string from YAML.
+    :returns: The ``(start, end)`` offsets of each statement, tag delimiters included.
+    :rtype: list[tuple[int, int]]
+    """
+    return [
+        match.span() for match in _TOKEN.finditer(source) if match.group("jinja") and match.group().startswith("{%")
+    ]
+
+
+def without_jinja_comments(source: str) -> str:
+    """Return *source* with its ``{# ... #}`` comments blanked, keeping every offset and newline.
+
+    :param source: The text of a SQL file.
+    :returns: *source* with only its rendered text and Jinja left in place.
+    :rtype: str
+    """
+    return _JINJA_COMMENT.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), source)
 
 
 def macro_declarations(source: str) -> Iterator[re.Match[str]]:
     """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
 
-    The comments are blanked rather than removed so offsets still index *source*.
-
     :param source: The text of a SQL file.
     :returns: A match per macro, with ``name`` and ``body`` groups.
     :rtype: Iterator[re.Match[str]]
     """
-    return _MACRO.finditer(_JINJA_COMMENT.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), source))
+    return _MACRO.finditer(without_jinja_comments(source))
+
+
+def starrocks_macro_names(sources: Iterable[str]) -> frozenset[str]:
+    """Return the names of the macros *sources* give a ``starrocks__`` body, without the prefix.
+
+    :param sources: The text of every SQL file in the project.
+    :returns: The dispatched macro names StarRocks has its own body for.
+    :rtype: frozenset[str]
+    """
+    return frozenset(
+        match.group("name").removeprefix("starrocks__")
+        for source in sources
+        for match in macro_declarations(source)
+        if match.group("name").startswith("starrocks__")
+    )
+
+
+def other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[tuple[int, int]]:
+    """Return the spans of the macro bodies in *source* that StarRocks never renders.
+
+    That is ``trino__x`` and ``duckdb__x`` always, and ``default__x`` when the
+    project also defines ``starrocks__x``.
+
+    :param source: The text of a SQL file.
+    :param starrocks_macros: The result of :func:`starrocks_macro_names` for the project.
+    :returns: The ``(start, end)`` offsets of each exempt body.
+    :rtype: list[tuple[int, int]]
+    """
+    return [
+        match.span("body")
+        for match in macro_declarations(source)
+        if match.group("name").startswith(_OTHER_ENGINE_PREFIXES)
+        or (
+            match.group("name").startswith("default__")
+            and match.group("name").removeprefix("default__") in starrocks_macros
+        )
+    ]
 
 
 def yaml_sql_strings(node: Any, path: str = "") -> Iterator[tuple[str, str]]:

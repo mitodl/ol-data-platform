@@ -21,7 +21,7 @@ with mentions as (
         select
             *
             , row_number() over (
-                partition by concept_label_key order by mention_count desc, label ASC
+                partition by concept_label_key order by mention_count desc, label ASC nulls last
             ) as label_rank
         from label_counts
     ) as ranked
@@ -37,7 +37,7 @@ with mentions as (
             concept_label_key
             , concept_kind
             , row_number() over (
-                partition by concept_label_key order by count(*) desc, concept_kind
+                partition by concept_label_key order by count(*) desc, concept_kind nulls last
             ) as kind_rank
         from mentions
         where concept_kind is not null
@@ -57,7 +57,7 @@ with mentions as (
             , description
             , row_number() over (
                 partition by concept_label_key
-                order by case when teaching_status = 'taught' then 0 else 1 end, length(description) desc
+                order by case when teaching_status = 'taught' then 0 else 1 end nulls last, length(description) desc
             ) as description_rank
         from mentions
         where description is not null

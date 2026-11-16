@@ -17,7 +17,7 @@
     be embedded as a resource's search text (the embedding substrate's
     resource_knowledge_markdown_v1 builder) without another model call.
 #}
-{% set concept_order = 'run_bridge.claim_count desc, concepts.name ASC' %}
+{% set concept_order = 'run_bridge.claim_count desc, concepts.name ASC nulls last' %}
 
 with learn_runs as (
     select * from {{ ref('int__courseware__learn_course_runs') }}
@@ -65,9 +65,9 @@ with learn_runs as (
 , statement_lists as (
     select
         courserun_fk
-        , {{ array_agg_filter('label', "claim_kind = 'skill'", order_by='label', distinct=true) }} as skills
-        , {{ array_agg_filter('label', "claim_kind = 'learning_outcome'", order_by='label', distinct=true) }} as learning_outcomes
-        , {{ array_agg_filter('label', "claim_kind = 'audience'", order_by='label', distinct=true) }} as audience
+        , {{ array_agg_filter('label', "claim_kind = 'skill'", order_by='label nulls last', distinct=true) }} as skills
+        , {{ array_agg_filter('label', "claim_kind = 'learning_outcome'", order_by='label nulls last', distinct=true) }} as learning_outcomes
+        , {{ array_agg_filter('label', "claim_kind = 'audience'", order_by='label nulls last', distinct=true) }} as audience
     from claims
     group by courserun_fk
 )

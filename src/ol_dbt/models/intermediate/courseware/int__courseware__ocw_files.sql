@@ -1,8 +1,10 @@
 {#
-    Every file int__ocw__content_files publishes for the OCW courses
+    Every page and resource int__ocw__content_files has for the OCW courses
     var('courseware_ocw_courses') selects, with what int__courseware__extraction_sources
     scopes them by: whether the file is an answer key, its section and parent page,
     and for a page, its role and the unit it belongs to. The rules are described there.
+    A resource with no text (a video with no transcript, a file missing from the
+    bucket) is kept: it has no body to read, but its description can link others.
     It is a table of its own because that model reads these files from many places,
     and Trino plans every reference to a CTE again (QUERY_HAS_TOO_MANY_STAGES).
 #}
@@ -28,6 +30,7 @@ with ocw_courses as (
         , files.content_file_key
         , files.content_type
         , files.title
+        , files.description
         , files.file_extension
         , files.content
         , coalesce(files.content_tags, '') as content_tags
@@ -51,6 +54,7 @@ with ocw_courses as (
         , content_file_key
         , content_type
         , title
+        , description
         , file_extension
         -- a page's key is courses/<slug>/pages/<path>/; the course's root page has no path
         , {{ regexp_extract_or_null('content_file_key', "'/pages/(.+)$'", 1) }} as page_path
@@ -163,6 +167,7 @@ select
     , files.content_file_key
     , files.content_type
     , files.title
+    , files.description
     , files.file_extension
     , files.page_path
     , files.section

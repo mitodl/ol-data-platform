@@ -40,7 +40,7 @@ with loaded_articles as (
 , article_topics as (
     select
         articles.article_uuid
-        , array_agg(distinct topic_lookup.topic_name order by topic_lookup.topic_name) as topics
+        , array_agg(distinct topic_lookup.topic_name order by topic_lookup.topic_name nulls last) as topics
     from articles
     cross join unnest(articles.article_topic_names) as article_topic (topic_name)
     inner join topic_lookup on trim(article_topic.topic_name) = topic_lookup.offeror_topic_name

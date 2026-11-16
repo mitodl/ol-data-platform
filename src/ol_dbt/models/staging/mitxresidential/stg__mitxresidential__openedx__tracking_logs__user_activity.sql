@@ -3,6 +3,7 @@
     unique_key=['user_username', 'useractivity_context_object', 'useractivity_event_source',
     'useractivity_event_type', 'useractivity_event_object', 'useractivity_timestamp'],
     incremental_strategy='delete+insert',
+    on_schema_change='append_new_columns',
     views_enabled=false
 ) }}
 
@@ -13,7 +14,7 @@ with source as (
         and {{ json_query_string('context', "'$.user_id'") }} is not null
 
         {% if is_incremental() %}
-            and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
+            and {{ tracking_log_load_watermark() }}
         {% endif %}
 )
 
@@ -42,6 +43,7 @@ with source as (
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences(adapter.quote('time'), "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp
+        , _dlt_load_id as useractivity_load_id
     from most_recent_source
 )
 

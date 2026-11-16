@@ -24,6 +24,7 @@ import yaml
 from ol_dbt_cli.lib.inventory import (
     AIRBYTE_LOADER,
     DEFAULT_ENVIRONMENT,
+    DLT_FIRST_LAKES,
     DLT_LOADER,
     KEYSET_SUFFIX,
     LOADER_METADATA_COLUMNS,
@@ -32,6 +33,7 @@ from ol_dbt_cli.lib.inventory import (
     history_absence,
     history_in_scope,
     keyset_tables,
+    lake_loader,
 )
 
 SNAPSHOT_DIR = Path("src/ol_dbt/snapshots/raw_history")
@@ -55,12 +57,17 @@ class DeleteFilter:
     ``keyset``: keep rows whose key is in ``<raw_table>__keyset`` or that the
     loader wrote after the keyset was read. ``latest_load``: keep the rows of the
     newest dlt load, for a dlt merge that re-reads the whole source each load.
+
+    ``loader_time_column`` is the production loader's. ``lake_loader_time_columns``
+    names the lakes another loader fills, e.g. QA, where dlt loads a unit whose
+    production tables Airbyte writes, so its raw tables have `_dlt_load_id`.
     """
 
     kind: str
     key: str | None = None
     loader_time_column: str | None = None
     max_age_hours: int | None = None
+    lake_loader_time_columns: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -114,11 +121,17 @@ def _delete_filter(unit: Unit, table: dict[str, Any], keyset_names: set[str], ab
         if loader not in {AIRBYTE_LOADER, DLT_LOADER} or loader_time is None:
             msg = f"{unit.key} has keyset tables but its loader {loader!r} stamps no load time"
             raise RenderError(msg)
+        lake_columns: list[tuple[str, str]] = []
+        for lake in DLT_FIRST_LAKES:
+            column = LOADER_METADATA_COLUMNS.get(lake_loader(unit, lake) or "")
+            if column is not None and column != loader_time:
+                lake_columns.append((lake, column))
         return DeleteFilter(
             kind="keyset",
             key=str(table["primary_key"][0][0]),
             loader_time_column=loader_time,
             max_age_hours=STALE_KEYSET_INTERVALS * _unit_interval_hours(unit),
+            lake_loader_time_columns=tuple(lake_columns),
         )
     dlt = unit.data.get("dlt")
     merges = isinstance(dlt, dict) and dlt.get("write_disposition") == "merge"
@@ -182,6 +195,8 @@ def _jinja(value: object) -> str:
         return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_jinja(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{_jinja(key)}: {_jinja(item)}" for key, item in value.items()) + "}"
     if value is None:
         return "none"
     if isinstance(value, int):
@@ -430,6 +445,8 @@ def _render_delete_filter_macro(selected: dict[str, list[HistoryTable]]) -> str:
             entry: dict[str, object] = {"kind": spec.kind, "loader_time_column": spec.loader_time_column}
             if spec.kind == "keyset":
                 entry |= {"key": spec.key, "max_age_hours": spec.max_age_hours}
+            if spec.lake_loader_time_columns:
+                entry["lake_loader_time_columns"] = dict(spec.lake_loader_time_columns)
             rendered = ", ".join(f"{_jinja(name)}: {_jinja(value)}" for name, value in entry.items())
             lines.append(f"        {_jinja(table.raw_table)}: {{{rendered}}},")
     lines += ["    }) %}", "{% endmacro %}", ""]

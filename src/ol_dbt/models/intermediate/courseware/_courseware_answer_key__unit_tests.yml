@@ -95,68 +95,78 @@ unit_tests:
     # answer keys
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/034pfsoln/,
       content_type: pdf, title: 034pfsoln.pdf, file_extension: .pdf, content_tags: null,
-      content: 1. 4}
+      content: 1. 4, has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps1_key/,
       content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
-      content: 1. The force is 3 N.}
+      content: 1. The force is 3 N., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mock_exam/,
       content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
-      content: 1. Beowulf is an epic.}
+      content: 1. Beowulf is an epic., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit18_01scf10_ps5/,
       content_type: pdf, title: Problem Set 5, file_extension: .pdf, content_tags: null,
-      content: Problem Set 5 Solutions. 1. 2x}
+      content: Problem Set 5 Solutions. 1. 2x, has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ans9/, content_type: pdf,
       title: ans9.pdf, file_extension: .pdf, content_tags: null, content: 1. Run k
-        times and take the median.}
+        times and take the median., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/exam_smpsolqii2a/,
       content_type: pdf, title: exam_smpsolqii2a.pdf, file_extension: .pdf, content_tags: null,
-      content: Ohio county election results.}
+      content: Ohio county election results., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/section22_ak/,
       content_type: pdf, title: section22_ak.pdf, file_extension: .pdf, content_tags: null,
       content: "7.014 Introductory Biology. Recitation Section 22 Answer Key May 2-3,\
-        \ 2005"}
+        \ 2005", has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit6_041f10_rec02/,
       content_type: pdf, title: Recitation 2, file_extension: .pdf, content_tags: '["Recitations",
-        "Problem Set Solutions"]', content: 1. 2x}
+        "Problem Set Solutions"]', content: 1. 2x, has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit8_01_final/,
       content_type: pdf, title: Final, file_extension: .pdf, content_tags: null, content: "1.\
-        \ Solution: x = 3\n2. Solution: y = 4\n3. Solution: z = 5"}
+        \ Solution: x = 3\n2. Solution: y = 4\n3. Solution: z = 5", has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps3_problem_2/,
       content_type: video, title: Problem 2, file_extension: null, content_tags: '["Problem-solving
-        Videos", "Problem Set Solutions"]', content: null}
+        Videos", "Problem Set Solutions"]', content: null, has_text_file: true, is_3play_artifact: false}
+    # a resource Learn does not load (a video with no transcript) is not listed
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps4_problem_1/,
+      content_type: video, title: Problem 1, file_extension: .mp4, content_tags: '["Problem
+        Set Solutions"]', content: null, has_text_file: false, is_3play_artifact: false}
     # topics and teaching material
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
       content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
-      content_tags: null, content: An aqueous solution is a solute in water.}
+      content_tags: null, content: An aqueous solution is a solute in water., has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
       content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
-      content: Solution of dynamic equilibrium equations by direct integration.}
+      content: Solution of dynamic equilibrium equations by direct integration., has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ses5_solis_wets/,
       content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: null,
-      content: Minimization by random search techniques by Solis and Wets.}
+      content: Minimization by random search techniques by Solis and Wets., has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/solnhofenlimestone/,
       content_type: file, title: SolnhofenLimestone.txt, file_extension: .txt, content_tags: null,
-      content: Peak stress of Solnhofen limestone.}
+      content: Peak stress of Solnhofen limestone., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/catialab2solids/,
       content_type: pdf, title: "CATIA Lab 2: Solids", file_extension: .pdf, content_tags: null,
-      content: Extrude a sketch into a solid.}
+      content: Extrude a sketch into a solid., has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/solving-quadratics/,
       content_type: pdf, title: Solving Quadratic Equations, file_extension: .pdf,
-      content_tags: null, content: Solving quadratic equations by factoring.}
+      content_tags: null, content: Solving quadratic equations by factoring., has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/key_ideas/,
       content_type: pdf, title: Key Ideas, file_extension: .pdf, content_tags: null,
-      content: The key ideas of the course.}
+      content: The key ideas of the course., has_text_file: true, is_3play_artifact: false}
     # not resources the rule judges: a page, a lecture video's transcript, and a
     # resource of a lecture video
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/lec10_iterative_sol/,
       content_type: file, title: "Lecture 10: Iterative Solutions", file_extension: .pdf,
-      content_tags: Lecture Videos, content: Iterative methods.}
+      content_tags: Lecture Videos, content: Iterative methods., has_text_file: true,
+      is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/pages/exam-solutions/,
       content_type: page, title: Exam Solutions, file_extension: null, content_tags: null,
-      content: <p>Solutions</p>}
+      content: <p>Solutions</p>, has_text_file: true, is_3play_artifact: false}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/lec5_solutions_transcript/,
       content_type: file, title: Lecture 5 transcript, file_extension: .srt, content_tags: null,
-      content: iterative solutions}
+      content: iterative solutions, has_text_file: true, is_3play_artifact: false}
   - input: source('courseware_intermediate', 'courseware_answer_check')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps_2003.pdf,
@@ -246,8 +256,6 @@ unit_tests:
   - input: ref('int__courseware__ocw_table_rows')
     rows: []
   - input: ref('int__courseware__ocw_resources')
-    rows: []
-  - input: ref('stg__ocw__s3__course_content')
     rows: []
   - input: ref('int__combined__course_xml_blocks')
     rows: []

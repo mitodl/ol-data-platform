@@ -62,7 +62,7 @@ with runs as (
             , decision.verdict
             , row_number() over (
                 partition by decision.query_label_key, decision.candidate_label_key
-                order by runs.started_at desc, decision.verdict asc
+                order by runs.started_at desc, decision.verdict asc nulls last
             ) as decision_rank
         from {{ source('courseware_intermediate', 'courseware_resolution_decision') }} as decision
         inner join runs

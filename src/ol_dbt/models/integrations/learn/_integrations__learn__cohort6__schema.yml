@@ -71,10 +71,6 @@ models:
     Runs of the courses in integrations__learn__see_courses, one row per Sloan course
     offering, with the fields MIT Learn's legacy Sloan ETL set on a run
     (transform_run). Dates are ISO 8601 UTC instants of midnight US Eastern.
-  config:
-    meta:
-      qa_branches:
-      - mitlearn/app_postgres
   columns:
   - name: readable_id
     description: str, the run's course.
@@ -321,3 +317,88 @@ unit_tests:
     rows:
     - {guid: ol-1, event_datetime: "2124-03-15T17:42:36.000000Z", event_end_datetime: null}
     - {guid: mitpe-1, event_datetime: "2124-09-15T16:30:00.000000Z", event_end_datetime: "2124-09-15T17:00:00.000000Z"}
+
+- name: test_integrations__learn__see_courses_applies_learn_rules
+  description: >
+    MIT Learn loads only a course with a URL and an offering, resolves its Sloan topic
+    through the offeror topic mappings and drops an unmapped one, takes the credits
+    of
+    the first offering in API order even when null, and uses the title as image alt
+    text. Delivery and pace are the distinct codes of the runs, format asynchronous
+    first.
+  model: integrations__learn__see_courses
+  given:
+  - input: ref('int__see__courses')
+    rows:
+    - {readable_id: c1, title: One, url: 'https://executive.mit.edu/c1', topic: Other
+        Business, has_url: true, has_offerings: true}
+    - {readable_id: c2, title: Two, url: 'https://executive.mit.edu/c2', topic: Unmapped,
+      has_url: true, has_offerings: true}
+    - {readable_id: c3, title: No URL, url: null, topic: Other Business, has_url: false,
+      has_offerings: true}
+    - {readable_id: c4, title: No offerings, url: 'https://executive.mit.edu/c4',
+      topic: Other Business, has_url: true, has_offerings: false}
+  - input: ref('int__see__course_runs')
+    rows:
+    - {readable_id: c1, run_id: r1, run_api_position: 1, delivery_label: Online, is_on_demand: true,
+      is_synchronous: false, is_asynchronous: true, continuing_ed_credits: '2.0'}
+    - {readable_id: c1, run_id: r2, run_api_position: 0, delivery_label: Blended,
+      is_on_demand: false, is_synchronous: true, is_asynchronous: true, continuing_ed_credits: null}
+    - {readable_id: c2, run_id: r3, run_api_position: 0, delivery_label: In Person,
+      is_on_demand: false, is_synchronous: true, is_asynchronous: false, continuing_ed_credits: '1.5'}
+    - {readable_id: c3, run_id: r4, run_api_position: 0, delivery_label: Online, is_on_demand: false,
+      is_synchronous: true, is_asynchronous: false, continuing_ed_credits: '1.0'}
+  - input: ref('int__learn__offeror_topic_lookup')
+    rows:
+    - {offeror_code: see, offeror_topic_name: Other Business, topic_uuid: t1, topic_name: Management}
+    - {offeror_code: mitpe, offeror_topic_name: Unmapped, topic_uuid: t2, topic_name: Other
+        offeror}
+  expect:
+    rows:
+    - {readable_id: c1, image_alt: One, topics: [Management], delivery: [hybrid, online],
+      pace: [instructor_paced, self_paced], format: [asynchronous, synchronous], continuing_ed_credits: null}
+    - {readable_id: c2, image_alt: Two, topics: null, delivery: [in_person], pace: [
+        instructor_paced], format: [synchronous], continuing_ed_credits: '1.5'}
+
+- name: test_integrations__learn__see_runs_applies_learn_rules
+  description: >
+    MIT Learn maps Sloan's delivery label to its code, makes only an online on-demand
+    run anytime and self-paced, blanks an online run's location, falls back to USD
+    for a missing or unknown currency, uses empty strings for missing text, reads
+    the
+    duration's hours as weeks and the time commitment's first two numbers as weekly
+    hours, so "8 hours, 5 days/week" is 8 to 5. Runs of a course MIT Learn skips are
+    left out.
+  model: integrations__learn__see_runs
+  given:
+  - input: ref('int__see__courses')
+    rows:
+    - {readable_id: c1, has_url: true, has_offerings: true}
+    - {readable_id: c2, has_url: false, has_offerings: true}
+  - input: ref('int__see__course_runs')
+    rows:
+    - {readable_id: c1, run_id: r1, delivery_label: Online, is_on_demand: true, is_synchronous: false,
+      is_asynchronous: true, location: Boston, currency: CHF, is_known_currency: true,
+      duration: "6 hours/day", time_commitment: "8 hours, 5 days/week"}
+    - {readable_id: c1, run_id: r2, delivery_label: Blended, is_on_demand: false,
+      is_synchronous: true, is_asynchronous: true, location: Cambridge, currency: ZZZ,
+      is_known_currency: false, duration: "30 Days", time_commitment: "6-8 hours/week"}
+    - {readable_id: c1, run_id: r3, delivery_label: In Person, is_on_demand: false,
+      is_synchronous: true, is_asynchronous: false, location: null, currency: null,
+      is_known_currency: false, duration: null, time_commitment: null}
+    - {readable_id: c2, run_id: r4, delivery_label: Online, is_on_demand: false, is_synchronous: true,
+      is_asynchronous: false, currency: USD, is_known_currency: true}
+  expect:
+    rows:
+    - {readable_id: c1, run_id: r1, delivery: [online], availability: anytime, pace: [
+        self_paced], format: [asynchronous], location: '', currency: CHF, duration: "6\
+        \ hours/day", min_weeks: 6, max_weeks: 6, time_commitment: "8 hours, 5 days/week",
+      min_weekly_hours: 8, max_weekly_hours: 5}
+    - {readable_id: c1, run_id: r2, delivery: [hybrid], availability: dated, pace: [
+        instructor_paced], format: [synchronous, asynchronous], location: Cambridge,
+      currency: USD, duration: "30 Days", min_weeks: 6, max_weeks: 6, time_commitment: "6-8\
+        \ hours/week", min_weekly_hours: 6, max_weekly_hours: 8}
+    - {readable_id: c1, run_id: r3, delivery: [in_person], availability: dated, pace: [
+        instructor_paced], format: [synchronous], location: '', currency: USD, duration: '',
+      min_weeks: null, max_weeks: null, time_commitment: '', min_weekly_hours: null,
+      max_weekly_hours: null}

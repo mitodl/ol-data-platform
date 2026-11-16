@@ -15,7 +15,6 @@ with source as (
              when object_id like '%+canvas%' then {{ split_part_or_null('object_id', "'+canvas'", 1) }}
              when agent = 'CanvasSyllabusBot' then object_id
         end as canvas_course_id
-        , dj_session_key as chatsession_django_session_key
         , {{ cast_timestamp_to_iso8601('created_on') }} as chatsession_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as chatsession_updated_on
     from most_recent_source

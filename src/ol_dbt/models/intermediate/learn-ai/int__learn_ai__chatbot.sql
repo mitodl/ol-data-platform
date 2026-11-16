@@ -44,7 +44,7 @@ with chatsession as (
         , chatsession.chatsession_object_id
         , row_number() over (
             partition by chatsession.chatsession_object_id
-            order by video.retrieved_at asc, video.block_id asc
+            order by video.retrieved_at asc nulls last, video.block_id asc nulls last
         ) as row_num
     from chatsession
     inner join video

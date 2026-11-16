@@ -65,7 +65,7 @@ with pages as (
 , instructors as (
     select
         links.wagtail_page_id
-        , array_agg(instructor_pages.instructor_name order by links.instructorpagelink_id) as instructors
+        , array_agg(instructor_pages.instructor_name order by links.instructorpagelink_id nulls last) as instructors
     from {{ ref('stg__mitxonline__app__postgres__cms_instructorpagelink') }} as links
     inner join {{ ref('stg__mitxonline__app__postgres__cms_instructorpage') }} as instructor_pages
         on links.instructor_wagtail_page_id = instructor_pages.wagtail_page_id
@@ -92,7 +92,7 @@ with pages as (
         wagtail_page_id
         , {{ dbt.concat([
             "'['"
-            , array_join("array_agg(faq_json order by faq_position, productpagefaq_id)", ",")
+            , array_join("array_agg(faq_json order by faq_position nulls last, productpagefaq_id nulls last)", ",")
             , "']'"
         ]) }} as faqs
     from faq_objects

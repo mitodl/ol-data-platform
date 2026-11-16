@@ -181,10 +181,10 @@ with mitxonline_payments as (
         or pwf.transaction_created_on > w.max_created_on
         or pwf.transaction_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sufk.stored_user_fk is distinct from pwf.user_fk
+        or {{ is_distinct_from('sufk.stored_user_fk', 'pwf.user_fk') }}
         -- the amount or the flag's rule changed, including every row on the run that adds the flag
-        or sufk.stored_transaction_amount is distinct from pwf.transaction_amount
-        or sufk.stored_is_successful is distinct from pwf.is_successful
+        or {{ is_distinct_from('sufk.stored_transaction_amount', 'pwf.transaction_amount') }}
+        or {{ is_distinct_from('sufk.stored_is_successful', 'pwf.is_successful') }}
     )
     {% endif %}
 )

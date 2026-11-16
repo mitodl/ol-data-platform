@@ -588,8 +588,11 @@
 {%- endmacro %}
 
 {% macro starrocks__json_is_object(json_expr) -%}
-    {# StarRocks: no dedicated json_type(); a JSON object's cast-to-varchar text starts with '{' #}
-    substr(cast({{ json_expr }} as varchar), 1, 1) = '{'
+    {# StarRocks: no dedicated json_type(); a JSON object's serialized text starts with '{'.
+       json_string, not cast(... as varchar): the cast unquotes a JSON string, so a string
+       holding JSON text ("{\"file\": \"x\"}") would read as an object, and it gives NULL
+       for a JSON null where Trino gives false. #}
+    substr(json_string({{ json_expr }}), 1, 1) = '{'
 {%- endmacro %}
 
 
@@ -649,8 +652,13 @@
 {%- endmacro %}
 
 {% macro starrocks__try_parse_json_array(json_expr) -%}
-    {# StarRocks: parse the JSON string, then cast to an array of JSON elements #}
-    cast(parse_json({{ json_expr }}) as array<json>)
+    {# StarRocks: parse the JSON string, then cast to an array of JSON elements. The cast
+       turns a JSON string, object, number or null into [] where Trino's try_cast gives
+       NULL, so only an array is cast. parse_json is NULL for malformed input. #}
+    case
+        when left(json_string(parse_json({{ json_expr }})), 1) = '['
+            then cast(parse_json({{ json_expr }}) as array<json>)
+    end
 {%- endmacro %}
 
 {#
@@ -837,6 +845,33 @@
 
 {% macro starrocks__array_length(array_expr) -%}
     array_length({{ array_expr }})
+{%- endmacro %}
+
+
+{#
+    null_if_empty_array: the array, or null when it has no elements. Replaces
+    Trino's nullif(x, array[]), which StarRocks cannot parse, for an array of any
+    element type.
+#}
+{% macro null_if_empty_array(array_expr) -%}
+    case when {{ array_length(array_expr) }} = 0 then null else {{ array_expr }} end
+{%- endmacro %}
+
+
+{#
+    is_distinct_from: null-safe inequality. StarRocks has no IS DISTINCT FROM (a
+    syntax error on 4.1.7); its null-safe equality is <=>.
+#}
+{% macro is_distinct_from(left, right) -%}
+    {{ adapter.dispatch('is_distinct_from', 'open_learning')(left, right) }}
+{%- endmacro %}
+
+{% macro default__is_distinct_from(left, right) -%}
+    {{ left }} is distinct from {{ right }}
+{%- endmacro %}
+
+{% macro starrocks__is_distinct_from(left, right) -%}
+    not ({{ left }} <=> {{ right }})
 {%- endmacro %}
 
 
@@ -1366,22 +1401,14 @@
 {%- endmacro %}
 
 {% macro starrocks__json_array_string(json_col, json_path) -%}
-    {# json_col may be a varchar or a JSON value (an unnest_json_array element); the cast
-       to varchar makes parse_json accept either.
-       cast(json as varchar) drops the quotes from a JSON string ("/a" gives /a), and
-       callers test for them, so json_string() serializes the value. It writes ", " and
-       ": " between items where Trino's json_format writes none; the regexp_replace
-       matches each string literal or run of other characters and drops the whitespace
-       after it, which leaves the whitespace inside strings alone.
-       Still unlike Trino: StarRocks sorts object keys (Trino does only for a JSON
-       value, not a varchar), formats a number with a decimal point or exponent its own
-       way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
-       BMP as surrogate pairs. #}
-    regexp_replace(
-        json_string(json_query(parse_json(cast({{ json_col }} as varchar)), {{ json_path }}))
-        , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
-        , '\\1'
-    )
+    {# json_col may be a varchar or a JSON value (an unnest_json_array element). cast(... as
+       json) parses a varchar and leaves a JSON value as it is; going through varchar would
+       unquote a JSON string element and parse its text again. Callers test for a JSON
+       string's quotes, which json_to_varchar keeps. StarRocks sorts object keys here where
+       Trino does only for a JSON value, not a varchar. #}
+    {{ starrocks__json_to_varchar(
+        "json_query(cast(" ~ json_col ~ " as json), " ~ json_path ~ ")"
+    ) }}
 {%- endmacro %}
 
 
@@ -1511,7 +1538,19 @@
 {%- endmacro %}
 
 {% macro starrocks__json_to_varchar(json_expr) -%}
-    cast({{ json_expr }} as varchar)
+    {# cast(json as varchar) drops the quotes from a JSON string ("/a" gives /a), so
+       json_string() serializes the value. It writes ", " and ": " between items where
+       Trino's json_format writes none; the regexp_replace matches each string literal or
+       run of other characters and drops the whitespace after it, which leaves the
+       whitespace inside strings alone.
+       Still unlike Trino: StarRocks formats a number with a decimal point or exponent its
+       own way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
+       BMP as surrogate pairs. Both sort object keys of a JSON value. #}
+    regexp_replace(
+        json_string({{ json_expr }})
+        , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
+        , '\\1'
+    )
 {%- endmacro %}
 
 
@@ -1767,13 +1806,14 @@
     whose condition is not true.
 
     `order_by` is passed through, so its NULL ordering is the engine's: an ascending key
-    sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`.
+    sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`, which
+    the null_ordering check of `ol-dbt validate` requires.
 
     With `distinct`, Trino only accepts `expr` itself as the ORDER BY, so `order_by` must be
-    `expr` (ascending). StarRocks then sorts after array_distinct() with array_sort(), NULLs
-    last as in Trino, rather than relying on array_distinct() to keep the aggregated order:
-    its planner rewrites array_distinct(array_agg(x)) into array_agg_distinct(x), which
-    does not keep it.
+    `expr` ascending (`nulls last` is accepted). StarRocks then sorts after array_distinct()
+    with array_sort(), NULLs last as in Trino, rather than relying on array_distinct() to
+    keep the aggregated order: its planner rewrites array_distinct(array_agg(x)) into
+    array_agg_distinct(x), which does not keep it.
 #}
 {% macro array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
     {{ adapter.dispatch('array_agg_filter', 'open_learning')(expr, condition, order_by, distinct) }}
@@ -1784,10 +1824,12 @@
 {%- endmacro %}
 
 {% macro starrocks__array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
-    {%- if distinct and order_by and (order_by | trim | lower) not in [expr | trim | lower, (expr | trim | lower) ~ ' asc'] -%}
+    {%- set key = expr | trim | lower -%}
+    {%- set ascending = [key, key ~ ' asc', key ~ ' nulls last', key ~ ' asc nulls last'] -%}
+    {%- if distinct and order_by and (order_by | trim | lower) not in ascending -%}
         {{ exceptions.raise_compiler_error(
             "array_agg_filter: with distinct=true, order_by must be the aggregated expression in "
-            ~ "ascending order ('" ~ expr ~ "'), got '" ~ order_by ~ "'"
+            ~ "ascending order ('" ~ expr ~ " nulls last'), got '" ~ order_by ~ "'"
         ) }}
     {%- endif -%}
     {%- set kept -%}

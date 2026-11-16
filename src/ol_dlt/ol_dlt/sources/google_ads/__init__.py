@@ -8,16 +8,24 @@ left to staging.
 
 Data flow, per client account:
     customer_client     -> raw__google_ads__api__customer_clients    (replace)
-    keyword_view        -> raw__google_ads__api__keyword_daily       (merge)
-    keyword_view        -> raw__google_ads__api__keyword_conversions_daily (merge)
-    campaign            -> raw__google_ads__api__campaign_daily      (merge)
+    keyword_view        -> raw__google_ads__api__keyword_daily       (merge*)
+    keyword_view        -> raw__google_ads__api__keyword_conversions_daily (merge*)
+    campaign            -> raw__google_ads__api__campaign_daily      (merge*)
     change_event        -> raw__google_ads__api__change_events       (merge)
-    campaign            -> raw__google_ads__api__campaign_snapshots  (merge)
-    ad_group_criterion  -> raw__google_ads__api__keyword_snapshots   (merge)
-    campaign_criterion  -> raw__google_ads__api__campaign_criterion_snapshots
-    campaign_shared_set -> raw__google_ads__api__campaign_shared_set_snapshots
-    shared_criterion    -> raw__google_ads__api__shared_criterion_snapshots
+    campaign            -> raw__google_ads__api__campaign_snapshots  (append)
+    ad_group_criterion  -> raw__google_ads__api__keyword_snapshots   (append)
+    campaign_criterion  -> raw__google_ads__api__campaign_criterion_snapshots (append)
+    campaign_shared_set -> raw__google_ads__api__campaign_shared_set_snapshots (append)
+    shared_criterion    -> raw__google_ads__api__shared_criterion_snapshots (append)
     (every report and snapshot fetch) -> raw__google_ads__api__fetch_log (merge)
+
+* Dates past an account's cursor append, in batches of ``BACKFILL_WINDOWS``
+account-windows that each save the cursors (the posthog_events pattern). Their
+keys are new, so one append commit does what a merge does in an upsert per 1,000
+rows. Snapshots append because each ``snapshot_date`` is new, and the state
+records each account's last one so a same-day rerun skips it. A run killed after
+a load commits but before its state saves appends it twice, so staging must
+dedup on the primary key, keeping the latest ``_dlt_load_id``.
 
 A merge never deletes, so a conversion Google retracts, or an entity removed
 between two snapshots on one day, keeps its old row. The fetch log records each
@@ -68,6 +76,9 @@ DEFAULT_START_DATE = "2021-01-01"
 # and Google restates past days' conversions, so each run re-pulls this window.
 DEFAULT_LOOKBACK_DAYS = 90
 REPORT_CHUNK_DAYS = 31
+# About 2,500 keyword rows per account-window in November 2026, so a backfill
+# batch is ~125,000 rows per table and takes a few minutes.
+BACKFILL_WINDOWS = 50
 # Google rejects segments.date older than 37 months, since 2026-06-01:
 # https://ads-developers.googleblog.com/2026/05/new-data-retention-policy-for-google.html
 REPORT_RETENTION = relativedelta(months=37)
@@ -308,7 +319,10 @@ def date_chunks(start: date, end: date, days: int) -> Iterator[tuple[date, date]
 def report_window(
     last_loaded: str | None, start_date: str, lookback_days: int, today: date
 ) -> tuple[date, date] | None:
-    """Return the dates to pull for one account, or None when it is current."""
+    """Return the dates to pull for one account, or None when it is current.
+
+    A ``lookback_days`` of -1 starts the day after ``last_loaded`` (a backfill).
+    """
     end = today - timedelta(days=1)
     # One day inside the retention limit, so a run late in the day stays inside it.
     oldest = today - REPORT_RETENTION + timedelta(days=1)
@@ -355,6 +369,7 @@ def google_ads_source(
     start_date: str = DEFAULT_START_DATE,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     today: date | None = None,
+    backfill_windows: int | None = None,
 ) -> Generator[Any]:
     """Load Google Ads Search data for every client account under the manager.
 
@@ -364,6 +379,9 @@ def google_ads_source(
         start_date: First date the daily reports load on a new account.
         lookback_days: Days the daily reports re-pull before the last loaded date.
         today: Overrides the current date (tests).
+        backfill_windows: Load only the daily reports, for dates past each
+            account's cursor, at most this many account-windows per table, and
+            append them. A caller repeats it until a load fetches no window.
     """
     table_format = config.active_table_format()
 
@@ -421,10 +439,12 @@ def google_ads_source(
             raise ValueError(msg)
         yield {"accounts": rows, "client_ids": client_ids}
 
-    def _table(name: str, primary_key: tuple[str, ...]) -> dict[str, Any]:
+    def _table(
+        name: str, primary_key: tuple[str, ...], *, append: bool = False
+    ) -> dict[str, Any]:
         return {
             "name": name,
-            "write_disposition": "merge",
+            "write_disposition": "append" if append or backfill_windows else "merge",
             "primary_key": list(primary_key),
             "table_format": table_format,
             "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
@@ -478,32 +498,55 @@ def google_ads_source(
             "last_loaded_date", {}
         )
         run_date, retrieved_at = _run_date(), _now()
+        lookback = -1 if backfill_windows else lookback_days
+        windows_left = backfill_windows
         for customer_id in client_ids:
             window = report_window(
-                last_loaded.get(customer_id), start_date, lookback_days, run_date
+                last_loaded.get(customer_id), start_date, lookback, run_date
             )
             if window is None:
                 continue
+            rows, fetched_to = 0, None
             for first, last in date_chunks(*window, REPORT_CHUNK_DAYS):
+                if windows_left == 0:
+                    break
                 query = build_query(
                     resource,
                     fields,
                     f"segments.date BETWEEN '{first}' AND '{last}' AND {where}",
                 )
                 for record in _search(customer_id, query, fields):
+                    rows += 1
                     yield {
                         "customer_id": customer_id,
                         **record,
                         "retrieved_at": retrieved_at,
                     }
-            yield _fetch_log(
-                table,
-                customer_id,
-                window[0].isoformat(),
-                window[1].isoformat(),
-                retrieved_at,
-            )
-            last_loaded[customer_id] = window[1].isoformat()
+                yield _fetch_log(
+                    table,
+                    customer_id,
+                    first.isoformat(),
+                    last.isoformat(),
+                    retrieved_at,
+                )
+                # dlt saves this only with a completed load, so a failed load
+                # re-reads the window. Never moved back by a lookback window.
+                if last.isoformat() > last_loaded.get(customer_id, ""):
+                    last_loaded[customer_id] = last.isoformat()
+                fetched_to = last
+                if windows_left is not None:
+                    windows_left -= 1
+            if fetched_to is not None:
+                logger.info(
+                    "%s: account %s, %s to %s, %d rows",
+                    table,
+                    customer_id,
+                    window[0],
+                    fetched_to,
+                    rows,
+                )
+            if windows_left == 0:
+                return
 
     keyword_key = (
         "customer_id",
@@ -619,12 +662,19 @@ def google_ads_source(
 
         @dlt.transformer(
             data_from=accounts,
-            **_table(name, ("customer_id", "snapshot_date", key_column)),
+            **_table(name, ("customer_id", "snapshot_date", key_column), append=True),
         )
         def snapshot(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
             query = build_query(resource, fields, where)
             snapshot_date, retrieved_at = _run_date().isoformat(), _now()
+            # As posthog_events' read_objects: saved with the load, so a resumed
+            # or repeated run on the same day skips accounts it already took.
+            taken: dict[str, str] = dlt.current.resource_state().setdefault(
+                "snapshot_date", {}
+            )
             for customer_id in listing["client_ids"]:
+                if taken.get(customer_id) == snapshot_date:
+                    continue
                 for record in _search(customer_id, query, fields):
                     yield {
                         "customer_id": customer_id,
@@ -635,10 +685,16 @@ def google_ads_source(
                 yield _fetch_log(
                     name, customer_id, snapshot_date, snapshot_date, retrieved_at
                 )
+                taken[customer_id] = snapshot_date
 
         return snapshot
 
     yield accounts
+    if backfill_windows:
+        yield keyword_daily
+        yield keyword_conversions_daily
+        yield campaign_daily
+        return
     yield customer_clients
     yield keyword_daily
     yield keyword_conversions_daily
@@ -651,6 +707,8 @@ def google_ads_source(
 google_ads_pipeline = config.pipeline_for("google_ads")
 
 
-def build_source() -> Any:  # noqa: ANN401
+def build_source(backfill_windows: int | None = None) -> Any:  # noqa: ANN401
     """Instantiate the source with nullable ``_dlt_load_id`` columns."""
-    return config.with_nullable_load_id(google_ads_source())
+    return config.with_nullable_load_id(
+        google_ads_source(backfill_windows=backfill_windows)
+    )

@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 import dagster as dg
+import httpx2
 import pytest
 import sentry_sdk
 from dagster import AssetSpec, Definitions, asset, materialize
 from ol_orchestrate.lib import sentry as sentry_lib
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.failures import retry_transient_errors
 from sentry_sdk.transport import Transport
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -333,3 +335,20 @@ def test_successful_asset_reports_nothing(
 
     assert result.success
     assert recorded_events.events() == []
+
+
+def test_an_exhausted_transient_retry_reports_the_transport_error(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Report the ConnectError under the RetryRequested, once, after the retries."""
+
+    @asset
+    def unreachable_api() -> None:
+        with retry_transient_errors(max_retries=1, seconds_to_wait=0):
+            msg = "EOF occurred in violation of protocol"
+            raise httpx2.ConnectError(msg)
+
+    event = _only_event_for(unreachable_api, recorded_events)
+
+    assert event["exception"]["values"][-1]["type"] == "ConnectError"
+    assert event["fingerprint"][-1] == "ConnectError"

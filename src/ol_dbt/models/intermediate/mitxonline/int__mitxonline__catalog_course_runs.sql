@@ -11,7 +11,7 @@ with runs as (
 , run_modes as (
     select
         run_modes.courserun_id
-        , array_agg(modes.enrollmentmode_slug order by modes.enrollmentmode_slug) as courserun_enrollment_modes
+        , array_agg(modes.enrollmentmode_slug order by modes.enrollmentmode_slug nulls last) as courserun_enrollment_modes
         , max(case when modes.enrollmentmode_slug = 'verified' then 1 else 0 end) = 1 as courserun_has_verified_mode
         , max(case when modes.enrollmentmode_slug = 'audit' then 1 else 0 end) = 1 as courserun_has_audit_mode
     from {{ ref('stg__mitxonline__app__postgres__courses_courserun_enrollment_modes') }} as run_modes
@@ -30,7 +30,7 @@ with runs as (
         , variants.supportedvariant_is_default
         , row_number() over (
             partition by variants.supportedvariant_object_id, variants.supportedvariant_language
-            order by variants.supportedvariant_id
+            order by variants.supportedvariant_id nulls last
         ) as variant_rank
     from {{ ref('stg__mitxonline__app__postgres__variants_supportedvariant') }} as variants
     inner join {{ ref('stg__mitxonline__app__postgres__django_contenttype') }} as content_types

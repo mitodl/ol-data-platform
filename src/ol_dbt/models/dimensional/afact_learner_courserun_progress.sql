@@ -22,7 +22,7 @@ with enrollments_ranked as (
         , row_number() over (
             partition by user_fk, courserun_fk
             order by
-                case when enrollment_is_active then 0 else 1 end
+                case when enrollment_is_active then 0 else 1 end nulls last
                 , enrollment_created_on desc nulls last
                 -- enrollment_id is a string; compare the integer ids as numbers.
                 , {{ try_cast('enrollment_id', 'bigint') }} desc nulls last

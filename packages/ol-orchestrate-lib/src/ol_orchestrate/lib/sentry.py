@@ -21,7 +21,13 @@ from collections.abc import Sequence
 from typing import Any
 
 import sentry_sdk
-from dagster import AssetsDefinition, Failure, HookContext, failure_hook
+from dagster import (
+    AssetsDefinition,
+    Failure,
+    HookContext,
+    RetryRequested,
+    failure_hook,
+)
 from sentry_sdk.integrations.logging import LoggingIntegration, ignore_logger
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -74,10 +80,10 @@ def drop_interruptions(
     """``before_send``: suppress events that only report a terminated process.
 
     Deliberately narrow. Connection-class transients -- pgbouncer churn, httpx
-    timeouts, DNS -- are handled by giving the assets that touch the database
-    and external HTTP a ``RetryPolicy`` instead of by filtering here: a step
-    failure hook fires only once a RetryPolicy is exhausted, so a connection
-    error that still reaches Sentry is one that survived its retries and is
+    timeouts, DNS -- are handled by retrying them in the step instead of by
+    filtering here (``failures.retry_transient_errors``, or a ``RetryPolicy``):
+    a step failure hook fires only once the retries are exhausted, so a
+    connection error that still reaches Sentry is one that survived them and is
     worth reading. Filtering those at the transport would hide the sustained
     outage along with the blip.
     """
@@ -191,6 +197,12 @@ def capture_exception_to_sentry(context: HookContext) -> None:
     exception = context.op_exception
     if exception is None:
         return
+    # A step that exhausts retry_transient_errors fails with the RetryRequested
+    # it raised. Report the transport error under it, so the issue is titled and
+    # grouped by what actually went wrong, the same as the failure sensor's
+    # unwrapped view of the event.
+    if isinstance(exception, RetryRequested) and exception.__cause__ is not None:
+        exception = exception.__cause__
 
     with sentry_sdk.new_scope() as scope:
         scope.set_tag("dagster_job", context.job_name)

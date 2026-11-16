@@ -51,6 +51,50 @@ class TestStripJinja:
         assert set(result.ref_placeholder_map.values()) == {"model_a", "model_b"}
 
 
+LIVE_RAW_ROWS_MODEL = (
+    "with source as (\n"
+    "    {{ live_raw_rows('raw__xpro__app__postgres__ecommerce_order') }}\n"
+    ")\n"
+    ", cleaned as (select id as order_id, status as order_state from source)\n"
+    "select * from cleaned\n"
+)
+LIVE_RAW_ROWS_SOURCE = "ol_warehouse_raw_data.raw__xpro__app__postgres__ecommerce_order"
+
+
+class TestLiveRawRows:
+    """live_raw_rows selects a raw source less its deleted records, so lineage must see the source."""
+
+    def test_records_the_source(self) -> None:
+        result = strip_jinja(LIVE_RAW_ROWS_MODEL)
+        assert result.source_names == [LIVE_RAW_ROWS_SOURCE]
+        assert (
+            "select * from source_ol_warehouse_raw_data_raw__xpro__app__postgres__ecommerce_order" in result.clean_sql
+        )
+
+    def test_a_relation_argument_does_not_record_the_source_twice(self) -> None:
+        sql = (
+            "{% set rel = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__ecommerce_order') %}\n"
+            "with source as ({{ live_raw_rows('raw__xpro__app__postgres__ecommerce_order', rel) }})\n"
+            "select id from source\n"
+        )
+        assert strip_jinja(sql).source_names == [LIVE_RAW_ROWS_SOURCE]
+
+    def test_the_regex_fallback_records_the_source(self) -> None:
+        from ol_dbt_cli.lib.sql_parser import _strip_jinja_regex
+
+        result = _strip_jinja_regex(LIVE_RAW_ROWS_MODEL)
+        assert result.source_names == [LIVE_RAW_ROWS_SOURCE]
+        assert (
+            "select * from source_ol_warehouse_raw_data_raw__xpro__app__postgres__ecommerce_order" in result.clean_sql
+        )
+
+    def test_columns_pass_through_and_the_star_traces_to_the_source(self) -> None:
+        result = parse_model_sql("stg_order", LIVE_RAW_ROWS_MODEL)
+        assert result.parse_error is None
+        assert result.source_refs == [LIVE_RAW_ROWS_SOURCE]
+        assert result.output_columns == {"order_id", "order_state"}
+
+
 class TestParseModelSql:
     def test_simple_select(self) -> None:
         sql = "select id as user_id, email as user_email from raw_users"

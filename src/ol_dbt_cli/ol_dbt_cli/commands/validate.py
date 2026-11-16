@@ -44,6 +44,7 @@ from ol_dbt_cli.lib.dimensional_layering import (
     load_baseline,
     write_baseline,
 )
+from ol_dbt_cli.lib.distinct_from import DISTINCT_FROM_CHECK, check_distinct_from
 from ol_dbt_cli.lib.exposure_contracts import (
     DEFAULT_EXPOSURES_DIR,
     EXPOSURE_CONTRACT_CHECK,
@@ -64,6 +65,7 @@ from ol_dbt_cli.lib.metric_registry import (
     check_metric_registry,
     load_metrics,
 )
+from ol_dbt_cli.lib.null_ordering import NULL_ORDERING_CHECK, check_null_ordering
 from ol_dbt_cli.lib.pipe_concat import PIPE_CONCAT_CHECK, check_pipe_concat
 from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
 from ol_dbt_cli.lib.qa_contract import (
@@ -75,6 +77,7 @@ from ol_dbt_cli.lib.qa_contract import (
     write_qa_baseline,
 )
 from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
+from ol_dbt_cli.lib.raw_delete_filter_calls import RAW_DELETE_FILTER_CHECK, check_raw_delete_filter
 from ol_dbt_cli.lib.raw_json_calls import RAW_JSON_CALLS_CHECK, check_raw_json_calls
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
@@ -1031,7 +1034,8 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
+                "null_ordering, distinct_from, cohort_policy, raw_json_calls, exposure_contract, glossary_terms, "
+                "raw_delete_filter."
             ),
         ),
     ] = None,
@@ -1043,8 +1047,8 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls, exposure_contract, "
-                "glossary_terms. "
+                "data_contract, metric_registry, pipe_concat, null_ordering, distinct_from, cohort_policy, "
+                "raw_json_calls, exposure_contract, glossary_terms, raw_delete_filter. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1176,7 +1180,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs seventeen checks:
+    Runs twenty checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1215,6 +1219,14 @@ def validate(
                                it depends on; regenerate with `ol-dbt exposures export` (ERROR)
     17. glossary_terms       — every config.meta.openmetadata.glossary FQN in the project names a
                                term declared in <repo>/glossary/ (ERROR)
+    18. null_ordering        — every ascending sort key in a window or an ordered aggregate says
+                               NULLS FIRST or NULLS LAST, since StarRocks sorts NULLs first
+                               and Trino last (ERROR)
+    19. distinct_from        — no model, macro, test or YAML expression uses IS [NOT] DISTINCT
+                               FROM, which StarRocks rejects as a syntax error (ERROR)
+    20. raw_delete_filter    — a staging model reading a raw table in raw_delete_filter_map()
+                               reads it through live_raw_rows, so records the source deleted
+                               leave staging as they leave the raw history snapshot (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1284,8 +1296,11 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        NULL_ORDERING_CHECK,
+        DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        RAW_DELETE_FILTER_CHECK,
         EXPOSURE_CONTRACT_CHECK,
         GLOSSARY_TERMS_CHECK,
     }
@@ -1297,8 +1312,11 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        NULL_ORDERING_CHECK,
+        DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        RAW_DELETE_FILTER_CHECK,
         EXPOSURE_CONTRACT_CHECK,
         GLOSSARY_TERMS_CHECK,
     }
@@ -1632,6 +1650,14 @@ def validate(
     if PIPE_CONCAT_CHECK not in skipped:
         check_pipe_concat(dbt_dir, report)
 
+    # Global like pipe_concat: a sort key is as wrong in a macro as in a model.
+    if NULL_ORDERING_CHECK not in skipped:
+        check_null_ordering(dbt_dir, report)
+
+    # Global like pipe_concat: the operator is as wrong in a macro as in a model.
+    if DISTINCT_FROM_CHECK not in skipped:
+        check_distinct_from(dbt_dir, report)
+
     # Global because the declarations live in YAML, which --changed-only does not select.
     if COHORT_POLICY_CHECK not in skipped:
         check_cohort_policy(dbt_dir, report)
@@ -1640,6 +1666,11 @@ def validate(
     # as in a model, and --changed-only selects neither.
     if RAW_JSON_CALLS_CHECK not in skipped:
         check_raw_json_calls(dbt_dir, report)
+
+    # Global because the filtered tables come from a generated macro, which an
+    # inventory edit changes without touching any model.
+    if RAW_DELETE_FILTER_CHECK not in skipped:
+        check_raw_delete_filter(dbt_dir, report)
 
     # Global because the files are generated from YAML, which --changed-only does not select.
     if EXPOSURE_CONTRACT_CHECK not in skipped:

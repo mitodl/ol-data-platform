@@ -151,7 +151,7 @@ def build_keyset_resource(
     resource = sql_table(
         credentials=_credentials_for(spec, resolved_profile),
         table=table.name,
-        schema=spec.db_schema,
+        schema=spec.schema_for(table.name),
         included_columns=[table.key],
         chunk_size=DEFAULT_CHUNK_SIZE,
         backend="pyarrow",

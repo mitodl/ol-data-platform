@@ -5,8 +5,8 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract (all orgs; MIT admin view only). Refreshed by the Dagster
--- b2b_organization MV-refresh asset.
+-- Grain: org x contract (all orgs; MIT admin view only). Refreshed by lakehouse's
+-- b2b_analytics/starrocks_mv_refresh asset.
 -- health_status: inactive | at_risk | high_utilization | healthy | early_stage
 -- Seats and certificates are counted as in mv_b2b_contract_utilization: course enrollments
 -- made under the contract, and certificates for those enrollments' runs. Every contract

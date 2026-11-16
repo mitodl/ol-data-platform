@@ -16,7 +16,7 @@ strategies:
   local: fixture
 loader: dlt
 # The load appends each log file once. Staging dedups events on their
-# business columns and reads new rows by event time, so this only orders
+# business columns and reads new rows by _dlt_load_id, so this only orders
 # copies of the same event.
 raw_metadata_column: _file_modified_at
 table_prefix: raw__mitxonline__openedx__tracking_log

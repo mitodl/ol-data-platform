@@ -1,7 +1,6 @@
 with source as (
 
-    select *
-    from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate') }}
 
 )
 

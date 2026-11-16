@@ -1,13 +1,11 @@
 """Unit + materialization tests for the reusable database source."""
 
 import sqlite3
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, NoReturn
 
 import dlt
 import pytest
-from dlt.extract.exceptions import ResourceExtractionError
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.sql_database import remove_nullability_adapter
 from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
@@ -16,11 +14,11 @@ from sqlalchemy import Boolean, Column, MetaData, Table, create_engine
 from sqlalchemy.dialects import mysql
 from sqlalchemy.dialects.mysql import pymysql as mysql_pymysql
 from sqlalchemy.engine import URL
-from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.types import TypeEngine
 
 from ol_dlt import config, database
 from ol_dlt.database import DatabaseSourceSpec, DatabaseTable
+from ol_dlt.sources.edxapp import EDXAPP_SPECS
 
 _SPEC = DatabaseSourceSpec(
     name="example",
@@ -429,7 +427,7 @@ def test_materializes_a_database_to_the_test_profile(
 
 
 def _widget_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db_path = tmp_path / "optional.db"
+    db_path = tmp_path / "widget.db"
     with sqlite3.connect(db_path) as connection:
         connection.execute(
             "CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
@@ -444,7 +442,7 @@ def _widget_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _optional_spec(*tables: DatabaseTable) -> DatabaseSourceSpec:
+def _sqlite_spec(*tables: DatabaseTable) -> DatabaseSourceSpec:
     return DatabaseSourceSpec(
         name="example",
         raw_table_prefix="raw__example__app__postgres__",
@@ -456,69 +454,11 @@ def _optional_spec(*tables: DatabaseTable) -> DatabaseSourceSpec:
 
 
 @pytest.mark.integration
-def test_an_optional_table_the_source_lacks_is_skipped(
-    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """QA's mitx edxapp database has no assessment_ai* tables; production does."""
-    _widget_database(tmp_path, monkeypatch)
-    spec = _optional_spec(
-        DatabaseTable(name="widget", primary_key="id", optional=True),
-        DatabaseTable(name="absent", primary_key="id", optional=True),
-    )
-    pipeline = config.pipeline_for("example")
-    info = pipeline.run(database.build_database_source(spec, profile="test"))
-    assert not info.has_failed_jobs
-
-    tables = pipeline.default_schema.tables
-    assert "raw__example__app__postgres__absent" not in tables
-    # A present optional table loads as any other: rows, and the hints dlt's
-    # reflection yields first (the NOT NULL column is still made nullable).
-    widget = tables["raw__example__app__postgres__widget"]["columns"]
-    assert widget["name"].get("nullable") is not False
-    assert (
-        pipeline.last_trace.last_normalize_info.row_counts[
-            "raw__example__app__postgres__widget"
-        ]
-        == 2
-    )
-
-
-def _rows_then_missing(rows: int, missing: str) -> Any:  # noqa: ANN401
-    @dlt.resource(name="raw__example__widget")
-    def widget() -> Iterator[dict[str, int]]:
-        yield from ({"id": row} for row in range(rows))
-        raise NoSuchTableError(missing)
-
-    return widget()
-
-
-def test_an_optional_table_skips_only_its_own_absence() -> None:
-    table = DatabaseTable(name="widget", primary_key="id", optional=True)
-    absent = _rows_then_missing(0, "widget")
-    database._skip_when_absent(absent, _SPEC, table)  # noqa: SLF001
-    assert list(absent) == []
-
-    # Another table missing, e.g. one a reflected foreign key names, still fails.
-    other = _rows_then_missing(0, "gadget")
-    database._skip_when_absent(other, _SPEC, table)  # noqa: SLF001
-    with pytest.raises(ResourceExtractionError) as raised:
-        list(other)
-    assert isinstance(raised.value.__cause__, NoSuchTableError)
-
-    # So does the same error once rows have started: that is not absence.
-    late = _rows_then_missing(1, "widget")
-    database._skip_when_absent(late, _SPEC, table)  # noqa: SLF001
-    with pytest.raises(ResourceExtractionError) as raised:
-        list(late)
-    assert isinstance(raised.value.__cause__, NoSuchTableError)
-
-
-@pytest.mark.integration
 def test_a_required_table_the_source_lacks_fails_the_load(
     test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _widget_database(tmp_path, monkeypatch)
-    spec = _optional_spec(DatabaseTable(name="absent", primary_key="id"))
+    spec = _sqlite_spec(DatabaseTable(name="absent", primary_key="id"))
     pipeline = config.pipeline_for("example")
     with pytest.raises(PipelineStepFailed, match="absent"):
         pipeline.run(database.build_database_source(spec, profile="test"))
@@ -755,3 +695,29 @@ def test_a_zero_row_read_of_a_cursor_table_merges_as_a_no_op(
     with sqlite3.connect(db_path) as connection:
         connection.execute("DELETE FROM event")
     assert _load() == [(1, "first")]
+
+
+@pytest.mark.parametrize(
+    ("table", "schema"),
+    [
+        ("coursewarehistoryextended_studentmodulehistoryextended", "edxapp_csmh"),
+        # The connection's own database.
+        ("auth_user", None),
+    ],
+)
+def test_the_loader_reads_the_table_s_own_schema(
+    table: str, schema: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """edxapp's csmh table lives in edxapp_csmh, beside the spec's edxapp."""
+    spec = EDXAPP_SPECS["mitx"]
+    selected: dict[str, object] = {}
+
+    def _sql_table(**kwargs: object) -> object:
+        selected.update(kwargs)
+        return dlt.resource([], name=str(kwargs["table"]))
+
+    monkeypatch.setattr(database, "sql_table", _sql_table)
+    database.build_table_resource(
+        spec, next(t for t in spec.tables if t.name == table), profile="dev"
+    )
+    assert (selected["schema"], selected["table"]) == (schema, table)

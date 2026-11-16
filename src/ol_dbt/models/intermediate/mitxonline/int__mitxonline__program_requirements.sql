@@ -86,7 +86,7 @@ with program_requirements as (
                 order by
                     coalesce(course_node_requirements.course_node_is_required, 0) desc
                     , course_node_requirements.innermost_operator_path_length desc
-                    , course_node_requirements.course_node_path asc
+                    , course_node_requirements.course_node_path asc nulls last
             )
             as course_node_rank
         -- The display order follows the course's first node in the tree, whichever node
@@ -193,7 +193,7 @@ select
     end as program_num_required_courses
     , row_number() over (
         partition by combined_requirements.program_id
-        order by combined_requirements.course_first_node_path
+        order by combined_requirements.course_first_node_path nulls last
     ) as course_order_in_program
 from combined_requirements
 left join core_courses_count on combined_requirements.program_id = core_courses_count.program_id

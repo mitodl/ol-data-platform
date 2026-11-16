@@ -1,6 +1,5 @@
 with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier', partition_columns='id') }}
@@ -8,7 +7,7 @@ with source as (
 , renamed as (
     select
         id as flexiblepricetier_id
-        , "current" as flexiblepricetier_is_current
+        , {{ adapter.quote("current") }} as flexiblepricetier_is_current
         , discount_id
         , courseware_object_id
         , income_threshold_usd as flexiblepricetier_income_threshold_usd

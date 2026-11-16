@@ -13,8 +13,9 @@ StarRocks over the MySQL protocol, and MV-serve is built and refreshed in
 WAREHOUSE; both are dbt-built surfaces governed by the contract docs. Do not
 add pull-side assets here.
 
-Extraction assets that predate the split (`sloan_course_metadata`, `video_api`,
-`video_metadata`) still live here and move on to INGEST later.
+OVS extraction (`video_api`, `video_metadata`) stays here because each video's
+metadata and webhook run as one job, and a job cannot span code locations. Any
+other extraction goes to `data_loading` (see "Adding a dlt Pipeline").
 
 ## Prerequisites
 
@@ -36,7 +37,7 @@ uv sync
 uv run dagster dev
 ```
 
-Open http://localhost:3000. You should see assets for Sloan, OVS Videos, and
+Open http://localhost:3000. You should see assets for OVS Videos and
 Open Learning Library. All assets load even without real credentials because the code
 location uses **resilient loading** — failed Vault auth falls back to a mock
 instance, and assets gracefully skip actual API calls when credentials are absent.
@@ -186,9 +187,8 @@ uv run pytest delivery_tests/ -v
 delivery/
 ├── delivery/
 │   ├── assets/             # One file per data source
-│   │   ├── sloan_api.py         # Reference implementation — read this first
 │   │   ├── ovs_videos.py        # Sensor-driven partitioned asset
-│   │   └── open_learning_library.py  # Open Learning Library REST asset
+│   │   └── open_learning_library.py  # Reference implementation — read this first
 │   ├── lib/                # Shared utilities (not assets)
 │   ├── sensors/            # Discovery and cleanup sensors
 │   └── definitions.py      # Wires everything together
@@ -201,68 +201,58 @@ delivery/
 
 ## Pattern 1: Adding a REST API Webhook Asset
 
-Follow the Sloan asset (`assets/sloan_api.py`) as the canonical reference.
+Follow the Open Learning Library asset (`assets/open_learning_library.py`) as
+the canonical reference. It reads an `integrations__learn__*` model and POSTs it
+to MIT Learn. If the source's data is not in the warehouse yet, load it in
+`data_loading` first (see "Adding a dlt Pipeline").
 
 ### 1. Create the asset file
 
 ```python
 # delivery/assets/my_source.py
-from dagster import AssetExecutionContext, AssetOut, multi_asset, Output
+from typing import Any, cast
+
+from dagster import AssetExecutionContext, AssetKey, asset
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.learn_api import MITLearnApiClient
+
+from delivery.lib.learn_webhook import LearnDeliveryConfig
 
 
-@multi_asset(
-    group_name="my_source",
-    outs={
-        "course_metadata": AssetOut(
-            description="Courses from My Source",
-            io_manager_key="s3file_io_manager",
-        ),
-    },
+@asset(
+    key=AssetKey(["mit_learn_delivery", "my_source_webhook"]),
+    group_name="mit_learn_delivery",
+    deps=[AssetKey(["integrations", "integrations__learn__my_source_courses"])],
 )
-def my_source_metadata(context: AssetExecutionContext, my_source_api: ApiClientFactory):
-    courses = my_source_api.client.get("/api/courses")
-    context.log.info("Fetched %d courses", len(courses))
-    yield Output(courses, output_name="course_metadata")
+def my_source_webhook(
+    context: AssetExecutionContext,
+    config: LearnDeliveryConfig,
+    learn_api: ApiClientFactory,
+) -> dict[str, Any]:
+    df = get_dbt_model_as_dataframe(
+        database_name="ol_warehouse_production_integrations",
+        table_name="integrations__learn__my_source_courses",
+    ).collect()
+    resources = [...]  # shape each row into MIT Learn's payload
+    return cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
+        resources, allow_mass_unpublish=config.allow_mass_unpublish
+    )
 ```
 
-### 2. Register the asset and resource in `definitions.py`
+The real asset picks the Glue database per environment, handles a refused batch
+(see step 4) and records delivery metadata; copy those parts from
+`open_learning_library.py`.
 
-```python
-from delivery.assets.my_source import my_source_metadata
-from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+### 2. Register the asset in `definitions.py`
 
-defs = Definitions(
-    assets=[..., my_source_metadata],
-    resources={
-        ...,
-        "my_source_api": ApiClientFactory(
-            deployment="my-source",
-            client_class="MySourceApiClient",
-            mount_point="secret-data",
-            config_path="pipelines/my-source",
-            kv_version="1",
-            vault=vault,
-        ),
-    },
-)
-```
+Add it to the `with_failure_hooks([...])` asset list. The `learn_api` resource is
+already defined there, and its signing secret comes from Vault, so a new
+source needs no new resource or secret.
 
 ### 3. Trigger it
 
-An asset that fetches from an external API runs on a schedule:
-
-```python
-ScheduleDefinition(
-    name="my_source_daily_schedule",
-    target=AssetSelection.assets(my_source_metadata),
-    cron_schedule="@daily",
-    execution_timezone="Etc/UTC",
-)
-```
-
-An asset that reads an `integrations__learn__*` model and POSTs it to MIT Learn
-must not. A cron tick fires whether or not the model has been rebuilt that day,
+Do not put it on a cron schedule. A cron tick fires whether or not the model has been rebuilt that day,
 and a full-sync batch built from stale data unpublishes whatever changed
 upstream since. Declare its deps with the key lakehouse emits,
 `AssetKey(["integrations", "<model name>"])`, and wrap it with
@@ -284,13 +274,7 @@ my_source_webhook, my_source_delivery_sensor = deliver_after_upstream(
 Register the sensor in `Definitions(sensors=instigators_for_environment([...]))`
 and give it an entry in `INSTIGATOR_ENVIRONMENTS`.
 
-### 4. Vault credentials (production)
-
-Add a Vault secret at `secret-data/pipelines/my-source` containing the API
-credentials that `ApiClientFactory` expects. See the platform team runbook for
-the key/value format per client class.
-
-### 5. When MIT Learn refuses a batch
+### 4. When MIT Learn refuses a batch
 
 MIT Learn refuses a learning_resources batch that would unpublish more than 10%
 of a source's published resources of a type. It answers `422` and loads nothing
@@ -377,7 +361,7 @@ data (courses, programs, content files) over the webhook API.
 
 | Convention | Example |
 |---|---|
-| Asset group name matches source | `group_name="sloan_executive_education"` |
+| Asset group name matches source | `group_name="ovs_videos"` |
 | `io_manager_key` for large files | `"s3file_io_manager"` |
 | `io_manager_key` for media/binary | `"yt_s3file_io_manager"` |
 | Sensor names | `<source>_discovery_sensor`, `<source>_stale_cleanup_sensor`, `<source>_delivery_sensor` |

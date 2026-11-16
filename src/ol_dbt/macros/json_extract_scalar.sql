@@ -16,9 +16,19 @@
 {% endmacro %}
 
 {% macro starrocks__json_extract_scalar(json_col, json_path) %}
-  {# StarRocks: get_json_string returns a plain string for scalar paths; a non-scalar path returns
-     the serialized JSON structure rather than NULL (acceptable difference from Trino).
-     get_json_string requires a VARCHAR JSON string, so cast in case json_col is JSON-typed
-     (e.g. an element produced by unnest_json_array/unnest_json_map on StarRocks). #}
-  get_json_string(cast({{ json_col }} as varchar), {{ json_path }})
+  {# StarRocks: json_query gives the value at the path; an array or object there gives NULL
+     on Trino, so those are tested for first (json_string keeps a string's quotes, so a
+     string starting with '[' is not one), and the cast to varchar unquotes a string and
+     gives NULL for a JSON null.
+     cast(json_col as json) parses a varchar and leaves a JSON value (an unnest_json_array
+     element) as it is. Going through varchar instead would unquote a JSON string element
+     and parse its text again, so "[1,2]" would read as an array.
+     Still unlike Trino: a number with a decimal point, exponent or sign is reformatted
+     (10.0 gives 10, 1e3 gives 1000, -0 gives 0), and the root path of the JSON text null
+     gives 'null'. #}
+  case
+      when left(json_string(json_query(cast({{ json_col }} as json), {{ json_path }})), 1)
+          not in ('[', '{')
+          then cast(json_query(cast({{ json_col }} as json), {{ json_path }}) as varchar)
+  end
 {% endmacro %}

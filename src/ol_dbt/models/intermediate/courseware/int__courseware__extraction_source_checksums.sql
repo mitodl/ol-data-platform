@@ -50,7 +50,7 @@ with sources as (
         , courserun_readable_id
         , count(*) as source_count
         , {{ md5_hex(array_join(
-            'array_agg(source_checksum order by scope_position, scope_id, source_position)', ','
+            'array_agg(source_checksum order by scope_position nulls last, scope_id nulls last, source_position nulls last)', ','
         )) }} as text_checksum
     from source_checksums
     group by platform, courserun_readable_id

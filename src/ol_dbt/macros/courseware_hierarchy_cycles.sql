@@ -17,7 +17,7 @@
         from_concept_id
         , to_concept_id
         , row_number() over (
-            order by adjudication_score, to_narrower_count, from_concept_id, to_concept_id
+            order by adjudication_score nulls last, to_narrower_count nulls last, from_concept_id nulls last, to_concept_id nulls last
         ) as cycle_rank
     from (
         select

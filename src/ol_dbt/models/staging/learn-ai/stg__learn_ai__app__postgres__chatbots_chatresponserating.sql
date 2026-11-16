@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__learn_ai__app__postgres__ai_chatbots_chatresponserating') }}
+    {{ live_raw_rows('raw__learn_ai__app__postgres__ai_chatbots_chatresponserating') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__learn_ai__app__postgres__ai_chatbots_chatresponserating', partition_columns = 'checkpoint_id') }}

@@ -13,6 +13,14 @@
 ) }}
 {% endsnapshot %}
 
+{% snapshot snapshot_raw__thirdparty__zendesk_support__macros %}
+{{ raw_history_snapshot(
+    'raw__thirdparty__zendesk_support__macros',
+    unique_key='id',
+    live=false
+) }}
+{% endsnapshot %}
+
 {% snapshot snapshot_raw__thirdparty__zendesk_support__organizations %}
 {{ raw_history_snapshot(
     'raw__thirdparty__zendesk_support__organizations',

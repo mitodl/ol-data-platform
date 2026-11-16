@@ -5,46 +5,6 @@
     ingestion/inventory/units/mitx__mysql.yml disagree.
 -#}
 
-{% snapshot snapshot_raw__mitx__openedx__mysql__assessment_aiclassifier %}
-{{ raw_history_snapshot(
-    'raw__mitx__openedx__mysql__assessment_aiclassifier',
-    unique_key='id',
-    live=false
-) }}
-{% endsnapshot %}
-
-{% snapshot snapshot_raw__mitx__openedx__mysql__assessment_aiclassifierset %}
-{{ raw_history_snapshot(
-    'raw__mitx__openedx__mysql__assessment_aiclassifierset',
-    unique_key='id',
-    live=false
-) }}
-{% endsnapshot %}
-
-{% snapshot snapshot_raw__mitx__openedx__mysql__assessment_aigradingworkflow %}
-{{ raw_history_snapshot(
-    'raw__mitx__openedx__mysql__assessment_aigradingworkflow',
-    unique_key='id',
-    live=false
-) }}
-{% endsnapshot %}
-
-{% snapshot snapshot_raw__mitx__openedx__mysql__assessment_aitrainingworkflow %}
-{{ raw_history_snapshot(
-    'raw__mitx__openedx__mysql__assessment_aitrainingworkflow',
-    unique_key='id',
-    live=false
-) }}
-{% endsnapshot %}
-
-{% snapshot snapshot_raw__mitx__openedx__mysql__assessment_aitrainingworkflow_training_examples %}
-{{ raw_history_snapshot(
-    'raw__mitx__openedx__mysql__assessment_aitrainingworkflow_training_examples',
-    unique_key='id',
-    live=false
-) }}
-{% endsnapshot %}
-
 {% snapshot snapshot_raw__mitx__openedx__mysql__assessment_assessment %}
 {{ raw_history_snapshot(
     'raw__mitx__openedx__mysql__assessment_assessment',

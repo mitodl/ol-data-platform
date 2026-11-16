@@ -57,7 +57,7 @@ with concepts as (
             concept_id
             , concept_label_key
             , row_number() over (
-                partition by concept_id order by count(*) desc, concept_label_key asc
+                partition by concept_id order by count(*) desc, concept_label_key asc nulls last
             ) as key_rank
         from eligible_mentions
         group by concept_id, concept_label_key
@@ -74,7 +74,7 @@ with concepts as (
             eligible_mentions.concept_id
             , eligible_mentions.label
             , row_number() over (
-                partition by eligible_mentions.concept_id order by count(*) desc, eligible_mentions.label asc
+                partition by eligible_mentions.concept_id order by count(*) desc, eligible_mentions.label asc nulls last
             ) as label_rank
         from eligible_mentions
         inner join display_keys
@@ -95,7 +95,7 @@ with concepts as (
             concept_id
             , concept_kind
             , row_number() over (
-                partition by concept_id order by count(*) desc, concept_kind asc
+                partition by concept_id order by count(*) desc, concept_kind asc nulls last
             ) as kind_rank
         from eligible_mentions
         where concept_kind is not null

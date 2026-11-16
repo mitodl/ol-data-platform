@@ -2,10 +2,12 @@
 
 The platform's own copy of what Learn writes to its ``content_files`` and
 ``topics`` Qdrant collections, under the strategies in
-``ml/embedding_strategies.yaml``. Chunks and vectors are built with
-:mod:`ol_orchestrate.lib.embeddings`; this module turns the warehouse rows into
-its documents and its rows into frames, and carries the stored vectors of a
-vector space into the next run so only changed texts are sent to a model.
+``ml/embedding_strategies.yaml``. A content file's chunks are keyed by its path in
+the source, and Learn's point id is a column computed alongside. Chunks and
+vectors are built with :mod:`ol_orchestrate.lib.embeddings`; this module turns
+the warehouse rows into its documents and its rows into frames, and carries the
+stored vectors of a vector space into the next run so only changed texts are sent
+to a model.
 ``docs/design/embedding_substrate_and_search_engine.md`` (section 2) is the design.
 """
 
@@ -55,11 +57,22 @@ class ContentFileSource:
     :param files_relation: the integrations model with the source's content files
     :param runs_relation: the integrations model whose ``run_id`` and
         ``readable_id`` give each run's resource
+    :param source_path_column: the files model's column with each file's path
+        in the source, which keys its document
     """
 
     platform_code: str | None
     files_relation: str
     runs_relation: str
+    source_path_column: str
+
+    @property
+    def file_columns(self) -> tuple[str, ...]:
+        """The files model's columns a document is built from.
+
+        :rtype: tuple[str, ...]
+        """
+        return tuple(dict.fromkeys((*CONTENT_FILE_COLUMNS, self.source_path_column)))
 
     def run_resources(self, runs: pl.LazyFrame) -> pl.LazyFrame:
         """Return each run's resource and Learn platform code from the runs model.
@@ -78,26 +91,6 @@ class ContentFileSource:
         )
 
 
-# The etl_sources the content-file models carry. Learn's platform code is the
-# PlatformType name its ETL sets (learning_resources/constants.py): one per source,
-# except xPRO, whose ETL maps each course's platform (XPRO_PLATFORM_TRANSFORM).
-CONTENT_FILE_SOURCES = {
-    "mitxonline": ContentFileSource(
-        platform_code="mitxonline",
-        files_relation="integrations__learn__content_files",
-        runs_relation="integrations__learn__mitxonline_runs",
-    ),
-    "ocw": ContentFileSource(
-        platform_code="ocw",
-        files_relation="integrations__learn__ocw_content_files",
-        runs_relation="integrations__learn__ocw_courses",
-    ),
-    "xpro": ContentFileSource(
-        platform_code=None,
-        files_relation="integrations__learn__content_files",
-        runs_relation="integrations__learn__xpro_runs",
-    ),
-}
 CONTENT_FILE_COLUMNS = (
     "run_readable_id",
     "key",
@@ -105,6 +98,32 @@ CONTENT_FILE_COLUMNS = (
     "file_type",
     "file_extension",
 )
+# The etl_sources the content-file models carry. Learn's platform code is the
+# PlatformType name its ETL sets (learning_resources/constants.py): one per source,
+# except xPRO, whose ETL maps each course's platform (XPRO_PLATFORM_TRANSFORM).
+# An Open edX file's source path is its path in the course export. An OCW file's
+# key is already its source's: the S3 prefix of its data.json in the live bucket,
+# and the OCW model has no source_path.
+CONTENT_FILE_SOURCES = {
+    "mitxonline": ContentFileSource(
+        platform_code="mitxonline",
+        files_relation="integrations__learn__content_files",
+        runs_relation="integrations__learn__mitxonline_runs",
+        source_path_column="source_path",
+    ),
+    "ocw": ContentFileSource(
+        platform_code="ocw",
+        files_relation="integrations__learn__ocw_content_files",
+        runs_relation="integrations__learn__ocw_courses",
+        source_path_column="key",
+    ),
+    "xpro": ContentFileSource(
+        platform_code=None,
+        files_relation="integrations__learn__content_files",
+        runs_relation="integrations__learn__xpro_runs",
+        source_path_column="source_path",
+    ),
+}
 
 CHUNK_SCHEMA = pl.Schema(
     {
@@ -225,21 +244,27 @@ def strategies_for_run(
 
 
 def content_file_documents(
-    files: pl.DataFrame, runs: pl.DataFrame
+    etl_source: str, files: pl.DataFrame, runs: pl.DataFrame
 ) -> tuple[list[Document], int]:
-    """Return content files as documents keyed as Learn keys their points.
+    """Return content files as documents keyed by their path in the source.
 
-    A file's point key needs its run's resource and platform code, which come from
-    the runs model. Files whose run is not there, or has no platform code, get no
-    document: Learn loads no resource for a course whose platform it cannot map.
+    The document key is the source's
+    (:func:`ol_orchestrate.lib.embeddings.documents.content_file_doc_key`). Learn's
+    point id, computed from the metadata, needs the run's resource and platform
+    code, which come from the runs model. Files whose run is not there, or has no
+    platform code, get no document: Learn loads no resource for a course whose
+    platform it cannot map.
 
-    :param files: rows of a content-file model, with ``CONTENT_FILE_COLUMNS``
+    :param etl_source: the source the files are from
+    :param files: rows of the source's content-file model, with its
+        :attr:`ContentFileSource.file_columns`
     :param runs: ``run_id``, ``readable_id`` (the run's resource) and
         ``platform_code`` rows, from :meth:`ContentFileSource.run_resources`
     :returns: the documents, and how many files had no resource
     :rtype: tuple[list[Document], int]
     :raises ValueError: when a run has more than one resource
     """
+    source_path_column = CONTENT_FILE_SOURCES[etl_source].source_path_column
     resources = runs.select("run_id", "readable_id", "platform_code").unique()
     if resources["run_id"].is_duplicated().any():
         msg = "a run_id has more than one resource in the runs model"
@@ -252,6 +277,8 @@ def content_file_documents(
     )
     documents = [
         ContentFileDocument(
+            etl_source=etl_source,
+            source_path=row[source_path_column],
             key=row["key"],
             content=row["content"],
             resource_readable_id=row["readable_id"],
@@ -542,18 +569,23 @@ def merge_vectors(
     stored: pl.DataFrame | None,
     strategy_ids: Iterable[str],
     run_id: str,
+    chunk_keys: Iterable[str],
 ) -> pl.DataFrame:
     """Combine a run's vector rows with the partition's stored ones.
 
-    Stored rows of strategies the run did not embed are kept as they are. A new
-    row whose chunk, strategy, vector space and input checksum are already stored
-    is replaced by the stored row whole, so a run that embedded nothing changes
+    Stored rows of strategies the run did not embed are kept as they are, except
+    that a serving or candidate strategy's row is dropped once its chunk is no
+    longer in the partition (its file left, or the chunk was re-keyed). A retired
+    strategy, or one no longer in the strategy file, keeps its rows. A new row
+    whose chunk, strategy, vector space and input checksum are already stored is
+    replaced by the stored row whole, so a run that embedded nothing changes
     nothing but the write, whichever stored vector of the space the run picked.
 
     :param new: the run's rows, without ``run_id``
     :param stored: the partition's stored rows, ``None`` when there are none
     :param strategy_ids: the strategies the run embedded
     :param run_id: the Dagster run
+    :param chunk_keys: the partition's chunks, of every chunker
     :returns: the partition's rows to write, in ``VECTOR_SCHEMA``
     :rtype: pl.DataFrame
     """
@@ -561,7 +593,18 @@ def merge_vectors(
     if stored is None or stored.is_empty():
         return new
     stored = stored.select(VECTOR_SCHEMA.names())
-    untouched = stored.filter(~pl.col("strategy_id").is_in(list(strategy_ids)))
+    active = [
+        strategy.strategy_id
+        for strategy in strategies().values()
+        if strategy.role != "retired"
+    ]
+    untouched = stored.filter(
+        ~pl.col("strategy_id").is_in(list(strategy_ids))
+        & (
+            pl.col("chunk_key").is_in(list(chunk_keys))
+            | ~pl.col("strategy_id").is_in(active)
+        )
+    )
     key = ["chunk_key", "strategy_id", "vector_space", "input_checksum"]
     kept = stored.join(new.select(key), on=key, how="semi")
     added = new.join(stored.select(key), on=key, how="anti")

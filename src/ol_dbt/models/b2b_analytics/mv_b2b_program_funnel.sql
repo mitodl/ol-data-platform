@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract x program. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x contract x program. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- program_course_completers is an approximation (cert in any program course, not a true
 -- program-level certificate) until tfact_program_certificate (dimensional todo C2) ships.
 with org_program_runs as (

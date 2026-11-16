@@ -188,8 +188,8 @@ from (
             partition by platform, courserun_readable_id, source_ref, char_start, concept_id
             -- a resolved row wins over a candidate for the same span and concept
             order by
-                case sense_status when 'course_sense' then 0 when 'needs_review' then 1 else 2 end
-                , tagged_concept_id
+                case sense_status when 'course_sense' then 0 when 'needs_review' then 1 else 2 end nulls last
+                , tagged_concept_id nulls last
         ) as span_rank
     from redirected
     -- the run uses the label in another sense

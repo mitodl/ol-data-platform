@@ -14,6 +14,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
     TRACKING_LOGS_DEPLOYMENTS,
+    google_ads_assets,
     mitxonline_app_assets,
     qa_first_app_database_assets,
     tracking_logs_table,
@@ -80,22 +81,24 @@ youtube_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
-# One @dlt_assets run loads every raw__google_ads__api__* table, so target the
-# group. Daily reports stop at yesterday (UTC); 10:00 UTC is after midnight in
+# One @dlt_assets run loads every raw__google_ads__api__* table, so target that
+# asset. Daily reports stop at yesterday (UTC); 10:00 UTC is after midnight in
 # the accounts' US time zones. Stopped by default; start google_ads_freshness_sensor
-# with it.
+# with it. The change history files never change, so they load by hand only.
 google_ads_ingest_schedule = dg.ScheduleDefinition(
     name="google_ads_ingest_daily_schedule",
-    target=dg.AssetSelection.groups("google_ads"),
+    target=dg.AssetSelection.assets(google_ads_assets),
     cron_schedule="0 10 * * *",
     execution_timezone="Etc/UTC",
     default_status=dg.DefaultScheduleStatus.STOPPED,
+    # Fails a hung run instead of the instance's 2-day limit. A backfill saves
+    # its cursors per batch, so the next run resumes where this one stopped.
+    tags={"dagster/max_runtime": str(4 * 60 * 60)},
 )
 
 # Sloan Executive Education, ahead of the lakehouse's non_airbyte_staging_daily
-# at 06:00. RUNNING by default in production, where the delivery location's
-# sloan_course_metadata extract has run daily against the same API since before
-# this load existed. The API has no QA instance.
+# at 06:00. RUNNING by default in production. The API has no QA instance, so a
+# QA tick would call the partner's production endpoint.
 see_ingest_schedule = dg.ScheduleDefinition(
     name="see_ingest_daily_schedule",
     target=dg.AssetSelection.keys(

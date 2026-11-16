@@ -128,7 +128,7 @@ with openedx_events as (
         select
             *
             , lead(canvas_object_id) over (
-                 partition by session_id, block_id order by event_timestamp
+                 partition by session_id, block_id order by event_timestamp nulls last
             ) as next_canvas_object_id
         from canvas_events_with_learnai
     ) as subquery

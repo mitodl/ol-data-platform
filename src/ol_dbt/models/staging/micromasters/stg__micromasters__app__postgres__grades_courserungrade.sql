@@ -1,8 +1,7 @@
 -- course run final grades from MicroMaster DB
 
 with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__grades_finalgrade') }}
+    {{ live_raw_rows('raw__micromasters__app__postgres__grades_finalgrade') }}
 )
 
 , cleaned as (

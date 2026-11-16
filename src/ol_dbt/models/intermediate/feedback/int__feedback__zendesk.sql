@@ -11,7 +11,7 @@ with requester_turns as (
         -- Counts the requester's turns only, so it differs from the conversation's turn_index
         , row_number() over (
             partition by ticket_id
-            order by comment_created_at, comment_id
+            order by comment_created_at nulls last, comment_id nulls last
         ) as turn_index
     from {{ ref('int__zendesk__ticket_conversation') }}
     where comment_author_role = 'requester'

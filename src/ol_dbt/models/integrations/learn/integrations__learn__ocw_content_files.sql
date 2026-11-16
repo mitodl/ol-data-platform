@@ -9,10 +9,25 @@
   source_path) are null here too. content_title is the title, as in Learn.
   checksum is the MD5 of content, null for empty content, which is what Learn's
   ContentFile.save stores.
+
+  Learn's drops, which int__ocw__content_files flags: Learn skips a course
+  with neither uid, and keeps a resource only when its text file is a path in
+  the bucket (has_text_file, false for a video whose transcript list Learn
+  cannot read) and the file is there, and never a 3Play caption or PDF file.
 #}
 
 with content_files as (
     select * from {{ ref('int__ocw__content_files') }}
+    where
+        courserun_readable_id is not null
+        and (
+            content_type = 'page'
+            or (
+                has_text_file
+                and not is_3play_artifact
+                and coalesce(extraction_status, '') != 'missing'
+            )
+        )
 )
 
 select

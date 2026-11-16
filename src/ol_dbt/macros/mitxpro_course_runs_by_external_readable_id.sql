@@ -23,7 +23,7 @@
             , courserun_title
             , row_number() over (
                 partition by courserun_external_readable_id
-                order by courserun_created_on, courserun_id
+                order by courserun_created_on nulls last, courserun_id nulls last
             ) as _row_num
         from {{ ref('int__mitxpro__course_runs') }}
         where courserun_external_readable_id is not null

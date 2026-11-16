@@ -28,6 +28,10 @@ with enrollments as (
     select * from {{ ref('int__mitxonline__ecommerce_order') }}
 )
 
+, deferred_course_run_orders as (
+    select * from {{ ref('int__mitxonline__deferred_course_run_orders') }}
+)
+
 , micromasters_orders as (
     select * from {{ ref('stg__micromasters__app__postgres__ecommerce_order') }}
 )
@@ -75,6 +79,11 @@ with enrollments as (
             and enrollments.courserun_id = mitxonline_orders.courserun_id
     inner join mitxonline_runs on enrollments.courserun_id = mitxonline_runs.courserun_id
     inner join mitxonline_programs on mitxonline_runs.course_id = mitxonline_programs.course_id
+    -- A deferred order pays for another run, so it doesn't verify the run on its line.
+    left join deferred_course_run_orders
+        on
+            mitxonline_orders.order_id = deferred_course_run_orders.order_id
+            and enrollments.courserun_id = deferred_course_run_orders.courserun_id
     where
         mitxonline_runs.courserun_tag not in ('2T2022', '1T2022', '3T2021')
         and mitxonline_programs.program_id in (
@@ -82,6 +91,7 @@ with enrollments as (
             , {{ var("dedp_mitxonline_public_policy_program_id") }}
         )
         and mitxonline_orders.order_state = 'fulfilled'
+        and deferred_course_run_orders.order_id is null
 
 )
 

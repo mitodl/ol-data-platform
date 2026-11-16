@@ -6,9 +6,11 @@ collection by id. Learn's payload carries the exact text it embedded
 file, the file's checksum, so text, checksum and vector are compared point by
 point. A chunk whose text matches embeds the same input on both sides, and both
 sides call text-embedding-3-large, so its two vectors should be the same up to
-the providers' numerical noise.
+the providers' numerical noise. Learn calls OpenAI and the platform Azure OpenAI,
+and that noise is wider than the model alone suggests (see the thresholds).
 """
 
+import math
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -17,9 +19,27 @@ import numpy as np
 import polars as pl
 from qdrant_client import QdrantClient, models
 
-# Vectors of the same text from the same model differ only in noise, far above
-# this. A lower similarity means the two sides did not embed the same way.
+# The two providers' vectors of one text differ in noise. On the 23,572 chunks of
+# mitxonline course-v1:MITxT+CTL.SC0x+1T2027 whose text is Learn's (2026-11-13)
+# the median similarity was 0.9999, but the spread depends on the script (Thai p01
+# 0.9946, English p01 0.9989) and the least was 0.933, a Thai transcript chunk. 6
+# of the 23,572 were under this (0.025%). A chunk under it warns; a model's chunks
+# under it are an error only past SYSTEMATIC_MIN_CHUNKS and SYSTEMATIC_SHARE.
 MIN_COSINE_SIMILARITY = 0.99
+# A model whose vectors fall under MIN_COSINE_SIMILARITY this often, and at least
+# this many times, embeds differently from Learn rather than noisily: 200 times the
+# rate above, and enough chunks that one noisy chunk of a small run is not it.
+SYSTEMATIC_SHARE = 0.05
+SYSTEMATIC_MIN_CHUNKS = 5
+# Under this a vector is taken as not one of the chunk's text, an error. It is set
+# from one run, so it trades both ways: the providers' noise reached 0.933 there,
+# and the nearest platform vector of any other chunk to each of the 6 Learn
+# vectors under 0.99 was 0.83 at most. Noise on an unmeasured script may go under
+# it, and a vector swapped between near-duplicate chunks may stay over it. A
+# similarity that is not a number (a NaN in either vector) counts as under it.
+FLOOR_COSINE_SIMILARITY = 0.9
+# The lowest points under MIN_COSINE_SIMILARITY named per model, to read them.
+LOWEST_POINTS_REPORTED = 10
 QDRANT_BATCH_SIZE = 256
 # Learn's per-resource metadata chunks share the content files collection; the
 # platform does not build them (docs/learn_embedding_config.md).
@@ -45,31 +65,74 @@ class LearnPoint:
 class CosineStats:
     """Cosine similarities of the compared vectors of one model.
 
+    A similarity that is not a finite number (a NaN in either vector) counts
+    under both thresholds, and is named in ``non_finite`` rather than in the
+    summaries, so they stay finite numbers and JSON.
+
     :param compared: vectors compared
-    :param minimum: the least similarity, ``None`` with none compared
-    :param p50: the median similarity, ``None`` with none compared
-    :param below_threshold: similarities under ``MIN_COSINE_SIMILARITY``
+    :param minimum: the least finite similarity, ``None`` with none
+    :param p50: the median finite similarity, ``None`` with none
+    :param below_threshold: similarities under ``MIN_COSINE_SIMILARITY``, the
+        non-finite ones included
+    :param below_floor: similarities under ``FLOOR_COSINE_SIMILARITY``, the
+        non-finite ones included
+    :param lowest: up to ``LOWEST_POINTS_REPORTED`` point ids with a finite
+        similarity under ``MIN_COSINE_SIMILARITY``, with it, least first
+    :param non_finite: up to ``LOWEST_POINTS_REPORTED`` point ids whose
+        similarity is not finite
     """
 
     compared: int
     minimum: float | None
     p50: float | None
     below_threshold: int
+    below_floor: int = 0
+    lowest: tuple[tuple[str, float], ...] = ()
+    non_finite: tuple[str, ...] = ()
 
     @classmethod
-    def of(cls, similarities: Sequence[float]) -> "CosineStats":
+    def of(cls, similarities: Mapping[str, float]) -> "CosineStats":
         """Summarize similarities.
 
-        :param similarities: the similarities
+        :param similarities: the similarity of each point id
         :rtype: CosineStats
         """
+        finite = {
+            point_id: similarity
+            for point_id, similarity in similarities.items()
+            if math.isfinite(similarity)
+        }
+        non_finite = sorted(similarities.keys() - finite.keys())
+        values = list(finite.values())
+        below = sorted(
+            (
+                (point_id, similarity)
+                for point_id, similarity in finite.items()
+                if similarity < MIN_COSINE_SIMILARITY
+            ),
+            key=lambda pair: pair[1],
+        )
         return cls(
             compared=len(similarities),
-            minimum=min(similarities) if similarities else None,
-            p50=float(np.median(similarities)) if similarities else None,
-            below_threshold=sum(
-                similarity < MIN_COSINE_SIMILARITY for similarity in similarities
-            ),
+            minimum=min(values) if values else None,
+            p50=float(np.median(values)) if values else None,
+            below_threshold=len(below) + len(non_finite),
+            below_floor=sum(value < FLOOR_COSINE_SIMILARITY for value in values)
+            + len(non_finite),
+            lowest=tuple(below[:LOWEST_POINTS_REPORTED]),
+            non_finite=tuple(non_finite[:LOWEST_POINTS_REPORTED]),
+        )
+
+    @property
+    def systematically_below_threshold(self) -> bool:
+        """Whether enough vectors are under ``MIN_COSINE_SIMILARITY`` that the two
+        sides embed differently, not only noisily.
+
+        :rtype: bool
+        """
+        return (
+            self.below_threshold >= SYSTEMATIC_MIN_CHUNKS
+            and self.below_threshold > SYSTEMATIC_SHARE * self.compared
         )
 
 
@@ -124,16 +187,50 @@ class ParityReport:
         return sum(stats.compared for stats in self.cosine_by_model.values())
 
     @property
+    def platform_model_stats(self) -> dict[str, CosineStats]:
+        """The similarities of models other than Learn's own, by model.
+
+        :rtype: dict[str, CosineStats]
+        """
+        return {
+            model_id: stats
+            for model_id, stats in self.cosine_by_model.items()
+            if model_id != self.reference_model_id
+        }
+
+    @property
     def below_threshold(self) -> int:
-        """Vectors under the threshold from models other than Learn's own.
+        """Vectors under ``MIN_COSINE_SIMILARITY`` from models other than Learn's
+        own.
 
         :rtype: int
         """
         return sum(
-            stats.below_threshold
-            for model_id, stats in self.cosine_by_model.items()
-            if model_id != self.reference_model_id
+            stats.below_threshold for stats in self.platform_model_stats.values()
         )
+
+    @property
+    def below_floor(self) -> int:
+        """Vectors under ``FLOOR_COSINE_SIMILARITY`` from models other than
+        Learn's own: vectors taken as not one of their chunk's text.
+
+        :rtype: int
+        """
+        return sum(stats.below_floor for stats in self.platform_model_stats.values())
+
+    @property
+    def models_embedding_differently(self) -> dict[str, CosineStats]:
+        """The models other than Learn's own whose vectors are under
+        ``MIN_COSINE_SIMILARITY`` often enough that the two sides embed the same
+        text differently.
+
+        :rtype: dict[str, CosineStats]
+        """
+        return {
+            model_id: stats
+            for model_id, stats in self.platform_model_stats.items()
+            if stats.systematically_below_threshold
+        }
 
     @property
     def size_differs(self) -> bool:
@@ -149,19 +246,33 @@ class ParityReport:
 
     @property
     def vectors_differ(self) -> bool:
-        """Whether a chunk with Learn's text has a vector unlike Learn's, or the
+        """Whether a chunk with Learn's text has a vector taken as not one of the
+        text, a model's vectors are unlike Learn's too often to be noise, or the
         two sides embed at different lengths.
+
+        A few vectors under ``MIN_COSINE_SIMILARITY`` are the providers' noise
+        and only make the points differ.
 
         :rtype: bool
         """
-        return (
-            self.below_threshold > 0
-            or self.vector_length_mismatches > 0
+        return bool(
+            self.below_floor
+            or self.models_embedding_differently
+            or self.vector_length_mismatches
             or self.size_differs
         )
 
     @property
     def points_differ(self) -> bool:
+        """Whether the entries differ (see ``entries_differ``) or a vector is
+        under ``MIN_COSINE_SIMILARITY``.
+
+        :rtype: bool
+        """
+        return bool(self.below_threshold) or self.entries_differ
+
+    @property
+    def entries_differ(self) -> bool:
         """Whether the two sides have different points, texts or checksums, or a
         chunk lacks a vector.
 
@@ -348,7 +459,7 @@ def compare_with_learn(  # noqa: PLR0913
     found: set[str] = set()
     matched = text_matches = checksum_matches = without_vector = 0
     length_mismatches = 0
-    similarities: dict[str, list[float]] = defaultdict(list)
+    similarities: dict[str, dict[str, float]] = defaultdict(dict)
     for offset in range(0, platform.height, batch_size):
         rows = platform.slice(offset, batch_size)
         learn = fetch(rows["point_id"].to_list())
@@ -370,7 +481,7 @@ def compare_with_learn(  # noqa: PLR0913
                 length_mismatches += 1
                 continue
             if (cosine := _cosine(row["vector"], point.vector)) is not None:
-                similarities[row["model_id"]].append(cosine)
+                similarities[row["model_id"]][row["point_id"]] = cosine
     platform_ids = set(platform["point_id"])
     return ParityReport(
         platform_chunks=platform.height,

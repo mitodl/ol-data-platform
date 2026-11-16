@@ -76,8 +76,6 @@ models:
   - name: canvas_course_id
     description: str, Canvas course ID for the chat session, e.g. 34625-15.060_FA25
       May be blank for non-Canvas
-  - name: chatsession_django_session_key
-    description: str, Django session key for the chat session.
   - name: chatsession_created_on
     description: timestamp, date and time when the record was created.
     tests:

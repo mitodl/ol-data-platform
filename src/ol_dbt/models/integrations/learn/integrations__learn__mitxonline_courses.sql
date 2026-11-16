@@ -36,7 +36,7 @@ with courses as (
         , max(case when published then 1 else 0 end) = 1 as has_published_run
         , max(case when published and status = 'Current' and has_verified_mode then 1 else 0 end) = 1
             as certification
-        , array_agg(distinct pace order by pace) as pace
+        , array_agg(distinct pace order by pace nulls last) as pace
     from runs
     group by readable_id
 )
@@ -57,7 +57,7 @@ with courses as (
         , courserun_course_number
         , row_number() over (
             partition by course_id
-            order by coalesce(courserun_start_on, courserun_enrollment_start_on, '') desc, courserun_id
+            order by coalesce(courserun_start_on, courserun_enrollment_start_on, '') desc, courserun_id nulls last
         ) as recency_rank
     from catalog_runs
 )
@@ -75,7 +75,7 @@ with courses as (
 , course_numbers as (
     select
         course_id
-        , array_agg(courserun_course_number order by recency_rank) as course_numbers
+        , array_agg(courserun_course_number order by recency_rank nulls last) as course_numbers
     from course_number_ranks
     group by course_id
 )
@@ -98,7 +98,7 @@ with courses as (
 , topics as (
     select
         course_id
-        , array_agg(coursetopic_name order by coursetopic_name) as topics
+        , array_agg(coursetopic_name order by coursetopic_name nulls last) as topics
     from topic_names
     group by course_id
 )
@@ -106,7 +106,7 @@ with courses as (
 , departments as (
     select
         course_departments.course_id
-        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name) as departments
+        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name nulls last) as departments
     from {{ ref('stg__mitxonline__app__postgres__courses_course_to_department') }} as course_departments
     inner join {{ ref('stg__mitxonline__app__postgres__courses_department') }} as departments
         on course_departments.coursedepartment_id = departments.coursedepartment_id
@@ -120,7 +120,7 @@ with courses as (
     select
         requirements.course_id
         , programs.program_certification_type
-        , row_number() over (partition by requirements.course_id order by programs.program_id) as program_rank
+        , row_number() over (partition by requirements.course_id order by programs.program_id nulls last) as program_rank
     from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }} as requirements
     inner join {{ ref('stg__mitxonline__app__postgres__courses_program') }} as programs
         on requirements.program_id = programs.program_id

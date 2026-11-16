@@ -36,7 +36,7 @@ with mitx_courses as (
         , {{ array_agg_filter(
             'signatory_normalized_name'
             , "signatory_normalized_name <> ''"
-            , order_by='signatory_normalized_name'
+            , order_by='signatory_normalized_name nulls last'
         ) }} as signatory_names
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }}
     group by courserun_readable_id

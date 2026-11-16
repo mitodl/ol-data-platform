@@ -165,7 +165,7 @@ with mitxonline_courses as (
                     runs.courserun_start_on desc
                     , runs.courserun_end_on desc
                     , runs.recency_on desc
-                    , runs.courserun_title asc
+                    , runs.courserun_title asc nulls last
             ) as _row_num
         from emeritus_global_alumni_runs as runs
         left join mitxpro_course_codes

@@ -40,7 +40,27 @@ NLB is internal to the data VPC.
 
   # Shell session with OIDC token exported (e.g. for DBeaver / DataGrip via JDBC)
   eval "$(starrocks-auth --env qa --port-forward --output env)"
-  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST
+  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST, STARROCKS_<ENV>_HOST,
+         STARROCKS_ID_TOKEN_FILE and STARROCKS_<ENV>_ID_TOKEN_FILE
+
+  Both token-file variables name the id_token written to
+  ~/.cache/starrocks-auth/<env>.id_token (mode 0600), with at least ten minutes
+  left. mysql-connector-python reads it as openid_token_file, e.g.
+  mysql.connector.connect(host=..., port=9030, user=os.environ["STARROCKS_USER"],
+      auth_plugin="authentication_openid_connect_client",
+      openid_token_file=os.environ["STARROCKS_ID_TOKEN_FILE"])
+  StarRocks checks the token at every connect, and nothing refreshes the file
+  after --output env exits, so run this again before reconnecting once the
+  token lapses (Keycloak issues them for about an hour). The --port-forward
+  tunnel also closes when this script exits, so use --output exec for dbt.
+
+--- dbt as yourself (OIDC, human users) ---
+
+  starrocks-auth --env qa --port-forward --output exec -- \
+      dbt build --target starrocks_qa --select my_model
+
+  dbt reconnects for every node, so while the command runs this script keeps
+  the token file fresh through the Keycloak refresh token.
 
 --- CI / non-interactive ---
 
@@ -71,8 +91,9 @@ StarRocks has two disjoint authentication paths:
        it uses HTTP Basic Auth exclusively.
 
   - Native-auth service accounts (dbt, Vault dynamic users): use --mode vault.
-    dbt profiles must reference STARROCKS_USER / STARROCKS_PASSWORD env vars,
-    not an OIDC token. Arrow Flight SQL also only supports native-password auth.
+    Their dbt profiles (e.g. starrocks_qa_vault) reference STARROCKS_USER /
+    STARROCKS_PASSWORD, not an OIDC token; starrocks_qa is the OIDC target for
+    humans. Arrow Flight SQL also only supports native-password auth.
 """
 
 import argparse
@@ -161,6 +182,12 @@ _VAULT_REDIRECT_URI = f"http://localhost:{_VAULT_CALLBACK_PORT}/oidc/callback"
 _VAULT_OIDC_ROLE = "developer"
 
 _EXPIRY_BUFFER = 30  # seconds before stated expiry to treat token as stale
+# dbt reconnects for every node and StarRocks checks the id_token at each
+# connect, so hand out a token with this much left and keep it topped up.
+_ID_TOKEN_MIN_SECONDS = 10 * 60
+_ID_TOKEN_REFRESH_CHECK_SECONDS = 60
+# A stalled Keycloak connection must not hang the background refresher.
+_TOKEN_REQUEST_TIMEOUT_SECONDS = 30
 _PORT_FORWARD_TIMEOUT = 15  # seconds to wait for the tunnel to become ready
 
 _CACHE_DIR = (
@@ -316,7 +343,9 @@ def _token_request(url: str, data: dict[str, str]) -> dict[str, Any]:
     body = urllib.parse.urlencode(data).encode()
     req = urllib.request.Request(url, data=body, method="POST")  # noqa: S310
     try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
+        with urllib.request.urlopen(  # noqa: S310
+            req, timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS
+        ) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         sys.exit(f"Token request failed {exc.code}: {exc.read().decode()}")
@@ -337,9 +366,14 @@ def _try_refresh(
         req = urllib.request.Request(  # noqa: S310
             f"{issuer}/protocol/openid-connect/token", data=body, method="POST"
         )
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
+        with urllib.request.urlopen(  # noqa: S310
+            req, timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS
+        ) as resp:
             token_response = json.loads(resp.read())
-    except (urllib.error.HTTPError, urllib.error.URLError):
+    # OSError covers HTTPError and URLError, and also the bare TimeoutError or
+    # ConnectionResetError that resp.read() raises unwrapped. Any of them means
+    # "no silent refresh", and the caller falls back to a browser login.
+    except (OSError, json.JSONDecodeError):
         return None
 
     access_token = token_response["access_token"]
@@ -635,8 +669,137 @@ def _output_token(username: str, token: str, **_) -> None:  # noqa: ARG001
     print(token)  # noqa: T201  # nosec B106
 
 
-def _output_env(
-    username: str, token: str, host: str, password: str | None = None, **_
+def _id_token_file_path(env_name: str) -> Path:
+    return _CACHE_DIR / f"{env_name}.id_token"
+
+
+def _id_token_env_var(env_name: str) -> str:
+    """Name the variable that carries one environment's token file path.
+
+    The dbt target for an environment reads only its own variable, so a token
+    exported for production can never be picked up by ``starrocks_qa``.
+    """
+    return f"STARROCKS_{env_name.upper()}_ID_TOKEN_FILE"
+
+
+def _host_env_var(env_name: str) -> str:
+    """Name the variable that carries one environment's host, like the token's."""
+    return f"STARROCKS_{env_name.upper()}_HOST"
+
+
+def _token_seconds_left(token: str) -> float:
+    return _decode_jwt_payload(token)["exp"] - time.time()
+
+
+def _cached_id_token_seconds_left(env_name: str) -> float:
+    cached = _load_cache(env_name)
+    id_token = cached.get("id_token") if cached else None
+    if not id_token:
+        return 0.0
+    return _token_seconds_left(id_token)
+
+
+def _ensure_fresh_id_token(issuer: str, env_name: str) -> None:
+    """Leave an id_token with at least _ID_TOKEN_MIN_SECONDS to run in the cache.
+
+    The access token can still be valid while the id_token is about to lapse,
+    and dbt reconnects (re-sending the id_token) for every node, so a build
+    handed a nearly expired token fails partway. Refresh silently when the
+    session allows it, else log in again in the browser.
+    """
+    if _cached_id_token_seconds_left(env_name) >= _ID_TOKEN_MIN_SECONDS:
+        return
+    cached = _load_cache(env_name) or {}
+    refresh_token = cached.get("refresh_token")
+    if refresh_token and cached.get("refresh_expires_at", 0) > time.time():
+        _try_refresh(issuer, env_name, refresh_token)
+    if _cached_id_token_seconds_left(env_name) < _ID_TOKEN_MIN_SECONDS:
+        _clear_cache(env_name)
+        _browser_pkce(issuer, env_name)
+    if _cached_id_token_seconds_left(env_name) < _ID_TOKEN_MIN_SECONDS:
+        sys.exit(
+            "Keycloak returned no usable id_token, so there is nothing to log in "
+            "to StarRocks with. Check that the login requests the openid scope."
+        )
+
+
+def _write_id_token_file(env_name: str) -> Path:
+    """Write the cached id_token to a file for mysql-connector-python and dbt.
+
+    Their authentication_openid_connect_client plugin reads the token from a
+    path (``openid_token_file``), not from a value. The file lives next to the
+    token cache, which already holds the same token. It is replaced atomically
+    (mkstemp creates the new file 0600, then os.replace swaps it in), so a
+    reader never sees a partial token and a symlink at the path is replaced
+    rather than followed.
+    """
+    id_token = _load_cache(env_name)["id_token"]  # type: ignore[index]
+    path = _id_token_file_path(env_name)
+    fd, tmp_name = tempfile.mkstemp(dir=_CACHE_DIR, prefix=f".{env_name}.id_token.")
+    with os.fdopen(fd, "w") as token_file:
+        token_file.write(id_token)
+    Path(tmp_name).replace(path)
+    return path
+
+
+def _keep_id_token_file_fresh(issuer: str, env_name: str) -> None:
+    """Refresh the token file in the background while --output exec runs.
+
+    Uses only the refresh token: a browser login cannot happen mid-run. Once
+    the Keycloak session can no longer be refreshed, the file keeps its last
+    token and dbt's next connection after it expires fails.
+    """
+
+    token_file = _id_token_file_path(env_name)
+
+    def refresh_once() -> bool:
+        # Judge by the file dbt reads, not the cache: another starrocks-auth run
+        # (e.g. --output mysql) can refresh the cache without rewriting the file.
+        if _token_seconds_left(token_file.read_text()) >= _ID_TOKEN_MIN_SECONDS:
+            return True
+        if _cached_id_token_seconds_left(env_name) < _ID_TOKEN_MIN_SECONDS:
+            cached = _load_cache(env_name) or {}
+            refresh_token = cached.get("refresh_token")
+            if not (
+                refresh_token
+                and cached.get("refresh_expires_at", 0) > time.time()
+                and _try_refresh(issuer, env_name, refresh_token)
+                and _cached_id_token_seconds_left(env_name) > 0
+            ):
+                return False
+        _write_id_token_file(env_name)
+        return True
+
+    warned = False
+    while True:
+        time.sleep(_ID_TOKEN_REFRESH_CHECK_SECONDS)
+        # A daemon thread that dies takes every later refresh with it, so a
+        # failed attempt (a reset connection, a truncated response, a missing
+        # file) is reported and retried on the next tick instead.
+        try:
+            refreshed = refresh_once()
+            reason = "the refresh token was refused or has expired"
+        except Exception as exc:  # noqa: BLE001
+            refreshed = False
+            reason = repr(exc)
+        if not refreshed and not warned:
+            warned = True
+            print(  # noqa: T201
+                f"starrocks-auth: could not refresh the Keycloak session ({reason}); "
+                "retrying every minute. StarRocks logins fail once the current "
+                "id_token expires.",
+                file=sys.stderr,
+            )
+
+
+def _output_env(  # noqa: PLR0913
+    username: str,
+    token: str,
+    host: str,
+    env_name: str,
+    password: str | None = None,
+    id_token_file: Path | None = None,
+    **_,
 ) -> None:
     # shlex.quote (not repr) — this output is eval'd by a shell, and repr's
     # quoting rules are for Python syntax, not POSIX shell syntax: a value
@@ -644,29 +807,55 @@ def _output_env(
     # still runs as command substitution when eval'd.
     print(f"export STARROCKS_USER={shlex.quote(username)}")  # noqa: T201
     print(f"export STARROCKS_HOST={shlex.quote(host)}")  # noqa: T201
+    print(f"export {_host_env_var(env_name)}={shlex.quote(host)}")  # noqa: T201
     if password is not None:
         # Vault dynamic credentials — native-password auth (dbt / service accounts)
         print(f"export STARROCKS_PASSWORD={shlex.quote(password)}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
     else:
         # OIDC access token — human interactive sessions
         print(f"export STARROCKS_TOKEN={shlex.quote(token)}")  # noqa: T201
+    if id_token_file is not None:
+        quoted = shlex.quote(str(id_token_file))
+        print(f"export STARROCKS_ID_TOKEN_FILE={quoted}")  # noqa: T201
+        print(f"export {_id_token_env_var(env_name)}={quoted}")  # noqa: T201
 
 
-def _output_exec(
+def _output_exec(  # noqa: PLR0913
     username: str,
     token: str,
     host: str,
     cmd: list[str],
+    env_name: str,
+    issuer: str | None = None,
     password: str | None = None,
+    id_token_file: Path | None = None,
     **_,
 ) -> None:
     if not cmd:
         sys.exit("--output exec requires a command after --")
-    env = {**os.environ, "STARROCKS_USER": username, "STARROCKS_HOST": host}
+    # Drop every environment's token path and host inherited from an earlier
+    # `eval`, so the child sees only those of the environment this run logged
+    # in to.
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not re.fullmatch(r"STARROCKS_(\w*ID_TOKEN_FILE|\w+_HOST)", key)
+    }
+    env |= {
+        "STARROCKS_USER": username,
+        "STARROCKS_HOST": host,
+        _host_env_var(env_name): host,
+    }
     if password is not None:
         env["STARROCKS_PASSWORD"] = password
     else:
         env["STARROCKS_TOKEN"] = token
+    if id_token_file is not None and issuer is not None:
+        env["STARROCKS_ID_TOKEN_FILE"] = str(id_token_file)
+        env[_id_token_env_var(env_name)] = str(id_token_file)
+        threading.Thread(
+            target=_keep_id_token_file_fresh, args=(issuer, env_name), daemon=True
+        ).start()
     # A child process rather than exec: exec replaces this interpreter, so the
     # atexit hook that stops --port-forward's kubectl never runs and the tunnel
     # outlives the command, holding port 9030 against the next run.
@@ -871,10 +1060,18 @@ def main() -> None:
         host = env_cfg["host"]
 
     password: str | None = None
+    id_token_file: Path | None = None
     if args.mode == "browser":
         username, token = _get_browser_token(
             issuer, args.env, force_refresh=args.refresh
         )
+        # Only the browser flow's own user may log in with its cached id_token,
+        # and only env and exec hand the path to another program (e.g. dbt).
+        if args.output in {"env", "exec"}:
+            _ensure_fresh_id_token(issuer, args.env)
+            # The refresh or login above may have replaced the access token too.
+            username, token = _get_browser_token(issuer, args.env, force_refresh=False)
+            id_token_file = _write_id_token_file(args.env)
     elif args.mode == "ci":
         username, token = _client_credentials(issuer)
     else:  # vault
@@ -903,7 +1100,9 @@ def main() -> None:
         env_name=args.env,
         mode=args.mode,
         tls=env_cfg["tls"],
+        issuer=issuer,
         password=password,
+        id_token_file=id_token_file,
     )
 
 

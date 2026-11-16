@@ -65,7 +65,7 @@ with courses as (
 , instructors as (
     select
         courserun_readable_id
-        , array_agg(instructor_name order by position) as instructors
+        , array_agg(instructor_name order by position nulls last) as instructors
     from instructor_names
     where instructor_name != ''
     group by courserun_readable_id
@@ -82,7 +82,7 @@ with courses as (
 , topics as (
     select
         courserun_readable_id
-        , array_agg(replace(topic_name, 'Educational Policy', 'Education Policy') order by position) as topics
+        , array_agg(replace(topic_name, 'Educational Policy', 'Education Policy') order by position nulls last) as topics
     from topic_names
     where topic_name != ''
     group by courserun_readable_id

@@ -56,7 +56,7 @@ with allowlist as (
                     when allowlist.courserun_readable_id is not null then 1
                     when allowlist.course_readable_id is not null then 2
                     else 3
-                end
+                end nulls last
         ) as match_rank
     from candidate_runs
     inner join allowlist

@@ -478,6 +478,39 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
     ]
 
 
+def test_sensor_fingerprint_unwraps_an_exhausted_transient_retry() -> None:
+    """``RetryRequested -> ConnectError`` is fingerprinted as the ConnectError.
+
+    The Sentry hook unwraps the same chain, so both report the transport error.
+    """
+    from dagster import DagsterEventType, job, op  # noqa: PLC0415
+    from httpx2 import ConnectError  # noqa: PLC0415
+    from ol_orchestrate.lib.failures import retry_transient_errors  # noqa: PLC0415
+
+    @op
+    def unreachable_api():
+        with retry_transient_errors(max_retries=1, seconds_to_wait=0):
+            msg = "EOF occurred in violation of protocol"
+            raise ConnectError(msg)
+
+    @job
+    def a_job():
+        unreachable_api()
+
+    result = a_job.execute_in_process(raise_on_error=False)
+    step_failures = [
+        event
+        for event in result.all_events
+        if event.event_type == DagsterEventType.STEP_FAILURE
+    ]
+
+    fingerprint = sentry_fingerprint(
+        _context(step_failures), step_failure_of(step_failures)
+    )
+
+    assert fingerprint[3] == "ConnectError"
+
+
 # ── Event-log reads ───────────────────────────────────────────────────────────
 
 

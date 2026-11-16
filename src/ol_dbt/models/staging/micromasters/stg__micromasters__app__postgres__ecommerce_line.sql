@@ -1,6 +1,6 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__micromasters__app__postgres__ecommerce_line') }}
+    {{ live_raw_rows('raw__micromasters__app__postgres__ecommerce_line') }}
 
 )
 

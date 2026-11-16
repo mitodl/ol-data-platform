@@ -149,10 +149,14 @@ class TestCommittedFiles:
         assert stale_history_files(REPO_ROOT, rendered) == [], "Run `ol-dbt inventory history --write`."
 
     def test_real_scope(self) -> None:
-        """339 tables on 2026-11-10: the decided rule's ~330, keyed, minus the activity tables."""
+        """336 tables: 339 on 2026-11-10, plus mitxonline courses_paidcourserun.
+
+        Less mitx's five unmodeled assessment_ai* tables, plus zendesk macros once
+        it synced incremental_deduped_history.
+        """
         selected = history_tables(load_units(REAL_INVENTORY))
         raw_tables = {table.raw_table for rows in selected.values() for table in rows}
-        assert len(raw_tables) == 339  # noqa: PLR2004
+        assert len(raw_tables) == 336  # noqa: PLR2004
         assert not raw_tables & LEARNER_ACTIVITY_TABLES
 
     def test_pilot_snapshots_keep_their_names_and_alone_are_live(self) -> None:
@@ -206,6 +210,24 @@ class TestSettings:
             "_airbyte_extracted_at",
             24,
         )
+
+    def test_keyset_filter_has_no_lake_column_when_every_lake_uses_the_production_loader(self) -> None:
+        spec = _by_name([_unit(DB_UNIT)])["auth_user"].delete_filter
+        assert spec is not None
+        assert spec.lake_loader_time_columns == ()
+
+    def test_keyset_filter_names_the_column_of_a_lake_dlt_loads(self) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_app", "write_disposition": "merge"}
+        units = [_unit(data)]
+        spec = _by_name(units)["auth_user"].delete_filter
+        assert spec is not None
+        assert spec.lake_loader_time_columns == (("qa", "_dlt_load_id"),)
+        assert (
+            "'raw__mitxonline__openedx__mysql__auth_user': {'kind': 'keyset', "
+            "'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 24, "
+            "'lake_loader_time_columns': {'qa': '_dlt_load_id'}},"
+        ) in render_history(units)[DELETE_FILTER_MACRO_PATH]
 
     def test_full_read_needs_no_filter(self) -> None:
         assert _by_name([_unit(DB_UNIT)])["course_overviews"].delete_filter is None

@@ -92,7 +92,7 @@ with chatbot_events as (
         , cast(video_events.event_timestamp as date) as activity_date
         , lag(cast(video_events.event_timestamp as date)) over (partition by users.email
         , video_events.courserun_readable_id
-        , video_events.video_block_fk order by cast(video_events.event_timestamp as date)) AS PreviousDATE
+        , video_events.video_block_fk order by cast(video_events.event_timestamp as date) nulls last) AS PreviousDATE
     from video_events
     inner join users
         on video_events.user_fk = users.user_pk

@@ -12,7 +12,7 @@ with course_block_source as (
             , course_content_hash
             , lag(course_content_hash) over (
                 partition by course_id
-                order by retrieved_at asc, course_content_hash asc
+                order by retrieved_at asc nulls last, course_content_hash asc nulls last
             ) as previous_content_hash
         from (
             select distinct
@@ -36,7 +36,7 @@ with course_block_source as (
                     , course_block_source.block_id
                     , course_block_source.retrieved_at
                     , course_block_source.course_content_hash
-                order by course_block_source.block_content_hash asc, course_block_source.block_index asc
+                order by course_block_source.block_content_hash asc nulls last, course_block_source.block_index asc nulls last
             ) as block_copy_number
         from course_block_source
         where (course_block_source.course_id, course_block_source.retrieved_at, course_block_source.course_content_hash) in (

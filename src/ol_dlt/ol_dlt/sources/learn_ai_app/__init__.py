@@ -18,8 +18,10 @@ older copies of rows (368,222 extra rows of ``ai_chatbots_djangocheckpoint``'s
 3,032,386 on 2026-11-10) that staging deduplicates. A replace load has one row
 per key, and the inventory resolves the QA dedup column to ``_dlt_load_id``.
 
-``users_user.password`` is excluded: a Django password hash that no dbt model
-selects.
+Two credential columns are excluded: ``users_user.password`` (a Django password
+hash) and ``ai_chatbots_userchatsession.dj_session_key`` (the Django session key of
+an anonymous chat; Learn AI hands that chat's threads to whoever presents it). No
+dbt model selects either.
 """
 
 from typing import Any
@@ -51,7 +53,11 @@ LEARN_AI_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(
             name="ai_chatbots_tutorbotoutput", primary_key="id", chunk_size=5_000
         ),
-        DatabaseTable(name="ai_chatbots_userchatsession", primary_key="id"),
+        DatabaseTable(
+            name="ai_chatbots_userchatsession",
+            primary_key="id",
+            excluded_columns=("dj_session_key",),
+        ),
         DatabaseTable(
             name="users_user", primary_key="id", excluded_columns=("password",)
         ),

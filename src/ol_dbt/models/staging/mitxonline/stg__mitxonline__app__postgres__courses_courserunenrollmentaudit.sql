@@ -1,7 +1,7 @@
 -- MITx Online CourseRunEnrollment audit log (before/after change tracking)
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__courses_courserunenrollmentaudit') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__courses_courserunenrollmentaudit') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__courses_courserunenrollmentaudit', partition_columns='id') }}

@@ -69,7 +69,7 @@ with registry as (
     select
         count(*) as extraction_count
         , {{ md5_hex(array_join(
-            'array_agg(extractions.extraction_key order by extractions.extraction_key)', ','
+            'array_agg(extractions.extraction_key order by extractions.extraction_key nulls last)', ','
         )) }} as extraction_selection_checksum
     from {{ ref('dim_courseware_extraction') }} as extractions
     inner join {{ ref('int__courseware__source_eligibility') }} as eligibility

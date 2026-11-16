@@ -102,7 +102,7 @@ with mentions as (
         select
             concept_id
             , concept_kind
-            , row_number() over (partition by concept_id order by count(*) desc, concept_kind) as kind_rank
+            , row_number() over (partition by concept_id order by count(*) desc, concept_kind nulls last) as kind_rank
         from mentions
         where concept_kind is not null
         group by concept_id, concept_kind

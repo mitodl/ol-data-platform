@@ -7,7 +7,10 @@ of wildly different sizes can load concurrently instead of one giant table
 blocking the rest of the run behind it.
 """
 
+import logging
+import time
 from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from functools import partial
 from typing import Any
 
@@ -53,6 +56,7 @@ from ol_dlt.sources import (
     xpro_app,
     youtube,
 )
+from ol_dlt.sources.google_ads import history as google_ads_history
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
 
@@ -103,16 +107,133 @@ mit_edx_programs_assets = build_ingest_assets(
     source=mit_edx_programs.build_source(),
     pipeline=mit_edx_programs.mit_edx_programs_pipeline,
 )
+# ad_opt_v2's change history files, copied once into the landing zone. Loaded by
+# hand only: each load replaces both tables.
+google_ads_history_assets = build_ingest_assets(
+    name="google_ads_history_ingest",
+    source=google_ads_history.build_source(),
+    pipeline=google_ads_history.google_ads_history_pipeline,
+)
 podcast_rss_assets = build_ingest_assets(
     name="podcast_rss_ingest",
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
 )
-google_ads_assets = build_ingest_assets(
-    name="google_ads_ingest",
-    source=google_ads.build_source(),
-    pipeline=google_ads.google_ads_pipeline,
+
+
+# --- google_ads: other tables, then the backfill, then the lookback ---------
+#
+# Change events and snapshots load first, so a long backfill cannot hold change
+# events past the API's 30-day retention. The backfill runs through
+# load_in_batches: each batch is its own load that saves the account cursors, so
+# a killed pod resumes after the last finished batch. The lookback re-pull runs
+# only once the backfill is drained, so it never loads a backlog in one merge.
+
+_GOOGLE_ADS_DAILY_TABLES = (
+    "raw__google_ads__api__keyword_daily",
+    "raw__google_ads__api__keyword_conversions_daily",
+    "raw__google_ads__api__campaign_daily",
 )
+_GOOGLE_ADS_SOURCE = google_ads.build_source()
+_GOOGLE_ADS_TRANSLATOR = RawDataDltTranslator()
+_GOOGLE_ADS_KEYS = {
+    name: _GOOGLE_ADS_TRANSLATOR.get_asset_spec(
+        DltResourceTranslatorData(
+            resource=resource, pipeline=google_ads.google_ads_pipeline
+        )
+    ).key
+    for name, resource in _GOOGLE_ADS_SOURCE.selected_resources.items()
+}
+_GOOGLE_ADS_OTHER_TABLES = tuple(
+    name for name in _GOOGLE_ADS_KEYS if name not in _GOOGLE_ADS_DAILY_TABLES
+)
+
+
+@contextmanager
+def _source_logs_in_run_log(context: AssetExecutionContext) -> Iterator[None]:
+    class Handler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            context.log.log(record.levelno, self.format(record))
+
+    source_log = logging.getLogger(google_ads.__name__)
+    handler, level = Handler(logging.INFO), source_log.level
+    source_log.addHandler(handler)
+    source_log.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        source_log.removeHandler(handler)
+        source_log.setLevel(level)
+
+
+@dlt_assets(
+    dlt_source=_GOOGLE_ADS_SOURCE,
+    dlt_pipeline=google_ads.google_ads_pipeline,
+    name="google_ads_ingest",
+    dagster_dlt_translator=_GOOGLE_ADS_TRANSLATOR,
+)
+def google_ads_assets(
+    context: AssetExecutionContext, dlt: DagsterDltResource
+) -> Iterable[Any]:
+    """Load every Google Ads table in the order the section comment describes."""
+    pipeline = google_ads.google_ads_pipeline
+    selected = {
+        name
+        for name, key in _GOOGLE_ADS_KEYS.items()
+        if not context.is_subset or key in context.selected_asset_keys
+    }
+    other = [name for name in _GOOGLE_ADS_OTHER_TABLES if name in selected]
+    daily = [name for name in _GOOGLE_ADS_DAILY_TABLES if name in selected]
+    with _source_logs_in_run_log(context):
+        if other:
+            yield from dlt.run(
+                context=context,
+                dlt_source=google_ads.build_source().with_resources(*other),
+            )
+        if not daily:
+            return
+        backfill, batches, fetches = load_in_batches(
+            context=context,
+            dlt=dlt,
+            build_source=partial(
+                google_ads.build_source, backfill_windows=google_ads.BACKFILL_WINDOWS
+            ),
+            pipeline=pipeline,
+            resource_name=google_ads.FETCH_LOG_TABLE,
+        )
+        context.log.info(
+            "Backfill: %s window fetches across %s tables in %s batches",
+            fetches,
+            len(daily),
+            batches,
+        )
+        if _normalized_row_count(pipeline, google_ads.FETCH_LOG_TABLE):
+            context.log.warning("Backfill not drained; the lookback waits a run.")
+            yield from backfill
+            return
+        # The merge writes silently, and it is most of a daily run.
+        context.log.info(
+            "Lookback: re-pulling %s days before each account's cursor for %s "
+            "tables and merging them",
+            google_ads.DEFAULT_LOOKBACK_DAYS,
+            len(daily),
+        )
+        started = time.monotonic()
+        try:
+            lookback = list(
+                dlt.run(
+                    context=context,
+                    dlt_source=google_ads.build_source().with_resources(*daily),
+                    loader_file_format="parquet",
+                )
+            )
+        finally:
+            context.log.info(
+                "Lookback re-pull and merge took %.0fs", time.monotonic() - started
+            )
+        yield from lookback
+
+
 keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
     source=keycloak.build_source(),
@@ -744,6 +865,7 @@ defs = Definitions(
             oll_assets,
             mitpe_assets,
             google_ads_assets,
+            google_ads_history_assets,
             mit_climate_assets,
             mit_edx_programs_assets,
             podcast_rss_assets,

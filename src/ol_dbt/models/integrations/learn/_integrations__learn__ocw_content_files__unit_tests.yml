@@ -1,0 +1,46 @@
+---
+unit_tests:
+- name: test_integrations__learn__ocw_content_files_applies_learns_drops
+  description: >
+    int__ocw__content_files keeps every page and resource; Learn has no ContentFile
+    for a course with neither uid, a resource with no text file in the bucket (a
+    video whose transcript list it cannot read among them), a 3Play caption or PDF
+    file, or a resource whose file is missing. A resource with a text file Learn
+    reads nothing from (an image) and one whose extraction failed are kept.
+  model: integrations__learn__ocw_content_files
+  given:
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/a/pages/syllabus/, content_type: page,
+      content: <p>Read.</p>, extraction_status: null, has_text_file: null, transcript_unreadable: false,
+      is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/notes/,
+      content_type: pdf, content: Lecture notes, extraction_status: extracted, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/figure/,
+      content_type: file, content: null, extraction_status: null, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/scan/, content_type: pdf,
+      content: null, extraction_status: failed, has_text_file: true, transcript_unreadable: false,
+      is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/no-transcript/,
+      content_type: video, content: null, extraction_status: null, has_text_file: false,
+      transcript_unreadable: false, is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/bad-transcripts/,
+      content_type: video, content: null, extraction_status: null, has_text_file: false,
+      transcript_unreadable: true, is_3play_artifact: false}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/caption/,
+      content_type: file, content: null, extraction_status: null, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: true}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/gone/, content_type: pdf,
+      content: null, extraction_status: missing, has_text_file: true, transcript_unreadable: false,
+      is_3play_artifact: false}
+    - {courserun_readable_id: null, content_file_key: courses/b/pages/syllabus/, content_type: page,
+      content: <p>Read.</p>, extraction_status: null, has_text_file: null, transcript_unreadable: false,
+      is_3play_artifact: false}
+  expect:
+    rows:
+    - {run_readable_id: run1, key: courses/a/pages/syllabus/, extraction_status: null}
+    - {run_readable_id: run1, key: courses/a/resources/notes/, extraction_status: extracted}
+    - {run_readable_id: run1, key: courses/a/resources/figure/, extraction_status: null}
+    - {run_readable_id: run1, key: courses/a/resources/scan/, extraction_status: failed}

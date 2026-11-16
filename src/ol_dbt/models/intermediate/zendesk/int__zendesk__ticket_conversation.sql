@@ -75,7 +75,7 @@ select
     -- comment_id breaks ties between comments that share a created_at
     , row_number() over (
         partition by ticket_id
-        order by comment_created_at, comment_id
+        order by comment_created_at nulls last, comment_id nulls last
     ) as turn_index
     , comment_author_role
     , comment_author_email

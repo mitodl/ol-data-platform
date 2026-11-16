@@ -306,8 +306,8 @@ with mitxonline_certificates as (
         , row_number() over (
             partition by _certificate_group
             order by
-                _platform_rank ASC
-                , case when certificate_is_revoked then 1 else 0 end
+                _platform_rank ASC nulls last
+                , case when certificate_is_revoked then 1 else 0 end nulls last
                 , certificate_issued_on desc nulls last
                 -- certificate_id is a string; compare the integer ids as numbers.
                 , {{ try_cast('certificate_id', 'bigint') }} desc nulls last
@@ -347,7 +347,7 @@ with mitxonline_certificates as (
             , count(*) over (partition by certificate_key) > 1 as target_has_copies
             , row_number() over (
                 partition by certificate_key
-                order by certificate_updated_on desc nulls last, user_fk, courserun_fk
+                order by certificate_updated_on desc nulls last, user_fk nulls last, courserun_fk nulls last
             ) as target_copy_num
         from {{ this }}
     ) as target
@@ -419,10 +419,10 @@ with mitxonline_certificates as (
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sufk.stored_user_fk is distinct from cwf.user_fk
+        or {{ is_distinct_from('sufk.stored_user_fk', 'cwf.user_fk') }}
         -- A newer certificate can take is_current from a row whose own timestamps did
         -- not move, so re-select any row whose flag no longer matches the target.
-        or sufk.stored_is_current is distinct from (cwf._cross_source_row_num = 1)
+        or {{ is_distinct_from('sufk.stored_is_current', '(cwf._cross_source_row_num = 1)') }}
         or sufk.stored_has_copies
     )
 
@@ -460,7 +460,7 @@ with mitxonline_certificates as (
         ]) }}
     where source_certificates.certificate_id is null
     {% if target_has_is_current %}
-    and (target.is_current is distinct from false or target.target_has_copies)
+    and ({{ is_distinct_from('target.is_current', 'false') }} or target.target_has_copies)
     {% endif %}
     {% endif %}
 )

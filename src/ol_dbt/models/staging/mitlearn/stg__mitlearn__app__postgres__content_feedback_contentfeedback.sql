@@ -1,6 +1,5 @@
 with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__content_feedback_contentfeedback') }}
+    {{ live_raw_rows('raw__mitlearn__app__postgres__content_feedback_contentfeedback') }}
 )
 
 {{ deduplicate_raw_table(

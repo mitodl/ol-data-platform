@@ -34,7 +34,7 @@ with source as (
         , ticket_restriction as user_ticket_restriction
         , only_private_comments as user_only_private_comments
         , two_factor_auth_enabled as user_has_two_factor_auth_enabled
-        , nullif(tags, array[]) as user_tags
+        , {{ null_if_empty_array('tags') }} as user_tags
         , role as user_role
         , case
             when role_type = 0 then 'custom agent'

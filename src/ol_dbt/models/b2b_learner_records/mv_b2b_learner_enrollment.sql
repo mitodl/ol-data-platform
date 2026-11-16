@@ -5,8 +5,8 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x contract x course_run x learner. Refreshed by the Dagster b2b_organization
--- MV-refresh asset. Individually identifying: read by ol-analytics-api's
+-- Grain: org x contract x course_run x learner. Refreshed by lakehouse's
+-- b2b_analytics/starrocks_mv_refresh asset. Individually identifying: read by ol-analytics-api's
 -- b2b_learner_records tenant, never by the k-anonymized b2b_dashboard tenant.
 -- The organization is reached through the contract the learner enrolled under
 -- (afact_learner_courserun_progress.contract_fk), never through the course run: a run

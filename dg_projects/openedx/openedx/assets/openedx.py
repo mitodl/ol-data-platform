@@ -33,7 +33,11 @@ from dagster import (
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.lib.failures import permanent_failure
+from ol_orchestrate.lib.failures import (
+    TRANSIENT_HTTP_ERRORS,
+    permanent_failure,
+    retry_transient_errors,
+)
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     CourseExportOutcome,
@@ -467,65 +471,101 @@ def build_courseware_source_asset(
     required_resource_keys={"openedx"},
 )
 def course_structure(context: AssetExecutionContext):
-    course_id = context.partition_key
-    course_status = context.resources.openedx.client.check_course_status(course_id)
-    context.log.info("Course status for %s: %s", course_id, course_status)
-    # if the course is found, trigger the XML export
-    if course_status == HTTP_SUCCESS:
-        course_structure_document = (
-            context.resources.openedx.client.get_course_structure_document(course_id)
-        )
-        data_version = hashlib.sha256(
-            json.dumps(course_structure_document).encode("utf-8")
-        ).hexdigest()
-        structures_file = Path(f"course_structures_{data_version}.json")
-        blocks_file = Path(f"course_blocks_{data_version}.json")
-        data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
-        with (
-            jsonlines.open(structures_file, mode="w") as structures,
-            jsonlines.open(blocks_file, mode="w") as blocks,
-        ):
-            table_row = {
-                "content_hash": hashlib.sha256(
-                    json.dumps(course_structure_document).encode("utf-8")
-                ).hexdigest(),
-                "course_id": context.partition_key,
-                "course_structure": course_structure_document,
-                "course_structure_flattened": flatten_nested_dict(
-                    course_structure_document, "__"
-                ),
-                "retrieved_at": data_retrieval_timestamp,
-            }
-            structures.write(table_row)
-            for block in un_nest_course_structure(
-                course_id, course_structure_document, data_retrieval_timestamp
+    with retry_transient_errors():
+        course_id = context.partition_key
+        course_status = context.resources.openedx.client.check_course_status(course_id)
+        context.log.info("Course status for %s: %s", course_id, course_status)
+        # if the course is found, trigger the XML export
+        if course_status == HTTP_SUCCESS:
+            course_structure_document = (
+                context.resources.openedx.client.get_course_structure_document(
+                    course_id
+                )
+            )
+            data_version = hashlib.sha256(
+                json.dumps(course_structure_document).encode("utf-8")
+            ).hexdigest()
+            structures_file = Path(f"course_structures_{data_version}.json")
+            blocks_file = Path(f"course_blocks_{data_version}.json")
+            data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
+            with (
+                jsonlines.open(structures_file, mode="w") as structures,
+                jsonlines.open(blocks_file, mode="w") as blocks,
             ):
-                blocks.write(block)
-        structure_object_key = f"{'/'.join(context.asset_key_for_output('course_structure').path)}/{course_id}/{data_version}.json"  # noqa: E501
-        blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_blocks').path)}/{course_id}/{data_version}.json"  # noqa: E501
-        yield Output(
-            (structures_file, structure_object_key),
-            output_name="course_structure",
-            data_version=DataVersion(data_version),
-            metadata={"course_id": course_id, "object_key": structure_object_key},
+                table_row = {
+                    "content_hash": hashlib.sha256(
+                        json.dumps(course_structure_document).encode("utf-8")
+                    ).hexdigest(),
+                    "course_id": context.partition_key,
+                    "course_structure": course_structure_document,
+                    "course_structure_flattened": flatten_nested_dict(
+                        course_structure_document, "__"
+                    ),
+                    "retrieved_at": data_retrieval_timestamp,
+                }
+                structures.write(table_row)
+                for block in un_nest_course_structure(
+                    course_id, course_structure_document, data_retrieval_timestamp
+                ):
+                    blocks.write(block)
+            structure_object_key = f"{'/'.join(context.asset_key_for_output('course_structure').path)}/{course_id}/{data_version}.json"  # noqa: E501
+            blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_blocks').path)}/{course_id}/{data_version}.json"  # noqa: E501
+            yield Output(
+                (structures_file, structure_object_key),
+                output_name="course_structure",
+                data_version=DataVersion(data_version),
+                metadata={"course_id": course_id, "object_key": structure_object_key},
+            )
+            yield Output(
+                (blocks_file, blocks_object_key),
+                output_name="course_blocks",
+                data_version=DataVersion(data_version),
+                metadata={
+                    "course_id": course_id,
+                    "object_key": blocks_object_key,
+                },
+            )
+        # if the course is not found, refer to the last successful materialization
+        elif course_status == HTTP_NOT_FOUND:
+            context.log.info("Course %s not found in the Open edX platform.", course_id)
+        # if the course status query results in some other error, raise an exception
+        else:
+            err_msg = (
+                f"Unexpected course status: {course_status} for course: {course_id}"
+            )
+            context.log.exception(err_msg)
+            raise ValueError(err_msg)
+
+
+def _poll_export_status(
+    context: AssetExecutionContext, course_id: str, task_id: str
+) -> dict[str, str]:
+    """Ask Studio for an export's status, treating a dropped request as no news.
+
+    A dropped poll is not raised. Raising would reach ``retry_transient_errors``,
+    which reruns ``course_xml`` from the top and starts a second Studio export
+    of a course that is still exporting. The returned status has no ``state``,
+    which ``classify_course_export_state`` counts as still pending, so the
+    caller polls again and its export timeout still bounds the wait.
+
+    :param context: The ``course_xml`` execution context.
+    :param course_id: The course being exported.
+    :param task_id: Studio's export task id.
+    :returns: Studio's status response, or one whose ``details`` names the
+        transport error.
+    :rtype: dict[str, str]
+    """
+    try:
+        return context.resources.openedx.client.check_course_export_status(
+            course_id, task_id
         )
-        yield Output(
-            (blocks_file, blocks_object_key),
-            output_name="course_blocks",
-            data_version=DataVersion(data_version),
-            metadata={
-                "course_id": course_id,
-                "object_key": blocks_object_key,
-            },
+    except TRANSIENT_HTTP_ERRORS as error:
+        context.log.warning(
+            "Polling the export of %s failed; trying again on the next poll",
+            course_id,
+            exc_info=True,
         )
-    # if the course is not found, refer to the last successful materialization
-    elif course_status == HTTP_NOT_FOUND:
-        context.log.info("Course %s not found in the Open edX platform.", course_id)
-    # if the course status query results in some other error, raise an exception
-    else:
-        err_msg = f"Unexpected course status: {course_status} for course: {course_id}"
-        context.log.exception(err_msg)
-        raise ValueError(err_msg)
+        return {"details": f"status request failed: {type(error).__name__}"}
 
 
 @asset(
@@ -550,136 +590,140 @@ def course_structure(context: AssetExecutionContext):
     pool="openedx_course_export",
 )
 def course_xml(context: AssetExecutionContext):
-    course_key = context.partition_key
-    course_status = context.resources.openedx.client.check_course_status(course_key)
-    # if the course is found, trigger the XML export
-    if course_status == HTTP_SUCCESS:
-        # Read before the export is triggered so the version recorded below is
-        # the one this archive reflects, not one published while it ran. The
-        # upstream observation is what got us here, so this lookup is known to
-        # have just succeeded for this course.
-        published_version = context.resources.openedx.client.get_course_outline(
-            course_key
-        )["published_version"]
-        exported_courses = context.resources.openedx.client.export_courses(
-            course_ids=[course_key],
-        )
-        context.log.debug(
-            "Initiated export of course %s: %s", course_key, exported_courses
-        )
-        successful_exports: set[str] = set()
-        failed_exports: set[str] = set()
-        # Keyed by course id, so a failure or a timeout can say what Studio
-        # last reported instead of just that something went wrong.
-        last_seen_status: dict[str, str] = {}
-        # Only ever one course is requested, so the poll set is built from that
-        # course rather than from whatever the response happens to contain.
-        # Reading upload_task_ids directly meant a course Studio declined to
-        # queue produced an empty mapping: the loop ran zero times, nothing was
-        # recorded as failed, and execution fell through to a bare KeyError on
-        # upload_urls further down.
-        tasks = {course_key: course_export_task_id(course_key, exported_courses)}
-        start_time = datetime.now(tz=UTC)
-        while len(successful_exports.union(failed_exports)) < len(tasks):
-            if (
-                datetime.now(tz=UTC) - start_time
-                > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
-            ):
-                # Which course timed out and what Studio last said are logged
-                # rather than interpolated into the message: Sentry titles the
-                # event from the message, so a course key in there gives every
-                # timeout a different title. The course key is already on the
-                # event as the dagster_partition tag.
-                context.log.error(
-                    "Course export timed out for %s after %s. Last status "
-                    "reported by Studio: %s",
-                    course_key,
-                    COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT,
-                    last_seen_status or "none",
-                )
-                err_msg = (
-                    "Course export timed out waiting for Studio after "
-                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}."
-                )
-                raise TimeoutError(err_msg)
-            time.sleep(timedelta(seconds=20).seconds)
-            for course_id, task_id in tasks.items():
-                task_status = (
-                    context.resources.openedx.client.check_course_export_status(
-                        course_id,
-                        task_id,
-                    )
-                )
-                state = task_status.get("state")
-                details = task_status.get("details")
-                last_seen_status[course_id] = (
-                    f"{state}{f' ({details})' if details else ''}"
-                )
-                outcome = classify_course_export_state(state)
-                if outcome is CourseExportOutcome.SUCCEEDED:
-                    successful_exports.add(course_id)
-                elif outcome is CourseExportOutcome.FAILED:
-                    failed_exports.add(course_id)
-                elif details:
-                    context.log.info(
-                        "Details of export task for course %s (task %s): %s",
-                        course_id,
-                        task_id,
-                        details,
-                    )
-        if failed_exports:
-            reported = {
-                course: last_seen_status.get(course)
-                for course in sorted(failed_exports)
-            }
-            # Studio reporting Failed is a terminal answer about this version of
-            # the course, not a hiccup -- re-asking returns the same thing until
-            # the course itself changes. Raised as a bare Exception it was never
-            # classified at all, so run_retries and the automation condition both
-            # kept re-running it: 2,587 events on DAGSTER-6.
-            # The course key stays out of the message and in the metadata
-            # below, so every occurrence of this defect carries the same Sentry
-            # title instead of one title per course.
-            errmsg = (
-                "Studio could not export the course XML, and reported a "
-                "terminal failure state. Rerunning will not change that; the "
-                "course itself has to be fixed or republished."
+    with retry_transient_errors():
+        course_key = context.partition_key
+        course_status = context.resources.openedx.client.check_course_status(course_key)
+        # if the course is found, trigger the XML export
+        if course_status == HTTP_SUCCESS:
+            # Read before the export is triggered so the version recorded below is
+            # the one this archive reflects, not one published while it ran. The
+            # upstream observation is what got us here, so this lookup is known to
+            # have just succeeded for this course.
+            published_version = context.resources.openedx.client.get_course_outline(
+                course_key
+            )["published_version"]
+            exported_courses = context.resources.openedx.client.export_courses(
+                course_ids=[course_key],
             )
-            raise permanent_failure(
-                errmsg,
+            context.log.debug(
+                "Initiated export of course %s: %s", course_key, exported_courses
+            )
+            successful_exports: set[str] = set()
+            failed_exports: set[str] = set()
+            # Keyed by course id, so a failure or a timeout can say what Studio
+            # last reported instead of just that something went wrong.
+            last_seen_status: dict[str, str] = {}
+            # Only ever one course is requested, so the poll set is built from that
+            # course rather than from whatever the response happens to contain.
+            # Reading upload_task_ids directly meant a course Studio declined to
+            # queue produced an empty mapping: the loop ran zero times, nothing was
+            # recorded as failed, and execution fell through to a bare KeyError on
+            # upload_urls further down.
+            tasks = {course_key: course_export_task_id(course_key, exported_courses)}
+            start_time = datetime.now(tz=UTC)
+            while len(successful_exports.union(failed_exports)) < len(tasks):
+                if (
+                    datetime.now(tz=UTC) - start_time
+                    > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
+                ):
+                    # Which course timed out and what Studio last said are logged
+                    # rather than interpolated into the message: Sentry titles the
+                    # event from the message, so a course key in there gives every
+                    # timeout a different title. The course key is already on the
+                    # event as the dagster_partition tag.
+                    context.log.error(
+                        "Course export timed out for %s after %s. Last status "
+                        "reported by Studio: %s",
+                        course_key,
+                        COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT,
+                        last_seen_status or "none",
+                    )
+                    err_msg = (
+                        "Course export timed out waiting for Studio after "
+                        f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}."
+                    )
+                    raise TimeoutError(err_msg)
+                time.sleep(timedelta(seconds=20).seconds)
+                for course_id, task_id in tasks.items():
+                    task_status = _poll_export_status(context, course_id, task_id)
+                    state = task_status.get("state")
+                    details = task_status.get("details")
+                    last_seen_status[course_id] = (
+                        f"{state}{f' ({details})' if details else ''}"
+                    )
+                    outcome = classify_course_export_state(state)
+                    if outcome is CourseExportOutcome.SUCCEEDED:
+                        successful_exports.add(course_id)
+                    elif outcome is CourseExportOutcome.FAILED:
+                        failed_exports.add(course_id)
+                    elif details:
+                        context.log.info(
+                            "Details of export task for course %s (task %s): %s",
+                            course_id,
+                            task_id,
+                            details,
+                        )
+            if failed_exports:
+                reported = {
+                    course: last_seen_status.get(course)
+                    for course in sorted(failed_exports)
+                }
+                # Studio reporting Failed is a terminal answer about this version of
+                # the course, not a hiccup -- re-asking returns the same thing until
+                # the course itself changes. Raised as a bare Exception it was never
+                # classified at all, so run_retries and the automation condition both
+                # kept re-running it: 2,587 events on DAGSTER-6.
+                # The course key stays out of the message and in the metadata
+                # below, so every occurrence of this defect carries the same Sentry
+                # title instead of one title per course.
+                errmsg = (
+                    "Studio could not export the course XML, and reported a "
+                    "terminal failure state. Rerunning will not change that; the "
+                    "course itself has to be fixed or republished."
+                )
+                raise permanent_failure(
+                    errmsg,
+                    metadata={
+                        "course_key": str(course_key),
+                        "studio_status": MetadataValue.json(reported),
+                    },
+                )
+            s3_location = exported_courses["upload_urls"][course_key]
+            context.log.debug(
+                "Attempting to download the course XML from %s", s3_location
+            )
+            s3_path = urlparse(s3_location)
+            course_file = Path(f"{course_key}.xml.tar.gz")
+            context.resources.s3.download_file(
+                Bucket=s3_path.hostname.split(".")[0],
+                Key=s3_path.path.lstrip("/"),
+                Filename=course_file,
+            )
+            data_version = hashlib.file_digest(
+                course_file.open("rb"), "sha256"
+            ).hexdigest()
+            target_path = f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz"  # noqa: E501
+            yield Output(
+                (course_file, target_path),
+                data_version=DataVersion(data_version),
                 metadata={
-                    "course_key": str(course_key),
-                    "studio_status": MetadataValue.json(reported),
+                    "course_id": course_key,
+                    "object_key": target_path,
+                    "courseware_published_version": published_version,
                 },
             )
-        s3_location = exported_courses["upload_urls"][course_key]
-        context.log.debug("Attempting to download the course XML from %s", s3_location)
-        s3_path = urlparse(s3_location)
-        course_file = Path(f"{course_key}.xml.tar.gz")
-        context.resources.s3.download_file(
-            Bucket=s3_path.hostname.split(".")[0],
-            Key=s3_path.path.lstrip("/"),
-            Filename=course_file,
-        )
-        data_version = hashlib.file_digest(course_file.open("rb"), "sha256").hexdigest()
-        target_path = f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz"  # noqa: E501
-        yield Output(
-            (course_file, target_path),
-            data_version=DataVersion(data_version),
-            metadata={
-                "course_id": course_key,
-                "object_key": target_path,
-                "courseware_published_version": published_version,
-            },
-        )
-    # if the course is not found, refer to the last successful materialization
-    elif course_status in {None, HTTP_NOT_FOUND}:
-        context.log.info("Course %s not found in the Open edX platform.", course_key)
-    # if the course status query results in some other error, raise an exception
-    else:
-        err_msg = f"Unexpected course status: {course_status} for course: {course_key}"
-        context.log.exception(err_msg)
-        raise ValueError(err_msg)
+        # if the course is not found, refer to the last successful materialization
+        elif course_status in {None, HTTP_NOT_FOUND}:
+            context.log.info(
+                "Course %s not found in the Open edX platform.", course_key
+            )
+        # if the course status query results in some other error, raise an exception
+        else:
+            err_msg = (
+                f"Unexpected course status: {course_status} for course: {course_key}"
+            )
+            context.log.exception(err_msg)
+            raise ValueError(err_msg)
 
 
 @multi_asset(
