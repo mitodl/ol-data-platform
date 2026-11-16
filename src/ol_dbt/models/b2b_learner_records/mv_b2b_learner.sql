@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x learner. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x learner. Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- Individually identifying: read by ol-analytics-api's b2b_learner_records tenant only.
 -- Rolled up from the same joins as mv_b2b_learner_enrollment rather than selected
 -- from it: the refresh asset refreshes MVs in name order, which would refresh this

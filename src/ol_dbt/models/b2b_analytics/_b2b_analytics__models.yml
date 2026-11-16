@@ -42,7 +42,8 @@ models:
 - name: mv_b2b_contract_utilization
   description: >
     Seat utilization and completion rate per org x contract. Manual-refresh
-    materialized view, refreshed by the Dagster b2b_organization MV-refresh asset.
+    materialized view, refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh
+    asset.
     Consumers: L&D manager dashboard header card, MIT admin overview.
   columns:
   - name: organization_key

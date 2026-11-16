@@ -5,7 +5,7 @@
     refresh_method='manual',
 ) }}
 
--- Grain: org x course_run (all-time). Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- Grain: org x course_run (all-time). Refreshed by lakehouse's b2b_analytics/starrocks_mv_refresh asset.
 -- Rows come from the dimensional facts through the contract each learner enrolled under
 -- (see macros/b2b_engagement.sql); see mv_b2b_monthly_engagement_trend for what that
 -- changed.
