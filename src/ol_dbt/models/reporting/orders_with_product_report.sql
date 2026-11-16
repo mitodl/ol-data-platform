@@ -27,7 +27,7 @@ with orders as (
         course_enrollment_detail.user_email
         , program.program_readable_id
         , course_enrollment_detail.platform
-        , count(distinct course_enrollment_detail.course_readable_id) as verified_course_count
+        , count(distinct course_enrollment_detail.course_readable_id) as verified_course_enrollment_count
     from program
     inner join program_course
         on program.program_pk = program_course.program_fk
@@ -39,7 +39,7 @@ with orders as (
     inner join course_enrollment_detail
         on 
             course.course_readable_id = course_enrollment_detail.course_readable_id
-            and course_enrollment_detail.enrollment_mode = 'verified'
+            and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
     group by
         course_enrollment_detail.user_email
         , program.program_readable_id
@@ -98,7 +98,7 @@ select
     , orders.user_id
     , orders.user_hashed_id
     , products.product_name
-    , verified_enrollment_counts.verified_enrollment_count
+    , verified_enrollment_counts.verified_course_enrollment_count
 from orders
 left join products
     on orders.product_readable_id = products.product_readable_id
