@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(snapshot_date as date) as snapshot_date
     , campaign_criterion__resource_name as campaign_criterion_resource_name
     , campaign__id as campaign_id
@@ -18,5 +18,6 @@ select
     , campaign_criterion__keyword__text as keyword_text
     , campaign_criterion__keyword__match_type as keyword_match_type
     , campaign_criterion__location__geo_target_constant as location_geo_target_constant
-    , retrieved_at
+    , retrieved_at as campaign_criterion_snapshot_retrieved_at
+    , _dlt_load_id as campaign_criterion_snapshot_dlt_load_id
 from current_source

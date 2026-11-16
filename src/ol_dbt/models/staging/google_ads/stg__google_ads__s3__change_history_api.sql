@@ -11,4 +11,5 @@ select
     , header as change_header
     , details as change_details
     , _source_file as change_source_file
+    , _dlt_load_id as change_dlt_load_id
 from source

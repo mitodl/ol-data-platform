@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(segments__date as date) as report_date
     , campaign__id as campaign_id
     , campaign__name as campaign_name
@@ -22,5 +22,6 @@ select
     , metrics__search_impression_share as search_impression_share
     , metrics__search_budget_lost_impression_share as search_budget_lost_impression_share
     , metrics__search_rank_lost_impression_share as search_rank_lost_impression_share
-    , retrieved_at
+    , retrieved_at as campaign_daily_retrieved_at
+    , _dlt_load_id as campaign_daily_dlt_load_id
 from current_source

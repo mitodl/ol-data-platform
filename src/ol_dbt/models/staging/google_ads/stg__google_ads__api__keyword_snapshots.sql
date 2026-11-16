@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(snapshot_date as date) as snapshot_date
     , ad_group_criterion__resource_name as keyword_resource_name
     , campaign__id as campaign_id
@@ -21,5 +21,6 @@ select
     , ad_group_criterion__keyword__match_type as keyword_match_type
     , ad_group_criterion__status as keyword_status
     , ad_group_criterion__negative as keyword_is_negative
-    , retrieved_at
+    , retrieved_at as keyword_snapshot_retrieved_at
+    , _dlt_load_id as keyword_snapshot_dlt_load_id
 from current_source

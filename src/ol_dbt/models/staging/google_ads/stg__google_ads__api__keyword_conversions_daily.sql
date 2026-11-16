@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(segments__date as date) as report_date
     , segments__ad_network_type as ad_network_type
     , segments__conversion_action as conversion_action_resource_name
@@ -25,5 +25,6 @@ select
     , ad_group_criterion__keyword__match_type as keyword_match_type
     , metrics__conversions as conversions
     , metrics__all_conversions as all_conversions
-    , retrieved_at
+    , retrieved_at as keyword_conversion_retrieved_at
+    , _dlt_load_id as keyword_conversion_dlt_load_id
 from current_source

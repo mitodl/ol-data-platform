@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(snapshot_date as date) as snapshot_date
     , campaign_shared_set__resource_name as campaign_shared_set_resource_name
     , campaign__id as campaign_id
@@ -17,5 +17,6 @@ select
     , shared_set__name as shared_set_name
     , shared_set__type as shared_set_type
     , campaign_shared_set__status as campaign_shared_set_status
-    , retrieved_at
+    , retrieved_at as campaign_shared_set_snapshot_retrieved_at
+    , _dlt_load_id as campaign_shared_set_snapshot_dlt_load_id
 from current_source

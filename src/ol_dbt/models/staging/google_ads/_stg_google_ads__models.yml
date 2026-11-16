@@ -6,8 +6,8 @@ models:
   description: Accounts under the MIT Open Learning Google Ads manager account, one
     row per account.
   columns:
-  - name: customer_id
-    description: str, Google Ads account id; joins to the report models' customer_id
+  - name: account_id
+    description: str, Google Ads account id; joins to the report models' account_id
     tests:
     - not_null
     - unique
@@ -25,12 +25,14 @@ models:
     description: str, the account's time zone; report dates are in it
   - name: account_retrieved_at
     description: timestamp, when the load read the account list
+  - name: account_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
 
 - name: stg__google_ads__api__keyword_daily
   description: Keyword Search performance per day and ad network, from the latest
     fetch of each date. Money is in the account currency.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -70,13 +72,15 @@ models:
     description: decimal, cost
   - name: search_impression_share
     description: double, share of eligible impressions received; null when unset
-  - name: retrieved_at
+  - name: keyword_daily_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
+  - name: keyword_daily_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - report_date
         - ad_network_type
         - ad_group_id
@@ -86,7 +90,7 @@ models:
   description: Keyword conversions per day, ad network and conversion action, from
     the latest fetch of each date.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -122,13 +126,15 @@ models:
     description: double, conversions of actions counted in Google's Conversions
   - name: all_conversions
     description: double, conversions of every action
-  - name: retrieved_at
+  - name: keyword_conversion_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
+  - name: keyword_conversion_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - report_date
         - ad_network_type
         - ad_group_id
@@ -139,7 +145,7 @@ models:
   description: Campaign performance, budget and lost impression share per day, from
     the latest fetch of each date.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -171,13 +177,15 @@ models:
     description: double, share of eligible impressions lost to budget
   - name: search_rank_lost_impression_share
     description: double, share of eligible impressions lost to ad rank
-  - name: retrieved_at
+  - name: campaign_daily_retrieved_at
     description: timestamp, when the fetch that wrote the row ran
+  - name: campaign_daily_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - report_date
         - campaign_id
 
@@ -185,7 +193,7 @@ models:
   description: Changes made in the client accounts, one row per change event, from
     2026-10-14 on.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -213,19 +221,21 @@ models:
     description: str, JSON of the changed resource before the change
   - name: change_new_resource
     description: str, JSON of the changed resource after the change
-  - name: retrieved_at
+  - name: change_event_retrieved_at
     description: timestamp, when the load last read the event
+  - name: change_event_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - change_event_resource_name
 
 - name: stg__google_ads__api__campaign_snapshots
   description: Each day's campaigns and budgets, from the latest snapshot of the day.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -255,13 +265,15 @@ models:
     description: decimal, daily budget
   - name: campaign_budget_reference_count
     description: bigint, campaigns sharing the budget; over 1 is a shared budget
-  - name: retrieved_at
+  - name: campaign_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
+  - name: campaign_snapshot_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - snapshot_date
         - campaign_resource_name
 
@@ -269,7 +281,7 @@ models:
   description: Each day's ad group keywords, including negatives, from the latest
     snapshot of the day.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -297,13 +309,15 @@ models:
     description: str, keyword status
   - name: keyword_is_negative
     description: boolean, true for a negative keyword
-  - name: retrieved_at
+  - name: keyword_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
+  - name: keyword_snapshot_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - snapshot_date
         - keyword_resource_name
 
@@ -311,7 +325,7 @@ models:
   description: Each day's campaign negative keywords and location targets, from the
     latest snapshot of the day.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -333,13 +347,15 @@ models:
     description: str, match type for a KEYWORD criterion
   - name: location_geo_target_constant
     description: str, the targeted location for a LOCATION criterion
-  - name: retrieved_at
+  - name: campaign_criterion_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
+  - name: campaign_criterion_snapshot_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - snapshot_date
         - campaign_criterion_resource_name
 
@@ -347,7 +363,7 @@ models:
   description: Each day's links between campaigns and shared negative keyword lists,
     from the latest snapshot of the day.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -367,13 +383,15 @@ models:
     description: str, e.g. NEGATIVE_KEYWORDS
   - name: campaign_shared_set_status
     description: str, link status
-  - name: retrieved_at
+  - name: campaign_shared_set_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
+  - name: campaign_shared_set_snapshot_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - snapshot_date
         - campaign_shared_set_resource_name
 
@@ -381,7 +399,7 @@ models:
   description: Each day's keywords in the shared negative keyword lists, from the
     latest snapshot of the day.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -399,13 +417,15 @@ models:
     description: str, keyword text
   - name: keyword_match_type
     description: str, match type
-  - name: retrieved_at
+  - name: shared_criterion_snapshot_retrieved_at
     description: timestamp, when the snapshot was read
+  - name: shared_criterion_snapshot_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - snapshot_date
         - shared_criterion_resource_name
 
@@ -413,7 +433,7 @@ models:
   description: Each account window a report or snapshot table re-read, with that fetch's
     time.
   columns:
-  - name: customer_id
+  - name: account_id
     description: str, Google Ads account id
     tests:
     - not_null
@@ -425,19 +445,21 @@ models:
     description: date, first date the fetch covered
   - name: fetch_window_end
     description: date, last date the fetch covered
-  - name: retrieved_at
+  - name: fetch_retrieved_at
     description: timestamp, when the fetch ran
     tests:
     - not_null
+  - name: fetch_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - customer_id
+        - account_id
         - fetch_table_name
         - fetch_window_start
         - fetch_window_end
-        - retrieved_at
+        - fetch_retrieved_at
 
 - name: stg__google_ads__s3__change_history_report
   description: ad_opt_v2's Google Ads UI change history exports, one row per change.
@@ -465,6 +487,8 @@ models:
       account access changes name people by email
   - name: change_source_file
     description: str, the landing-zone file the row came from
+  - name: change_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -498,6 +522,8 @@ models:
     description: str, JSON array of the change's detail lines
   - name: change_source_file
     description: str, the landing-zone file the row came from
+  - name: change_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:

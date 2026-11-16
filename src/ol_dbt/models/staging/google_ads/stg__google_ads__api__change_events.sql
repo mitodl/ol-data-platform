@@ -3,7 +3,7 @@ with source as (
 )
 
 select
-    customer_id
+    customer_id as account_id
     , change_event__resource_name as change_event_resource_name
     , change_event__change_date_time as change_event_at
     , change_event__change_resource_type as change_resource_type
@@ -15,5 +15,6 @@ select
     , change_event__ad_group as ad_group_resource_name
     , change_event__old_resource as change_old_resource
     , change_event__new_resource as change_new_resource
-    , retrieved_at
+    , retrieved_at as change_event_retrieved_at
+    , _dlt_load_id as change_event_dlt_load_id
 from source

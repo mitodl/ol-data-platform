@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(segments__date as date) as report_date
     , segments__ad_network_type as ad_network_type
     , campaign__id as campaign_id
@@ -28,5 +28,6 @@ select
     , metrics__clicks as clicks
     , {{ google_ads_micros('metrics__cost_micros') }} as cost
     , metrics__search_impression_share as search_impression_share
-    , retrieved_at
+    , retrieved_at as keyword_daily_retrieved_at
+    , _dlt_load_id as keyword_daily_dlt_load_id
 from current_source

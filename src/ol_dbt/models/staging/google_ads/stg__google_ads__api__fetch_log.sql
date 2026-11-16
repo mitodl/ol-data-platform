@@ -3,9 +3,10 @@ with source as (
 )
 
 select
-    customer_id
+    customer_id as account_id
     , table_name as fetch_table_name
     , cast(window_start as date) as fetch_window_start
     , cast(window_end as date) as fetch_window_end
-    , retrieved_at
+    , retrieved_at as fetch_retrieved_at
+    , _dlt_load_id as fetch_dlt_load_id
 from source

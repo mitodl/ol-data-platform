@@ -9,7 +9,7 @@ with source as (
 ) }}
 
 select
-    customer_id
+    customer_id as account_id
     , cast(snapshot_date as date) as snapshot_date
     , campaign__resource_name as campaign_resource_name
     , campaign__id as campaign_id
@@ -22,5 +22,6 @@ select
     , campaign_budget__resource_name as campaign_budget_resource_name
     , {{ google_ads_micros('campaign_budget__amount_micros') }} as campaign_budget_amount
     , campaign_budget__reference_count as campaign_budget_reference_count
-    , retrieved_at
+    , retrieved_at as campaign_snapshot_retrieved_at
+    , _dlt_load_id as campaign_snapshot_dlt_load_id
 from current_source
