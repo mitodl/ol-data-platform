@@ -4,11 +4,12 @@ version: 2
 models:
 - name: int__openedx__content_files
   description: >
-    One row per file of an MITx Online or xPRO course run's export that has text
-    to read: OLX block XML from course_xml_blocks plus the documents and
-    transcripts the openedx location extracts, including files whose extraction
-    failed or found no text. Each carries the key, title and video MIT Learn's
-    process_olx_path derives for it, and the flags of Learn's excluded_olx_paths.
+    One row per file of an Open edX course run's export (MITx Online, xPRO and
+    residential MITx) that has text to read: OLX block XML from
+    course_xml_blocks plus the documents and transcripts the openedx location
+    extracts, including files whose extraction failed or found no text. Each
+    carries the key, title and video MIT Learn's process_olx_path derives for
+    it, and the flags of Learn's excluded_olx_paths.
     Which files become Learn ContentFiles, and which of two that share a key,
     is decided in integrations__learn__content_files.
   tests:
@@ -21,7 +22,7 @@ models:
     tests:
     - not_null
   - name: source_system
-    description: str, mitxonline or xpro
+    description: str, mitx, mitxonline or xpro
     tests:
     - not_null
   - name: source_path
@@ -79,9 +80,10 @@ unit_tests:
   description: >
     Keys and titles as MIT Learn derives them, each case checked against Learn's
     content files for course-v1:MITxT+7.05x+2T2026 and
-    course-v1:xPRO+SysEngx1+R28 on 2026-10-02. Every file of a Learn source's
-    export has a row, excluded, empty, failed or sharing a key; a run the
-    exclusions check has not covered has its files with the flags unknown.
+    course-v1:xPRO+SysEngx1+R28 on 2026-10-02. Every file of an export has a
+    row, excluded, empty, failed or sharing a key, residential MITx included; a
+    run the exclusions check has not covered has its files with the flags
+    unknown.
   model: int__openedx__content_files
   given:
   - input: ref('stg__openedx__s3__course_xml_blocks')
@@ -141,11 +143,13 @@ unit_tests:
       coursestructure_xml_block_display_name: Test Course, coursestructure_xml_block_path: course/course/R1.xml,
       coursestructure_xml_raw_xml: '<course display_name="Test Course"><chapter url_name="week_1"
         /></course>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
-    # Residential MITx is not a Learn source.
+    # A residential MITx file with the same run id, path and key as an xpro one
+    # is its own source's: it neither shares the xpro file's key nor takes its
+    # exclusion row.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
-      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
-      coursestructure_xml_block_display_name: Hidden, coursestructure_xml_block_path: course/chapter/other.xml,
-      coursestructure_xml_raw_xml: '<chapter display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: problem,
+      coursestructure_xml_block_display_name: Hidden, coursestructure_xml_block_path: course/problem/staff_check.xml,
+      coursestructure_xml_raw_xml: '<problem display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
   - input: ref('stg__openedx__s3__course_document_text')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -244,6 +248,9 @@ unit_tests:
         \ clip-en.srt", edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt",
       shares_edx_module_id: false, title: "Intro Video", is_exclusion_checked: true,
       is_excluded: false, exclusion_reason: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: "course/problem/staff_check.xml",
+      edx_module_id: "block-v1:X+Y+R1+type@problem+block@staff_check", shares_edx_module_id: false,
+      title: "Hidden", is_exclusion_checked: false, is_excluded: null, exclusion_reason: null}
 
 - name: test_int__openedx__content_files_xml_text_as_tika_reads_it
   description: >
