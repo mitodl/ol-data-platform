@@ -1,4 +1,4 @@
-"""Tests for the iceberg_raw_orphan_files asset.
+"""Tests for the iceberg_raw_orphan_files and iceberg_dbt_layer_orphan_files assets.
 
 Finding and deleting orphan files is tested in
 `packages/ol-orchestrate-lib/tests/lib/test_iceberg_orphan_files.py`. What is
@@ -327,3 +327,109 @@ def test_a_delete_run_needs_the_dagster_bucket(monkeypatch: pytest.MonkeyPatch):
         )
 
     assert calls == []
+
+
+def _by_database(
+    monkeypatch: pytest.MonkeyPatch, results: dict[str, DatabaseOrphanFiles]
+) -> list[dict[str, Any]]:
+    """Fake the pass per database; a database not in ``results`` has no tables."""
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(module, "_aws_clients", lambda: ("glue", "s3"))
+
+    def fake_pass(_glue: str, _catalog_factory: Any, _store: Any, **kwargs: Any):
+        calls.append(kwargs)
+        database = kwargs["database"]
+        return results.get(
+            database,
+            DatabaseOrphanFiles(
+                database=database, tables=[], failures=[], unreadable_databases=[]
+            ),
+        )
+
+    monkeypatch.setattr(module, "remove_database_orphan_files", fake_pass)
+    return calls
+
+
+def _dbt_table(database: str, table: str, eligible_bytes: int) -> TableOrphanFiles:
+    return TableOrphanFiles(
+        database=database,
+        table=table,
+        objects_listed=10,
+        bytes_listed=eligible_bytes * 2,
+        orphan_objects=4,
+        orphan_bytes=eligible_bytes,
+        eligible_objects=4,
+        eligible_bytes=eligible_bytes,
+    )
+
+
+def test_dbt_layer_pass_deletes_nowhere_yet():
+    assert frozenset() == module.ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS
+
+
+def test_dbt_layer_pass_covers_the_dbt_layers_of_its_own_warehouse():
+    prefix = f"ol_warehouse_{module.WAREHOUSE_ENV}_"
+    assert all(db.startswith(prefix) for db in module.DBT_LAYER_GLUE_DATABASES)
+    assert f"{prefix}staging" in module.DBT_LAYER_GLUE_DATABASES
+    assert f"{prefix}raw" not in module.DBT_LAYER_GLUE_DATABASES
+    assert f"{prefix}history" not in module.DBT_LAYER_GLUE_DATABASES
+
+
+def test_dbt_layer_delete_is_refused_where_it_is_not_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = _by_database(monkeypatch, {})
+
+    with pytest.raises(ValueError, match="Deletion is not enabled"):
+        module.iceberg_dbt_layer_orphan_files(
+            build_asset_context(),
+            IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS, delete=True),
+        )
+
+    assert calls == []
+
+
+def test_dbt_layer_pass_totals_every_database(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """One failure in 22 tables stays under the threshold only counted across
+    databases: intermediate alone (1 of 2) would fail the run.
+    """
+    staging, intermediate = module.DBT_LAYER_GLUE_DATABASES[:2]
+    calls = _by_database(
+        monkeypatch,
+        {
+            staging: DatabaseOrphanFiles(
+                database=staging,
+                tables=[_dbt_table(staging, f"stg__{i}", 100) for i in range(20)],
+                failures=[],
+                unreadable_databases=[],
+            ),
+            intermediate: DatabaseOrphanFiles(
+                database=intermediate,
+                tables=[_dbt_table(intermediate, "int__b", 5_000)],
+                failures=["int__c: boom"],
+                unreadable_databases=[],
+            ),
+        },
+    )
+
+    output = module.iceberg_dbt_layer_orphan_files(
+        build_asset_context(), IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS)
+    )
+    metadata = {key: value.value for key, value in output.metadata.items()}
+
+    assert [call["database"] for call in calls] == list(module.DBT_LAYER_GLUE_DATABASES)
+    assert all(call["delete"] is False for call in calls)
+    assert metadata["tables_examined"] == 21
+    assert metadata["eligible_bytes"] == 7_000
+    assert metadata["failure_count"] == 1
+    assert metadata["failure_details"] == ["int__c: boom"]
+    details = metadata["orphan_details"]
+    assert (details[0]["database"], details[0]["table"]) == (intermediate, "int__b")
+    assert {row["database"] for row in details[1:]} == {staging}
+    assert metadata["delete_status"] == "not run (report only)"
+    log = capsys.readouterr().err
+    assert f"{staging}: 20 tables examined, 0 refused, 0 failed." in log
+    assert f"{intermediate}: 1 tables examined, 0 refused, 1 failed." in log
+    assert f"{module.DBT_LAYER_GLUE_DATABASES[-1]}: 0 tables examined" in log

@@ -44,9 +44,11 @@ from lakehouse.assets.iceberg_maintenance import (
     iceberg_raw_layer_maintenance,
 )
 from lakehouse.assets.iceberg_orphan_files import (
+    ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS,
     ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
     ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
     IcebergOrphanFilesConfig,
+    iceberg_dbt_layer_orphan_files,
     iceberg_raw_orphan_files,
 )
 from lakehouse.assets.lake_orphan_sweep import (
@@ -515,6 +517,30 @@ iceberg_raw_orphan_files_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
+# The same pass over the dbt-layer databases, after the raw one (its production
+# delete runs took up to two hours) and that night's 02:00 dbt-layer snapshot
+# expiry. Reports only until an environment is named in
+# ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS.
+iceberg_dbt_layer_orphan_files_schedule = ScheduleDefinition(
+    name="iceberg_dbt_layer_orphan_files_weekly",
+    job=define_asset_job(
+        name="iceberg_dbt_layer_orphan_files_job",
+        selection=AssetSelection.assets(iceberg_dbt_layer_orphan_files),
+        config=RunConfig(
+            ops={
+                "iceberg_dbt_layer_orphan_files": IcebergOrphanFilesConfig(
+                    min_age_days=ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV
+                    in ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 9 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 # Regenerate dbt docs artifacts (manifest.json + catalog.json) for OpenMetadata
 # once daily. Decoupled from model materialization because catalog generation
 # recompiles the whole project and queries every relation. Default STOPPED; enable
@@ -857,6 +883,7 @@ defs = Definitions(
             iceberg_raw_layer_maintenance,
             lake_orphan_sweep,
             iceberg_raw_orphan_files,
+            iceberg_dbt_layer_orphan_files,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -933,6 +960,10 @@ defs = Definitions(
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
             ("iceberg_raw_orphan_files_weekly", iceberg_raw_orphan_files_schedule),
+            (
+                "iceberg_dbt_layer_orphan_files_weekly",
+                iceberg_dbt_layer_orphan_files_schedule,
+            ),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
