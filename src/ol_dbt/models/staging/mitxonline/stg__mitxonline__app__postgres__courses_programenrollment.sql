@@ -1,7 +1,7 @@
 -- MITx Online Program Enrollment Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programenrollment') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__courses_programenrollment') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__courses_programenrollment', partition_columns='id') }}

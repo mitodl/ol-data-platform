@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__wagtailimages_image') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__wagtailimages_image') }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__wagtailimages_image', partition_columns='id') }}

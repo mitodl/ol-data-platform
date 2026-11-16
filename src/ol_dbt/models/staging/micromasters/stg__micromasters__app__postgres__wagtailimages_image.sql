@@ -4,7 +4,7 @@
 {% set description_exists = relation_has_column(raw_images, 'description') %}
 
 with source as (
-    select * from {{ raw_images }}
+    {{ live_raw_rows('raw__micromasters__app__postgres__wagtailimages_image', raw_images) }}
 )
 
 , cleaned as (

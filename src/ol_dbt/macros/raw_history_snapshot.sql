@@ -127,13 +127,7 @@
             ) }}
         {%- endfor -%}
     {%- endif -%}
-    {%- set delete_filter = raw_delete_filter(raw_table, relation) -%}
-    {%- set filtered -%}
-        select * from {{ relation }}
-        {%- if delete_filter %}
-        where {{ delete_filter }}
-        {%- endif %}
-    {%- endset -%}
+    {%- set filtered = live_raw_rows(raw_table, relation) -%}
     {%- set body -%}
     with raw_rows as (
         {{ filtered }}

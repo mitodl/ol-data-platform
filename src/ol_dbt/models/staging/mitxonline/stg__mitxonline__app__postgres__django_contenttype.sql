@@ -1,6 +1,6 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__django_content_type') }}
+    {{ live_raw_rows('raw__mitxonline__app__postgres__django_content_type') }}
 
 )
 

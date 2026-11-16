@@ -1,7 +1,7 @@
 --MITxPro Platform Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_platform') }}
+    {{ live_raw_rows('raw__xpro__app__postgres__courses_platform') }}
 )
 
 , cleaned as (

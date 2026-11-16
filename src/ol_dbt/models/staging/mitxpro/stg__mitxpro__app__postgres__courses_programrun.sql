@@ -1,7 +1,7 @@
 -- MITxPro Program Run Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_programrun') }}
+    {{ live_raw_rows('raw__xpro__app__postgres__courses_programrun') }}
 )
 
 , cleaned as (

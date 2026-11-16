@@ -77,6 +77,7 @@ from ol_dbt_cli.lib.qa_contract import (
     write_qa_baseline,
 )
 from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
+from ol_dbt_cli.lib.raw_delete_filter_calls import RAW_DELETE_FILTER_CHECK, check_raw_delete_filter
 from ol_dbt_cli.lib.raw_json_calls import RAW_JSON_CALLS_CHECK, check_raw_json_calls
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
@@ -1033,7 +1034,8 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "null_ordering, distinct_from, cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
+                "null_ordering, distinct_from, cohort_policy, raw_json_calls, exposure_contract, glossary_terms, "
+                "raw_delete_filter."
             ),
         ),
     ] = None,
@@ -1046,7 +1048,7 @@ def validate(
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
                 "data_contract, metric_registry, pipe_concat, null_ordering, distinct_from, cohort_policy, "
-                "raw_json_calls, exposure_contract, glossary_terms. "
+                "raw_json_calls, exposure_contract, glossary_terms, raw_delete_filter. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1178,7 +1180,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs nineteen checks:
+    Runs twenty checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1222,6 +1224,9 @@ def validate(
                                and Trino last (ERROR)
     19. distinct_from        — no model, macro, test or YAML expression uses IS [NOT] DISTINCT
                                FROM, which StarRocks rejects as a syntax error (ERROR)
+    20. raw_delete_filter    — a staging model reading a raw table in raw_delete_filter_map()
+                               reads it through live_raw_rows, so records the source deleted
+                               leave staging as they leave the raw history snapshot (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1295,6 +1300,7 @@ def validate(
         DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        RAW_DELETE_FILTER_CHECK,
         EXPOSURE_CONTRACT_CHECK,
         GLOSSARY_TERMS_CHECK,
     }
@@ -1310,6 +1316,7 @@ def validate(
         DISTINCT_FROM_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        RAW_DELETE_FILTER_CHECK,
         EXPOSURE_CONTRACT_CHECK,
         GLOSSARY_TERMS_CHECK,
     }
@@ -1659,6 +1666,11 @@ def validate(
     # as in a model, and --changed-only selects neither.
     if RAW_JSON_CALLS_CHECK not in skipped:
         check_raw_json_calls(dbt_dir, report)
+
+    # Global because the filtered tables come from a generated macro, which an
+    # inventory edit changes without touching any model.
+    if RAW_DELETE_FILTER_CHECK not in skipped:
+        check_raw_delete_filter(dbt_dir, report)
 
     # Global because the files are generated from YAML, which --changed-only does not select.
     if EXPOSURE_CONTRACT_CHECK not in skipped:
