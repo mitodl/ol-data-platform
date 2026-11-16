@@ -131,7 +131,7 @@ tables:
       description: copy
 - name: macros
   raw_table: raw__thirdparty__zendesk_support__macros
-  sync_mode: incremental_append
+  sync_mode: incremental_deduped_history
   cursor_field:
   - updated_at
   primary_key:
