@@ -210,62 +210,49 @@ to MIT Learn. If the source's data is not in the warehouse yet, load it in
 
 ```python
 # delivery/assets/my_source.py
-from dagster import AssetExecutionContext, AssetOut, multi_asset, Output
+from typing import Any, cast
+
+from dagster import AssetExecutionContext, AssetKey, asset
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.learn_api import MITLearnApiClient
+
+from delivery.lib.learn_webhook import LearnDeliveryConfig
 
 
-@multi_asset(
-    group_name="my_source",
-    outs={
-        "course_metadata": AssetOut(
-            description="Courses from My Source",
-            io_manager_key="s3file_io_manager",
-        ),
-    },
+@asset(
+    key=AssetKey(["mit_learn_delivery", "my_source_webhook"]),
+    group_name="mit_learn_delivery",
+    deps=[AssetKey(["integrations", "integrations__learn__my_source_courses"])],
 )
-def my_source_metadata(context: AssetExecutionContext, my_source_api: ApiClientFactory):
-    courses = my_source_api.client.get("/api/courses")
-    context.log.info("Fetched %d courses", len(courses))
-    yield Output(courses, output_name="course_metadata")
+def my_source_webhook(
+    context: AssetExecutionContext,
+    config: LearnDeliveryConfig,
+    learn_api: ApiClientFactory,
+) -> dict[str, Any]:
+    df = get_dbt_model_as_dataframe(
+        database_name="ol_warehouse_production_integrations",
+        table_name="integrations__learn__my_source_courses",
+    ).collect()
+    resources = [...]  # shape each row into MIT Learn's payload
+    return cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
+        resources, allow_mass_unpublish=config.allow_mass_unpublish
+    )
 ```
 
-### 2. Register the asset and resource in `definitions.py`
+The real asset picks the Glue database per environment, handles a refused batch
+(see step 4) and records delivery metadata; copy those parts from
+`open_learning_library.py`.
 
-```python
-from delivery.assets.my_source import my_source_metadata
-from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+### 2. Register the asset in `definitions.py`
 
-defs = Definitions(
-    assets=[..., my_source_metadata],
-    resources={
-        ...,
-        "my_source_api": ApiClientFactory(
-            deployment="my-source",
-            client_class="MySourceApiClient",
-            mount_point="secret-data",
-            config_path="pipelines/my-source",
-            kv_version="1",
-            vault=vault,
-        ),
-    },
-)
-```
+Add it to the `with_failure_hooks([...])` asset list. The `learn_api` resource is
+already defined there, and its signing secret comes from Vault, so a new
+source needs no new resource or secret.
 
 ### 3. Trigger it
 
-An asset that fetches from an external API runs on a schedule:
-
-```python
-ScheduleDefinition(
-    name="my_source_daily_schedule",
-    target=AssetSelection.assets(my_source_metadata),
-    cron_schedule="@daily",
-    execution_timezone="Etc/UTC",
-)
-```
-
-An asset that reads an `integrations__learn__*` model and POSTs it to MIT Learn
-must not. A cron tick fires whether or not the model has been rebuilt that day,
+Do not put it on a cron schedule. A cron tick fires whether or not the model has been rebuilt that day,
 and a full-sync batch built from stale data unpublishes whatever changed
 upstream since. Declare its deps with the key lakehouse emits,
 `AssetKey(["integrations", "<model name>"])`, and wrap it with
@@ -287,13 +274,7 @@ my_source_webhook, my_source_delivery_sensor = deliver_after_upstream(
 Register the sensor in `Definitions(sensors=instigators_for_environment([...]))`
 and give it an entry in `INSTIGATOR_ENVIRONMENTS`.
 
-### 4. Vault credentials (production)
-
-Add a Vault secret at `secret-data/pipelines/my-source` containing the API
-credentials that `ApiClientFactory` expects. See the platform team runbook for
-the key/value format per client class.
-
-### 5. When MIT Learn refuses a batch
+### 4. When MIT Learn refuses a batch
 
 MIT Learn refuses a learning_resources batch that would unpublish more than 10%
 of a source's published resources of a type. It answers `422` and loads nothing
