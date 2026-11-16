@@ -5,9 +5,11 @@ Finding and deleting orphan files is tested in
 left here is the Dagster side: where deletion may run, and what a run reports.
 """
 
+from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from dagster import build_asset_context, instance_for_test
 from lakehouse.assets import iceberg_orphan_files as module
 from lakehouse.assets.iceberg_orphan_files import (
@@ -373,6 +375,35 @@ def test_dbt_layer_pass_covers_the_dbt_layers_of_its_own_warehouse():
     assert f"{prefix}staging" in module.DBT_LAYER_GLUE_DATABASES
     assert f"{prefix}raw" not in module.DBT_LAYER_GLUE_DATABASES
     assert f"{prefix}history" not in module.DBT_LAYER_GLUE_DATABASES
+
+
+def _dbt_project_schemas(node: Any) -> set[str]:
+    if not isinstance(node, dict):
+        return set()
+    found = {node["+schema"]} if "+schema" in node else set()
+    for child in node.values():
+        found |= _dbt_project_schemas(child)
+    return found
+
+
+def test_dbt_layers_match_the_dbt_project_schemas():
+    """A new `+schema` folder has to be placed on one side or the other.
+
+    Left out on purpose: history (raw snapshots that cannot be rebuilt) and the
+    two b2b schemas, which are StarRocks default_catalog tables, not Iceberg
+    tables in Glue.
+    """
+    project = yaml.safe_load(
+        (Path(__file__).resolve().parents[3] / "src/ol_dbt/dbt_project.yml").read_text()
+    )
+    not_scanned = {"history", "b2b_analytics", "b2b_learner_records"}
+
+    schemas = _dbt_project_schemas(project["models"]) | _dbt_project_schemas(
+        project["snapshots"]
+    )
+
+    assert set(module.DBT_LAYERS) == schemas - not_scanned
+    assert not_scanned <= schemas
 
 
 def test_dbt_layer_delete_is_refused_where_it_is_not_enabled(
