@@ -57,6 +57,8 @@ def test_reports_a_plain_source_read_of_a_filtered_table(staging: Path) -> None:
         LIVE_READ,
         "{% set rel = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__ecommerce_order') %}\n"
         "{{ live_raw_rows('raw__xpro__app__postgres__ecommerce_order', rel) }}",
+        "{{ live_raw_rows('raw__xpro__app__postgres__ecommerce_order', "
+        "source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__ecommerce_order')) }}",
         OTHER_READ,
         "{# was: " + SOURCE_READ + " #}\n" + LIVE_READ,
     ],

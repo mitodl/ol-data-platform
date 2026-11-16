@@ -66,7 +66,12 @@ def check_raw_delete_filter(dbt_dir: Path, report: ValidationReport) -> None:
         return
     for path in sorted((dbt_dir / "models" / "staging").rglob("*.sql")):
         code = _SQL_COMMENT.sub("", without_jinja_comments(path.read_text()))
-        direct = {m.group("table") for e in _EXPRESSION.finditer(code) for m in _SOURCE.finditer(e.group(0))}
+        direct = {
+            m.group("table")
+            for e in _EXPRESSION.finditer(code)
+            if "live_raw_rows(" not in e.group(0)
+            for m in _SOURCE.finditer(e.group(0))
+        }
         for table in sorted({m.group("table") for m in _SOURCE.finditer(code)} & tables):
             if table not in direct and re.search(rf"live_raw_rows\(\s*['\"]{table}['\"]", code):
                 continue
