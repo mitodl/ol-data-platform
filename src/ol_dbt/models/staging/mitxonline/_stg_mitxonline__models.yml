@@ -1514,6 +1514,8 @@ models:
     description: object, it includes member fields that provide contextual information.
       Common fields apply to all events are course_id, org_id, path, user_id. Other
       member fields for applicable events are course_user_tags, module.
+    tests:
+    - not_null
   - name: useractivity_event_source
     description: str, specifies the source of the interaction that triggered the event.
       The values are - browser, mobile, server, task
@@ -1555,6 +1557,10 @@ models:
       8601 string
     tests:
     - not_null
+  - name: useractivity_load_id
+    description: str, dlt load id (_dlt_load_id) of the raw row, the load's unix timestamp
+      as text. The incremental watermark; null on rows built before the column was
+      added
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
