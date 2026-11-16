@@ -124,6 +124,10 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # raw snapshot expiry ran there first, so that is where most of the files
     # it strands are. Never dev: it resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
+    # The same pass over the dbt-layer databases. It only reports until
+    # ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS names an environment.
+    # QA reports too, so a delete can be enabled there first. Never dev.
+    "iceberg_dbt_layer_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
     # Production-only here, but note that leaves the path that actually fired

@@ -14,8 +14,8 @@ Two other modules remove files:
 
 - ``ol_orchestrate.lib.iceberg_orphan_files`` removes files inside a live
   table's directory that no retained snapshot references, which is what expiry
-  leaves behind. The lakehouse ``iceberg_raw_orphan_files`` asset runs it over
-  the raw layer.
+  leaves behind. The lakehouse ``iceberg_raw_orphan_files`` and
+  ``iceberg_dbt_layer_orphan_files`` assets run it over the raw and dbt layers.
 - ``ol_orchestrate.lib.lake_orphan_sweep`` deletes whole S3 prefixes that no
   Glue table references (e.g. data left behind by dropped tables). The
   lakehouse ``lake_orphan_sweep`` asset runs it on a schedule, and

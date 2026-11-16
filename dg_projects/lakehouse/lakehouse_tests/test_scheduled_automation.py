@@ -83,8 +83,8 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     Raw snapshot expiry builds nothing either. It trims the snapshots QA's own
     raw loads leave behind. The dbt-layer maintenance stays out of QA.
 
-    The raw orphan-file pass also builds nothing, and only reports until an
-    environment is named in the asset's delete set.
+    The raw and dbt-layer orphan-file passes also build nothing, and each only
+    reports until an environment is named in its asset's delete set.
 
     The observation drift check reads QA raw's metadata and writes nothing.
     """
@@ -93,6 +93,7 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
         "iceberg_raw_maintenance_nightly",
         "lake_orphan_sweep_weekly",
         "iceberg_raw_orphan_files_weekly",
+        "iceberg_dbt_layer_orphan_files_weekly",
         "learn_integrations_qa_daily",
         "qa_observation_drift_daily",
     ]
