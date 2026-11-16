@@ -22,7 +22,7 @@ select
     , campaign__name as campaign_name
     , campaign__status as campaign_status
     , campaign__advertising_channel_type as campaign_channel_type
-    , {{ google_ads_local_to_utc('campaign__start_date_time', 'account_time_zone', labeled_utc=true) }}
+    , {{ google_ads_local_to_utc('campaign__start_date_time', 'account_time_zone') }}
     as campaign_start_at
     , {{ google_ads_local_to_utc("nullif(campaign__end_date_time, '')", 'account_time_zone') }} as campaign_end_at
     , campaign__bidding_strategy_type as campaign_bidding_strategy_type

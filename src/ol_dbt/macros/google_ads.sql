@@ -63,27 +63,9 @@
 {% endmacro %}
 
 
-{% macro google_ads_local_to_utc(local_timestamp, time_zone, labeled_utc=false) -%}
-    {#- Google Ads gives times in the account's zone. Set labeled_utc when dlt already marked the value UTC. -#}
-    {%- set wall_clock = google_ads_drop_utc_label(local_timestamp) if labeled_utc else local_timestamp -%}
-    {{ timestamptz_at_utc(local_timestamp_to_timestamptz(wall_clock, time_zone)) }}
-{%- endmacro %}
-
-{% macro google_ads_drop_utc_label(timestamp_expr) -%}
-    {{ adapter.dispatch('google_ads_drop_utc_label', 'open_learning')(timestamp_expr) }}
-{%- endmacro %}
-
-{% macro default__google_ads_drop_utc_label(timestamp_expr) -%}
-    cast({{ timestamp_expr }} as timestamp(6))
-{%- endmacro %}
-
-{% macro duckdb__google_ads_drop_utc_label(timestamp_expr) -%}
-    {#- DuckDB's cast to timestamp uses the session's zone, not UTC. -#}
-    ({{ timestamp_expr }} at time zone 'UTC')
-{%- endmacro %}
-
-{% macro starrocks__google_ads_drop_utc_label(timestamp_expr) -%}
-    cast({{ timestamp_expr }} as datetime)
+{% macro google_ads_local_to_utc(local_timestamp, time_zone) -%}
+    {#- Google Ads gives times in the account's zone with no offset. -#}
+    {{ timestamptz_at_utc(local_timestamp_to_timestamptz(local_timestamp, time_zone)) }}
 {%- endmacro %}
 
 {% macro google_ads_default_time_zone() -%}

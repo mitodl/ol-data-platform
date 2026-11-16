@@ -11,7 +11,7 @@ with source as (
 select
     customer_id as account_id
     , change_event__resource_name as change_event_resource_name
-    , {{ google_ads_local_to_utc('change_event__change_date_time', 'account_time_zone', labeled_utc=true) }}
+    , {{ google_ads_local_to_utc('change_event__change_date_time', 'account_time_zone') }}
     as change_event_at
     , change_event__change_resource_type as change_resource_type
     , change_event__change_resource_name as change_resource_name
