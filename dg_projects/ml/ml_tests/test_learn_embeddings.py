@@ -57,6 +57,8 @@ from ml.lib.learn_embeddings import (
     TOPICS_RELATION,
     known_vectors,
     learn_vectors,
+    sibling_reads,
+    sibling_runs,
     strategies,
 )
 from ml.lib.learn_parity import CosineStats, LearnPoint, compare_with_learn
@@ -605,6 +607,49 @@ def test_a_text_stored_under_another_course_is_not_searched(tables, calls):
     assert build_content_files(tables).success
 
     assert calls == [["Shared syllabus."]]
+
+
+def test_a_rerun_reads_no_sibling_vectors(tables, calls, monkeypatch):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    calls.clear()
+    keys_read: list[str] = []
+    read_by_key = warehouse.load_rows_by_key
+
+    def spy(*args, **kwargs):
+        keys_read.append(args[3])
+        return read_by_key(*args, **kwargs)
+
+    monkeypatch.setattr(warehouse, "load_rows_by_key", spy)
+    assert build_content_files(tables, dagster_instance).success
+
+    assert calls == []
+    # Only the siblings' checksum index; every text is in the run's own rows.
+    assert keys_read == ["run_readable_id"]
+
+
+def test_sibling_runs_are_the_runs_of_the_resource():
+    assert sibling_runs(runs(), RUN) == sorted([RUN, SIBLING_RUN])
+    # A run the runs model no longer has searches only its own rows.
+    assert sibling_runs(runs(), "gone") == ["gone"]
+
+
+def test_sibling_reads_cover_the_texts_from_the_fewest_runs():
+    space = "text-embedding-3-large@3072"
+    index = pl.DataFrame(
+        {
+            "run_readable_id": ["r1", "r1", "r2", "r2", "r2", "r3", "r3"],
+            "vector_space": [space] * 5 + ["other@1"] * 2,
+            "input_checksum": ["a", "b", "a", "b", "c", "d", "e"],
+        }
+    )
+
+    plan = sibling_reads(index, space, ["a", "b", "c", "d", "z"])
+
+    # r2 holds a, b and c; d is stored only in another space; z nowhere.
+    assert plan == {"r2": ["a", "b", "c"]}
+    assert sibling_reads(index, space, []) == {}
 
 
 def test_a_text_stored_under_a_sibling_run_is_reused(tables, calls):
