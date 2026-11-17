@@ -32,6 +32,7 @@ from ol_dbt_cli.lib.inventory import (
     Unit,
     history_absence,
     history_in_scope,
+    keyset_lakes,
     keyset_tables,
     lake_loader,
 )
@@ -61,6 +62,12 @@ class DeleteFilter:
     ``loader_time_column`` is the production loader's. ``lake_loader_time_columns``
     names the lakes another loader fills, e.g. QA, where dlt loads a unit whose
     production tables Airbyte writes, so its raw tables have `_dlt_load_id`.
+
+    ``keyset_lakes`` are the lakes whose raw schema carries the keyset tables
+    (the unit's ``history.keyset_lakes``). The filter reads the keyset there
+    and filters nothing elsewhere, so a build never has to look the keyset up:
+    on StarRocks that means listing the whole raw schema, 8-15 s to plan per
+    model on QA.
     """
 
     kind: str
@@ -68,6 +75,7 @@ class DeleteFilter:
     loader_time_column: str | None = None
     max_age_hours: int | None = None
     lake_loader_time_columns: tuple[tuple[str, str], ...] = ()
+    keyset_lakes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,6 +140,7 @@ def _delete_filter(unit: Unit, table: dict[str, Any], keyset_names: set[str], ab
             loader_time_column=loader_time,
             max_age_hours=STALE_KEYSET_INTERVALS * _unit_interval_hours(unit),
             lake_loader_time_columns=tuple(lake_columns),
+            keyset_lakes=tuple(sorted(keyset_lakes(unit))),
         )
     dlt = unit.data.get("dlt")
     merges = isinstance(dlt, dict) and dlt.get("write_disposition") == "merge"
@@ -444,7 +453,11 @@ def _render_delete_filter_macro(selected: dict[str, list[HistoryTable]]) -> str:
                 continue
             entry: dict[str, object] = {"kind": spec.kind, "loader_time_column": spec.loader_time_column}
             if spec.kind == "keyset":
-                entry |= {"key": spec.key, "max_age_hours": spec.max_age_hours}
+                entry |= {
+                    "key": spec.key,
+                    "max_age_hours": spec.max_age_hours,
+                    "keyset_lakes": list(spec.keyset_lakes),
+                }
             if spec.lake_loader_time_columns:
                 entry["lake_loader_time_columns"] = dict(spec.lake_loader_time_columns)
             rendered = ", ".join(f"{_jinja(name)}: {_jinja(value)}" for name, value in entry.items())

@@ -226,8 +226,17 @@ class TestSettings:
         assert (
             "'raw__mitxonline__openedx__mysql__auth_user': {'kind': 'keyset', "
             "'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 24, "
-            "'lake_loader_time_columns': {'qa': '_dlt_load_id'}},"
+            "'keyset_lakes': [], 'lake_loader_time_columns': {'qa': '_dlt_load_id'}},"
         ) in render_history(units)[DELETE_FILTER_MACRO_PATH]
+
+    def test_keyset_filter_names_the_lakes_the_unit_declares(self) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["qa", "local"]}
+        units = [_unit(data)]
+        spec = _by_name(units)["auth_user"].delete_filter
+        assert spec is not None
+        assert spec.keyset_lakes == ("local", "qa")
+        assert "'keyset_lakes': ['local', 'qa']}," in render_history(units)[DELETE_FILTER_MACRO_PATH]
 
     def test_full_read_needs_no_filter(self) -> None:
         assert _by_name([_unit(DB_UNIT)])["course_overviews"].delete_filter is None
@@ -290,7 +299,8 @@ class TestRender:
         macro = rendered[DELETE_FILTER_MACRO_PATH]
         assert (
             "'raw__mitxonline__openedx__mysql__auth_user': {'kind': 'keyset', "
-            "'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 24}," in macro
+            "'loader_time_column': '_airbyte_extracted_at', 'key': 'id', 'max_age_hours': 24, "
+            "'keyset_lakes': []}," in macro
         )
         assert "'raw__youtube__api__videos': {'kind': 'latest_load', 'loader_time_column': '_dlt_load_id'}," in macro
 
@@ -330,6 +340,32 @@ class TestValidation:
         assert any(
             "states no history.absence" in message for message in _errors(_validate(inventory, ("youtube__api", data)))
         )
+
+    def test_keyset_lakes_need_keyset_tables(self, inventory: Path) -> None:
+        data = copy.deepcopy(FEED_UNIT)
+        data["history"] = {**data["history"], "keyset_lakes": ["qa"]}
+        assert any(
+            "keyset_lakes is set but the unit has no keyset tables" in message
+            for message in _errors(_validate(inventory, ("youtube__api", data)))
+        )
+
+    def test_keyset_lakes_are_known_lakes(self, inventory: Path) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["staging"]}
+        assert _errors(_validate(inventory, ("mitxonline__mysql", data)))
+
+    def test_keyset_lakes_with_a_composite_keyset_key_is_reported_not_raised(self, inventory: Path) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["qa"]}
+        data["tables"][0]["primary_key"] = [["id"], ["username"]]
+        errors = _errors(_validate(inventory, ("mitxonline__mysql", data)))
+        assert any("is not one column, which the keyset module cannot read" in message for message in errors)
+        assert not any("has no keyset tables" in message for message in errors)
+
+    def test_declared_keyset_lakes_pass(self, inventory: Path) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["qa"]}
+        assert _errors(_validate(inventory, ("mitxonline__mysql", data))) == []
 
     def test_opting_out_needs_a_reason(self, inventory: Path) -> None:
         data = copy.deepcopy(DB_UNIT)

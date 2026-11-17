@@ -1263,6 +1263,9 @@ On the unit:
   generated disabled until it is rolled out. History rolls out a unit at a time once its
   prerequisites hold (8430c2 items 26-27), and a unit's snapshots have to run for at least one
   load before its dlt cutover (§10.4 step 1).
+- `history.keyset_lakes`: the lakes (`production`, `qa`, `ci`, `local`) whose raw schema
+  carries the unit's keyset tables, i.e. where its keyset assets run. The delete filter reads
+  the keyset only there (§11.4). `validate` fails it on a unit with no keyset tables.
 - `history.markers`: `{at, kind: loader_cutover | schema_change, tables?, note}`. A loader
   cutover or a source schema change writes one extra version of every row, and a marker lets
   reports discount the versions that start then. Markers are copied into each snapshot's
@@ -1300,8 +1303,12 @@ tables whose input has to be filtered:
   `ol_dlt.keyset` (124 on 2026-11-10). A raw row is kept when its key is in
   `<raw_table>__keyset`, or when the loader wrote it (`_airbyte_extracted_at`, or
   `_dlt_load_id` as a time) after the keyset read started, less
-  `var('raw_keyset_trust_margin_minutes', 60)`. No keyset table yet means no filter; an empty
-  keyset fails the run. A keyset older than two load intervals is still applied and logged:
+  `var('raw_keyset_trust_margin_minutes', 60)`. The filter applies only in the lakes the unit
+  lists in `history.keyset_lakes`, where its keysets run. Elsewhere there is no filter. The
+  build does not look the keyset table up, because dbt does not cache source schemas and the
+  lookup lists the whole raw schema for every model (8-15 s to plan per model on QA
+  StarRocks). A listed lake whose keyset table is missing fails the build; an empty keyset
+  fails the run. A keyset older than two load intervals is still applied and logged:
   running unfiltered would bring every key already recorded as deleted back as an open version,
   because raw still holds its row (owner decision 2026-11-10, replacing 826b18 decision 3 for
   this filter).
