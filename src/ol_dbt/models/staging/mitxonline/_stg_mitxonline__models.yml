@@ -2079,8 +2079,10 @@ models:
     tests:
     - not_null:
         config:
-          severity: "{{ 'warn' if target.database == 'ol_data_lake_qa' else 'error'\
-            \ }}"
+          # target.catalog on StarRocks, as in raw_data_lake(), which a test config
+          # cannot call.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: program_prerequisites
     description: text, a short description indicating prerequisites of this program.
   - name: program_faq_url
