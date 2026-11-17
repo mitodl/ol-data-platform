@@ -1619,6 +1619,12 @@ def test_an_unreachable_learn_fails_the_run_before_embedding(tables, calls):
     result = build_taking_learns_vectors(tables, qdrant=unreachable_qdrant())
 
     assert not result.success
+    (failure,) = result.get_step_failure_events()
+    assert failure.step_key == CONTENT_FILE_VECTORS_KEY.to_python_identifier()
+    cause = failure.step_failure_data.error.cause
+    assert cause is not None
+    assert cause.cls_name == "ConnectionError"
+    assert "Learn's cluster is unreachable" in cause.message
     # Nothing is embedded in Learn's place: that would pay for its texts.
     assert calls == []
     assert CONTENT_FILE_VECTORS_KEY.path[-1] not in tables
