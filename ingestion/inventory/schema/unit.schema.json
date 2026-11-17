@@ -79,7 +79,7 @@
         "keyset_lakes": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"enum": ["production", "qa", "local"]},
+          "items": {"enum": ["production", "qa", "ci", "local"]},
           "description": "The lakes whose raw schema carries this unit's keyset tables (`<raw_table>__keyset`, written by ol_dlt.keyset). raw_delete_filter reads the keyset in these lakes, and fails the build if it is missing or empty there, and filters nothing in the others. Add a lake once its keyset assets run there."
         },
         "markers": {
