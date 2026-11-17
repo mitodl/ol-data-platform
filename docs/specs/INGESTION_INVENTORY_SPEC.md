@@ -1303,8 +1303,9 @@ tables whose input has to be filtered:
   `var('raw_keyset_trust_margin_minutes', 60)`. The filter applies only in the lakes the unit
   lists in `history.keyset_lakes`, where its keysets run. Elsewhere there is no filter. The
   build does not look the keyset table up, because dbt does not cache source schemas and the
-  lookup lists the whole raw schema for every model (8-10 s per model on QA StarRocks). A
-  listed lake whose keyset table is missing fails the build; an empty keyset fails the run. A keyset older than two load intervals is still applied and logged:
+  lookup lists the whole raw schema for every model (8-15 s to plan per model on QA
+  StarRocks). A listed lake whose keyset table is missing fails the build; an empty keyset
+  fails the run. A keyset older than two load intervals is still applied and logged:
   running unfiltered would bring every key already recorded as deleted back as an open version,
   because raw still holds its row (owner decision 2026-11-10, replacing 826b18 decision 3 for
   this filter).

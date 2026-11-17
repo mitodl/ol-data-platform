@@ -21,7 +21,7 @@
       where its keysets run): no filter. The lake decides this rather than a
       lookup of the keyset table, because dbt does not cache source schemas, so
       a lookup lists the whole raw schema for every model. On StarRocks that
-      took 8-10 s per model on QA's 2,744 raw tables (2026-11-17).
+      took 8-15 s to plan per model on QA's 2,744 raw tables (2026-11-17).
     - a lake in keyset_lakes whose keyset table is missing: the build fails on
       the missing table.
     - an empty keyset: raises, since every key would read as deleted.

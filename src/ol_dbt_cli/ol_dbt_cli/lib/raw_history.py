@@ -66,7 +66,8 @@ class DeleteFilter:
     ``keyset_lakes`` are the lakes whose raw schema carries the keyset tables
     (the unit's ``history.keyset_lakes``). The filter reads the keyset there
     and filters nothing elsewhere, so a build never has to look the keyset up:
-    on StarRocks that means listing the whole raw schema, 8-10 s per model on QA.
+    on StarRocks that means listing the whole raw schema, 8-15 s to plan per
+    model on QA.
     """
 
     kind: str
