@@ -65,7 +65,7 @@
 
 {% macro google_ads_local_to_utc(local_timestamp, time_zone) -%}
     {#- Google Ads gives times in the account's zone with no offset. -#}
-    {{ timestamptz_at_utc(local_timestamp_to_timestamptz(local_timestamp, time_zone)) }}
+    {{ timestamptz_at_utc(local_timestamp_to_timestamptz(local_timestamp, time_zone, precision=6)) }}
 {%- endmacro %}
 
 {% macro google_ads_default_time_zone() -%}

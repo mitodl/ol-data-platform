@@ -1202,20 +1202,22 @@
     local_timestamp_to_timestamptz: a wall-clock timestamp read in the zone that
     `zone_expr` evaluates to, as a zone-aware timestamp. Unlike
     local_date_to_timestamptz the zone is a SQL expression, so it can vary by row.
+    `precision` sets Trino's fractional digits (its plain timestamp keeps 3);
+    DuckDB and StarRocks always keep microseconds.
 #}
-{% macro local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
-    {{ adapter.dispatch('local_timestamp_to_timestamptz', 'open_learning')(timestamp_expr, zone_expr) }}
+{% macro local_timestamp_to_timestamptz(timestamp_expr, zone_expr, precision=none) -%}
+    {{ adapter.dispatch('local_timestamp_to_timestamptz', 'open_learning')(timestamp_expr, zone_expr, precision) }}
 {%- endmacro %}
 
-{% macro default__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
-    with_timezone(cast({{ timestamp_expr }} as timestamp), {{ zone_expr }})
+{% macro default__local_timestamp_to_timestamptz(timestamp_expr, zone_expr, precision=none) -%}
+    with_timezone(cast({{ timestamp_expr }} as timestamp{{ '(%d)' % precision if precision is not none }}), {{ zone_expr }})
 {%- endmacro %}
 
-{% macro duckdb__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+{% macro duckdb__local_timestamp_to_timestamptz(timestamp_expr, zone_expr, precision=none) -%}
     timezone({{ zone_expr }}, cast({{ timestamp_expr }} as timestamp))
 {%- endmacro %}
 
-{% macro starrocks__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+{% macro starrocks__local_timestamp_to_timestamptz(timestamp_expr, zone_expr, precision=none) -%}
     {{ starrocks_strict_convert_tz('cast({} as datetime)', timestamp_expr, zone_expr) }}
 {%- endmacro %}
 
