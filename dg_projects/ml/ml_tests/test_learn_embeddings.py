@@ -1809,13 +1809,17 @@ def test_strategy_table_has_a_row_per_strategy(tables):
 
 
 @pytest.mark.parametrize(
-    ("properties", "conflicts"),
-    [({}, True), (CONTENT_FILE_TABLE_PROPERTIES, False)],
-    ids=["default bounds", "content-file table properties"],
+    "rewritten",
+    [False, True],
+    ids=["old files keep cut bounds", "each partition rewritten once"],
 )
-def test_runs_with_a_shared_prefix_overwrite_their_partitions_concurrently(
-    iceberg_catalog: SqlCatalog, properties: dict[str, str], *, conflicts: bool
+def test_runs_overwrite_concurrently_once_their_files_have_full_bounds(
+    iceberg_catalog: SqlCatalog, *, rewritten: bool
 ):
+    """Production's tables predate the property, and pyiceberg checks the files a
+    concurrent overwrite deletes by their bounds too, so concurrent runs conflict
+    until every partition holding older files has been rewritten once.
+    """
     first, second = "course-v1:MITxT+CTL.SC0x+1T2027", "course-v1:MITxT+18.01x+3T2025"
 
     def rows(run: str) -> pa.Table:
@@ -1826,26 +1830,28 @@ def test_runs_with_a_shared_prefix_overwrite_their_partitions_concurrently(
     def partition(run: str) -> BooleanExpression:
         return And(EqualTo("etl_source", "mitxonline"), EqualTo("run_readable_id", run))
 
-    table = iceberg_catalog.create_table(
-        "some_db.vectors", schema=rows(first).schema, properties=properties
-    )
+    def load():
+        return iceberg_catalog.load_table("some_db.vectors")
+
+    table = iceberg_catalog.create_table("some_db.vectors", schema=rows(first).schema)
     with table.update_spec() as spec:
         spec.add_identity("etl_source")
         spec.add_identity("run_readable_id")
-    table = iceberg_catalog.load_table("some_db.vectors")
-    table.append(rows(first))
-    table.append(rows(second))
+    load().append(rows(first))
+    load().append(rows(second))
+    with load().transaction() as update:
+        update.set_properties(CONTENT_FILE_TABLE_PROPERTIES)
+    if rewritten:
+        for run in (first, second):
+            load().overwrite(rows(run), overwrite_filter=partition(run))
 
-    writing = iceberg_catalog.load_table("some_db.vectors").transaction()
+    writing = load().transaction()
     writing.overwrite(rows(first), overwrite_filter=partition(first))
-    iceberg_catalog.load_table("some_db.vectors").overwrite(
-        rows(second), overwrite_filter=partition(second)
-    )
+    load().overwrite(rows(second), overwrite_filter=partition(second))
 
-    if conflicts:
+    if rewritten:
+        writing.commit_transaction()
+        assert sorted(load().scan().to_polars()["run_readable_id"]) == [second, first]
+    else:
         with pytest.raises(ValidationException):
             writing.commit_transaction()
-    else:
-        writing.commit_transaction()
-        stored = iceberg_catalog.load_table("some_db.vectors").scan().to_polars()
-        assert sorted(stored["run_readable_id"]) == sorted([first, second])

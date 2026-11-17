@@ -108,11 +108,12 @@ CONTENT_FILE_PARTITIONS = MultiPartitionsDefinition(
     }
 )
 CONTENT_FILE_PARTITION_EXPR = {"etl_source": "etl_source", "run": "run_readable_id"}
-# pyiceberg checks a partition overwrite against the files committed meanwhile by
-# their column bounds, not their partition, and cuts string bounds to 16
-# characters by default. Run ids share longer prefixes ("course-v1:MITxT+"), so
+# pyiceberg checks a partition overwrite against the files added and deleted
+# meanwhile by their column bounds, not their partition, and cuts string bounds to
+# 16 characters by default. Run ids share longer prefixes ("course-v1:MITxT+"), so
 # two runs overwriting at once failed the commit. Full bounds on the run column
-# let runs of different partitions overwrite concurrently.
+# let runs of different partitions overwrite concurrently, once every file written
+# before this property has been rewritten.
 CONTENT_FILE_TABLE_PROPERTIES = {
     "write.metadata.metrics.column.run_readable_id": "full"
 }
