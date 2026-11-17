@@ -362,6 +362,23 @@ def chunk_frame(
     return pl.DataFrame(rows, schema=CHUNK_SCHEMA)
 
 
+def sibling_runs(runs: pl.DataFrame, run: str) -> list[str]:
+    """Return the runs of a run's resource, the run included.
+
+    A course's files repeat across its runs, so their vectors are where a run's
+    texts are most often already stored. A run missing from the runs model is
+    its own only sibling.
+
+    :param runs: ``run_id`` and ``readable_id`` (the run's resource) rows
+    :param run: the run's ``run_readable_id``
+    :returns: the run ids, sorted
+    :rtype: list[str]
+    """
+    resources = runs.filter(pl.col("run_id") == run)["readable_id"].to_list()
+    siblings = runs.filter(pl.col("readable_id").is_in(resources))["run_id"]
+    return sorted({run, *siblings.to_list()})
+
+
 def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
     """Rebuild the chunk pairs :func:`embed_chunks` takes from a chunk table's rows.
 

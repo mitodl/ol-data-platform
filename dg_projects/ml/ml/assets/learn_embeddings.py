@@ -56,6 +56,7 @@ from ml.lib.learn_embeddings import (
     learn_vectors,
     merge_vectors,
     point_ids_by_checksum,
+    sibling_runs,
     stored_chunks,
     strategies,
     strategies_for_run,
@@ -63,7 +64,7 @@ from ml.lib.learn_embeddings import (
     topic_documents,
 )
 from ml.lib.warehouse import (
-    read_rows,
+    read_rows_by_key,
     read_table,
     require_rows,
     require_table,
@@ -381,7 +382,8 @@ def embed_vectors(  # noqa: PLR0913
     :param embeddings: the embedder resource
     :param doc_kind: the kind of document the asset embeds
     :param chunks: the partition's chunk rows
-    :param vectors: the whole vector table, for stored vectors of a vector space
+    :param vectors: the stored vector rows searched for a text's vector: the
+        whole table for topics, the sibling runs' for a content-file run
     :param stored: the partition's stored vector rows
     :param learn_fetch: reads Learn's points by id, ``None`` where there is no
         Learn cluster
@@ -523,12 +525,28 @@ def content_file_embedding_vectors(
         CHUNK_SCHEMA.names(),
         **in_partition,
     )
-    vectors = read_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-    stored = read_rows(
+    source = CONTENT_FILE_SOURCES[etl_source]
+    siblings = sibling_runs(
+        source.run_resources(require_table(LAYER, source.runs_relation)).collect(),
+        run,
+    )
+    # The stored vectors searched are those of the run's resource's runs, read
+    # with their partitions pruned. Reading the whole table instead would read
+    # every run's vectors for each run, which at the full corpus is the whole
+    # table thousands of times; a text shared only with another course is
+    # taken from Learn or embedded again.
+    vectors = read_rows_by_key(
         LAYER,
         CONTENT_FILE_VECTORS_KEY.path[-1],
-        VECTOR_SCHEMA.names(),
-        **in_partition,
+        [*VECTOR_SCHEMA.names(), "run_readable_id"],
+        "run_readable_id",
+        siblings,
+        etl_source=etl_source,
+    )
+    stored = (
+        vectors.filter(pl.col("run_readable_id") == run).select(VECTOR_SCHEMA.names())
+        if vectors is not None
+        else None
     )
     rows, metadata, failures = embed_vectors(
         context,
@@ -536,7 +554,7 @@ def content_file_embedding_vectors(
         embeddings,
         doc_kind=CONTENT_FILE_DOC_KIND,
         chunks=chunks,
-        vectors=vectors,
+        vectors=vectors.lazy() if vectors is not None else None,
         stored=stored,
         learn_fetch=learn_vectors.fetch(
             LEARN_CONTENT_FILES_COLLECTION, text_field="chunk_content"
