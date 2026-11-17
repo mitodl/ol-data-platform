@@ -14,6 +14,11 @@ with mitxonline_course_structure as (
     select * from {{ ref('stg__mitxresidential__openedx__api__course_structure') }}
 )
 
+-- union all, not union distinct: in production (2026-11-17) no branch repeats a
+-- (courserun_readable_id, block_id, retrieved_at), and the platform literal keeps branches apart, so the
+-- distinct removed no rows. It made StarRocks group every row on every column, block_metadata JSON
+-- included, which ran QA's CN out of memory. Staging only dedups a block per retrieval and course hash,
+-- so two hashes in one retrieval would repeat it here; the content_block_pk unique test warns on that.
 , combined as (
     select
         'mitxonline' as platform
@@ -27,7 +32,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from mitxonline_course_structure
 
-    union distinct
+    union all
 
     select
         'edxorg' as platform
@@ -41,7 +46,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from edxorg_course_structure
 
-    union distinct
+    union all
 
     select
         'mitxpro' as platform
@@ -55,7 +60,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from xpro_course_structure
 
-    union distinct
+    union all
 
     select
         'residential' as platform
