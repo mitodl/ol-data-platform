@@ -322,6 +322,13 @@ def test_qa_first_app_database_loads_and_is_scheduled(
             for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
         }
         assert scheduled == expected
+        # A schedule with no persisted state starts at its default, so a unit
+        # added later loads in QA without being started by hand.
+        assert schedule.default_status == (
+            dg.DefaultScheduleStatus.RUNNING
+            if environment == "qa"
+            else dg.DefaultScheduleStatus.STOPPED
+        )
 
 
 @pytest.mark.parametrize("environment", ["dev", "production"])
