@@ -273,7 +273,9 @@ defs = Definitions(
             environment=DAGSTER_ENV,
             azure_ad_auth=DAGSTER_ENV != "dev",
         ),
-        # Learn's cluster, read-only, for the learn_v1 smokechecks (not in dev).
+        # Learn's cluster, read-only: learn_qdrant for the learn_v1 smokechecks
+        # (not in dev), and learn_vectors, which gives the vector assets Learn's
+        # vectors of the texts it already embedded (no client in dev).
         **learn_parity_resources,
     },
     assets=with_failure_hooks(

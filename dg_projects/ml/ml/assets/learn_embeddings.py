@@ -11,12 +11,15 @@ when the topic model is.
 
 The vector assets send a model only the texts with no stored vector in the
 strategy model's vector space, so a re-run over unchanged chunks embeds nothing.
+In Learn's vector space they take Learn's vector of a text it already embedded,
+read from its point by id (ml.resources.learn_vectors), before embedding it.
 Nothing here writes to Qdrant; projecting these tables into Learn's collections is
 a separate step.
 """
 
 from collections.abc import Collection, Iterable
 from datetime import UTC, datetime
+from functools import partial
 
 import polars as pl
 from dagster import (
@@ -40,6 +43,7 @@ from ml.lib.learn_embeddings import (
     CHUNK_SCHEMA,
     CONTENT_FILE_SOURCES,
     EMBEDDED_SCHEMA,
+    LEARN_VECTOR_SPACE,
     TOPIC_DOC_KIND,
     TOPICS_RELATION,
     VECTOR_SCHEMA,
@@ -49,7 +53,9 @@ from ml.lib.learn_embeddings import (
     content_file_documents,
     embed_strategy,
     known_vectors,
+    learn_vectors,
     merge_vectors,
+    point_ids_by_checksum,
     stored_chunks,
     strategies,
     strategies_for_run,
@@ -63,9 +69,14 @@ from ml.lib.warehouse import (
     require_table,
     warehouse_database,
 )
+from ml.resources.learn_vectors import LearnVectorsResource, PointFetch
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.embeddings.documents import md5_hex
-from ol_orchestrate.lib.embeddings.learn import CONTENT_FILE_DOC_KIND
+from ol_orchestrate.lib.embeddings.learn import (
+    CONTENT_FILE_DOC_KIND,
+    LEARN_CONTENT_FILES_COLLECTION,
+    LEARN_TOPICS_COLLECTION,
+)
 from ol_orchestrate.lib.embeddings.pipeline import StoredVector
 from ol_orchestrate.resources.embeddings import EmbeddingsResource
 from pydantic import Field
@@ -357,8 +368,13 @@ def embed_vectors(  # noqa: PLR0913
     chunks: pl.DataFrame,
     vectors: pl.LazyFrame | None,
     stored: pl.DataFrame | None,
+    learn_fetch: PointFetch | None,
 ) -> tuple[pl.DataFrame, dict[str, MetadataValue], list[str]]:
     """Embed a partition's chunks under each strategy of the run.
+
+    A text is taken, in order, from this run, from the vector table, or from
+    Learn's point for the chunk when Learn embedded the same text in the same
+    vector space, and is embedded only when none has it.
 
     :param context: the asset context, for logs and the run id
     :param config: the run's strategies and concurrency
@@ -367,6 +383,8 @@ def embed_vectors(  # noqa: PLR0913
     :param chunks: the partition's chunk rows
     :param vectors: the whole vector table, for stored vectors of a vector space
     :param stored: the partition's stored vector rows
+    :param learn_fetch: reads Learn's points by id, ``None`` where there is no
+        Learn cluster
     :returns: the rows to write, their metadata, and one message per strategy
         with failed requests
     :rtype: tuple[pl.DataFrame, dict[str, MetadataValue], list[str]]
@@ -380,24 +398,46 @@ def embed_vectors(  # noqa: PLR0913
     # in the same space reuses what an earlier one embedded.
     this_run: dict[str, dict[str, StoredVector]] = {}
 
-    def lookup(vector_space: str, checksums: Iterable[str]) -> dict[str, StoredVector]:
+    def lookup(
+        vector_space: str,
+        checksums: Iterable[str],
+        strategy_chunks: pl.DataFrame,
+        vector_length: int,
+        imported: dict[str, StoredVector],
+    ) -> dict[str, StoredVector]:
         wanted = set(checksums)
         found = {
             checksum: stored
             for checksum, stored in this_run.get(vector_space, {}).items()
             if checksum in wanted
         }
-        return found | known_vectors(vectors, vector_space, wanted - found.keys())
+        found |= known_vectors(vectors, vector_space, wanted - found.keys())
+        missing = wanted - found.keys()
+        if learn_fetch is not None and missing and vector_space == LEARN_VECTOR_SPACE:
+            imported |= learn_vectors(
+                learn_fetch,
+                point_ids_by_checksum(strategy_chunks, missing),
+                vector_length,
+            )
+            found |= imported
+        return found
 
     for strategy in chosen:
-        pairs = stored_chunks(
-            chunks.filter(pl.col("chunker_id") == strategy.chunker.chunker_id)
+        strategy_chunks = chunks.filter(
+            pl.col("chunker_id") == strategy.chunker.chunker_id
         )
+        pairs = stored_chunks(strategy_chunks)
+        imported: dict[str, StoredVector] = {}
         frame, outcome = embed_strategy(
             strategy,
             pairs,
             embeddings.embedder(strategy),
-            lookup,
+            partial(
+                lookup,
+                strategy_chunks=strategy_chunks,
+                vector_length=strategy.model.vector_length,
+                imported=imported,
+            ),
             embedded_at=embedded_at,
             max_workers=config.max_workers,
             logger=context.log,
@@ -410,17 +450,20 @@ def embed_vectors(  # noqa: PLR0913
         )
         frames.append(frame)
         context.log.info(
-            "%s: %d chunks, %d texts embedded, %d reused, %d chunks failed",
+            "%s: %d chunks, %d texts embedded, %d reused (%d of them from Learn), "
+            "%d chunks failed",
             strategy.strategy_id,
             outcome.chunks,
             outcome.embedded_texts,
             outcome.reused_texts,
+            len(imported),
             outcome.failed_chunks,
         )
         prefix = strategy.strategy_id
         metadata |= {
             f"{prefix}/embedded_texts": MetadataValue.int(outcome.embedded_texts),
             f"{prefix}/reused_texts": MetadataValue.int(outcome.reused_texts),
+            f"{prefix}/imported_texts": MetadataValue.int(len(imported)),
             f"{prefix}/failed_chunks": MetadataValue.int(outcome.failed_chunks),
             f"{prefix}/input_tokens": MetadataValue.int(outcome.input_tokens),
         }
@@ -467,8 +510,11 @@ def content_file_embedding_vectors(
     context: AssetExecutionContext,
     config: EmbeddingVectorsConfig,
     embeddings: EmbeddingsResource,
+    learn_vectors: LearnVectorsResource,
 ):
-    """Embed one course run's chunks, reusing every stored vector of the space."""
+    """Embed one course run's chunks, reusing every stored vector of the space and
+    Learn's vectors of the texts it embedded.
+    """
     etl_source, run = partition_run(context.partition_key)
     in_partition = {"etl_source": etl_source, "run_readable_id": run}
     chunks = require_rows(
@@ -492,6 +538,9 @@ def content_file_embedding_vectors(
         chunks=chunks,
         vectors=vectors,
         stored=stored,
+        learn_fetch=learn_vectors.fetch(
+            LEARN_CONTENT_FILES_COLLECTION, text_field="chunk_content"
+        ),
     )
     yield Output(
         rows.with_columns(
@@ -518,8 +567,11 @@ def topic_embedding_vectors(
     context: AssetExecutionContext,
     config: EmbeddingVectorsConfig,
     embeddings: EmbeddingsResource,
+    learn_vectors: LearnVectorsResource,
 ):
-    """Embed the topic chunks, reusing every stored vector of the space."""
+    """Embed the topic chunks, reusing every stored vector of the space and
+    Learn's vectors of the names it embedded.
+    """
     chunks = require_table(LAYER, TOPIC_CHUNKS_KEY.path[-1]).collect()
     vectors = read_table(LAYER, TOPIC_VECTORS_KEY.path[-1])
     # The table is one row per topic and strategy, so it is read once and the
@@ -533,6 +585,7 @@ def topic_embedding_vectors(
         chunks=chunks,
         vectors=stored.lazy() if stored is not None else None,
         stored=stored,
+        learn_fetch=learn_vectors.fetch(LEARN_TOPICS_COLLECTION, text_field="name"),
     )
     yield Output(rows, metadata=metadata)
     _fail_on_request_failures(failures)

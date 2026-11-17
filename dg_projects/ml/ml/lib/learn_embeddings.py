@@ -20,11 +20,13 @@ from functools import cache
 from pathlib import Path
 
 import polars as pl
+from ml.lib.learn_parity import QDRANT_BATCH_SIZE, LearnPoint
 from ol_llm import BatchFailed, BatchReport, Chunk, CircuitBreaker, process_batch
 from ol_orchestrate.lib.embeddings.chunking import Chunker
 from ol_orchestrate.lib.embeddings.documents import Document, md5_hex
 from ol_orchestrate.lib.embeddings.learn import (
     CONTENT_FILE_DOC_KIND,
+    LEARN_V1_CONTENT_FILES,
     ContentFileDocument,
     ContentFilePointMapper,
 )
@@ -41,6 +43,10 @@ from ol_orchestrate.lib.embeddings.strategy import (
 )
 
 STRATEGIES_PATH = Path(__file__).parents[1] / "embedding_strategies.yaml"
+# The model and vector space of the vectors in Learn's collections. A vector row
+# with this model was taken from Learn's point, not embedded by the platform.
+LEARN_MODEL_ID = LEARN_V1_CONTENT_FILES.model.model_id
+LEARN_VECTOR_SPACE = LEARN_V1_CONTENT_FILES.model.vector_space_id
 TOPIC_DOC_KIND = "topic"
 TOPICS_RELATION = (
     "stg__mitlearn__app__postgres__learning_resources_learningresourcetopic"
@@ -408,6 +414,81 @@ def known_vectors(
         checksum: StoredVector([float(value) for value in vector], model_id)
         for checksum, vector, model_id in found.iter_rows()
     }
+
+
+def point_ids_by_checksum(
+    chunks: pl.DataFrame, checksums: Iterable[str]
+) -> dict[str, list[str]]:
+    """Return the point ids of the chunks with each wanted text checksum.
+
+    The vector runs refuse strategies with a context template
+    (:func:`strategies_for_run`), so the text a chunk is embedded from is its
+    own and its input checksum is its ``chunk_checksum``.
+
+    :param chunks: chunk rows of one chunker
+    :param checksums: the input checksums wanted
+    :returns: the sorted point ids per checksum, for the checksums with a chunk
+    :rtype: dict[str, list[str]]
+    """
+    rows = (
+        chunks.filter(pl.col("chunk_checksum").is_in(sorted(set(checksums))))
+        .group_by("chunk_checksum")
+        .agg(pl.col("point_id").unique().sort())
+    )
+    return dict(rows.iter_rows())
+
+
+def learn_vectors(
+    fetch: Callable[[Sequence[str]], Mapping[str, LearnPoint]],
+    point_ids: Mapping[str, Sequence[str]],
+    vector_length: int,
+    batch_size: int = QDRANT_BATCH_SIZE,
+) -> dict[str, StoredVector]:
+    """Take Learn's vector for each text Learn embedded, from its points by id.
+
+    A point's vector is taken for a checksum only when the MD5 of the text
+    Learn embedded on that point is the checksum, so a point whose text differs
+    (a file changed since Learn loaded it, or an OLX file whose text the platform
+    approximates) gives nothing and its chunk is embedded. Learn writes a point
+    with a zero vector with no vector at all, so such a point gives nothing too.
+
+    :param fetch: reads Learn's points by id, at most ``batch_size`` at once
+    :param point_ids: per input checksum, the ids of the points that may have
+        its text
+    :param vector_length: the strategy's vector length; a vector of another
+        length is not taken
+    :param batch_size: ids per read
+    :returns: per checksum found, Learn's vector, as ``LEARN_MODEL_ID``'s
+    :rtype: dict[str, StoredVector]
+    """
+    pending = [
+        (point_id, checksum)
+        for checksum, ids in sorted(point_ids.items())
+        for point_id in ids
+    ]
+    found: dict[str, StoredVector] = {}
+    for start in range(0, len(pending), batch_size):
+        batch = [
+            (point_id, checksum)
+            for point_id, checksum in pending[start : start + batch_size]
+            if checksum not in found
+        ]
+        if not batch:
+            continue
+        points = fetch([point_id for point_id, _ in batch])
+        for point_id, checksum in batch:
+            point = points.get(point_id)
+            if (
+                checksum in found
+                or point is None
+                or point.text is None
+                or point.vector is None
+                or len(point.vector) != vector_length
+                or md5_hex(point.text) != checksum
+            ):
+                continue
+            found[checksum] = StoredVector(point.vector, LEARN_MODEL_ID)
+    return found
 
 
 @dataclass(frozen=True)
