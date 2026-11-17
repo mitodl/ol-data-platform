@@ -11,6 +11,7 @@ from ol_dlt.database import DatabaseSourceSpec
 from ol_dlt.sources import (
     edxapp,
     learn_ai_app,
+    micromasters_app,
     mitlearn_app,
     ocw_studio_app,
     xpro_app,
@@ -47,6 +48,13 @@ SOURCES = [
         "ocw__app_postgres",
         ocw_studio_app.__name__,
         id="ocw_studio_app",
+    ),
+    pytest.param(
+        micromasters_app.build_source,
+        micromasters_app.MICROMASTERS_APP_SPEC,
+        "micromasters__app_postgres",
+        micromasters_app.__name__,
+        id="micromasters_app",
     ),
     *(
         pytest.param(
@@ -138,6 +146,7 @@ def test_resources_follow_the_raw_naming_convention(
         (mitlearn_app.MITLEARN_APP_SPEC, "users_user"),
         (learn_ai_app.LEARN_AI_APP_SPEC, "users_user"),
         (xpro_app.XPRO_APP_SPEC, "users_user"),
+        (micromasters_app.MICROMASTERS_APP_SPEC, "auth_user"),
         *((spec, "auth_user") for spec in edxapp.EDXAPP_SPECS.values()),
     ],
 )
@@ -145,6 +154,16 @@ def test_password_hash_is_excluded(spec: DatabaseSourceSpec, table_name: str) ->
     """The Django password hash is credential material, not analytical data."""
     users = next(table for table in spec.tables if table.name == table_name)
     assert "password" in users.excluded_columns
+
+
+def test_micromasters_social_auth_token_is_excluded() -> None:
+    """extra_data holds the OAuth access token MicroMasters calls edX.org with."""
+    social_auth = next(
+        table
+        for table in micromasters_app.MICROMASTERS_APP_SPEC.tables
+        if table.name == "social_auth_usersocialauth"
+    )
+    assert "extra_data" in social_auth.excluded_columns
 
 
 def test_learn_ai_session_key_is_excluded() -> None:

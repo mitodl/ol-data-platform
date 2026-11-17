@@ -50,6 +50,7 @@ def test_every_source_package_is_covered() -> None:
         "keycloak",
         "learn_ai_app",
         "medium",
+        "micromasters_app",
         "mit_climate",
         "mit_edx_programs",
         "mitlearn_app",

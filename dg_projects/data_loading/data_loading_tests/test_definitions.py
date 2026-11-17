@@ -28,6 +28,7 @@ from data_loading.defs.ingestion.assets import (
 from ol_dlt.sources import (
     edxapp,
     learn_ai_app,
+    micromasters_app,
     mitlearn_app,
     mitxonline_app,
     ocw_studio_app,
@@ -294,6 +295,7 @@ _QA_FIRST_SPECS = {
     "mitlearn_app": mitlearn_app.MITLEARN_APP_SPEC,
     "learn_ai_app": learn_ai_app.LEARN_AI_APP_SPEC,
     "ocw_studio_app": ocw_studio_app.OCW_STUDIO_APP_SPEC,
+    "micromasters_app": micromasters_app.MICROMASTERS_APP_SPEC,
     **{spec.name: spec for spec in edxapp.EDXAPP_SPECS.values()},
 }
 

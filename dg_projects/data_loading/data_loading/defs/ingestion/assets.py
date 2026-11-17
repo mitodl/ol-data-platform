@@ -40,6 +40,7 @@ from ol_dlt.sources import (
     keycloak,
     learn_ai_app,
     medium,
+    micromasters_app,
     mit_climate,
     mit_edx_programs,
     mitlearn_app,
@@ -318,6 +319,10 @@ QA_FIRST_APP_DATABASES: dict[str, tuple[Callable[[], Any], Any]] = {
     "ocw_studio_app": (
         ocw_studio_app.build_source,
         ocw_studio_app.ocw_studio_app_pipeline,
+    ),
+    "micromasters_app": (
+        micromasters_app.build_source,
+        micromasters_app.micromasters_app_pipeline,
     ),
     **{
         spec.name: (
