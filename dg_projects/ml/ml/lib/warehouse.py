@@ -204,6 +204,38 @@ def read_rows(
         return None
 
 
+def read_rows_by_key(
+    layer: str,
+    table: str,
+    columns: Sequence[str],
+    key_column: str,
+    keys: Sequence[str],
+    **equals: str,
+) -> pl.DataFrame | None:
+    """Read a table's rows whose key is one of the given keys, if it exists.
+
+    The key and the equalities go into the Iceberg scan, as for :func:`read_rows`,
+    so a key that is a partition column prunes the other partitions' files.
+
+    :param layer: the warehouse layer
+    :param table: the table name
+    :param columns: the columns to read
+    :param key_column: the column to match
+    :param keys: the keys to keep
+    :param equals: column values every returned row also has
+    :returns: the rows, or None when the table does not exist yet
+    :rtype: pl.DataFrame | None
+    :raises PermanentFailure: when a dev read redirect is set
+    """
+    _refuse_dev_redirects()
+    try:
+        return load_rows_by_key(
+            warehouse_database(layer), table, columns, key_column, keys, equals=equals
+        )
+    except NoSuchTableError:
+        return None
+
+
 def require_rows(
     layer: str, table: str, columns: Sequence[str], **equals: str
 ) -> pl.DataFrame:

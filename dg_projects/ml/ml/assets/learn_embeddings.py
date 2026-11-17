@@ -17,9 +17,9 @@ Nothing here writes to Qdrant; projecting these tables into Learn's collections 
 a separate step.
 """
 
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from datetime import UTC, datetime
-from functools import partial
+from functools import cache, partial
 
 import polars as pl
 from dagster import (
@@ -56,6 +56,8 @@ from ml.lib.learn_embeddings import (
     learn_vectors,
     merge_vectors,
     point_ids_by_checksum,
+    sibling_reads,
+    sibling_runs,
     stored_chunks,
     strategies,
     strategies_for_run,
@@ -64,6 +66,7 @@ from ml.lib.learn_embeddings import (
 )
 from ml.lib.warehouse import (
     read_rows,
+    read_rows_by_key,
     read_table,
     require_rows,
     require_table,
@@ -82,6 +85,17 @@ from ol_orchestrate.resources.embeddings import EmbeddingsResource
 from pydantic import Field
 
 GROUP_NAME = "learn_embeddings"
+# Stored vectors of a vector space by input checksum, for the texts asked for.
+StoredLookup = Callable[[str, Iterable[str]], dict[str, StoredVector]]
+# The vector-table columns known_vectors reads.
+STORED_VECTOR_COLUMNS = (
+    "chunk_key",
+    "model_id",
+    "vector_space",
+    "input_checksum",
+    "vector",
+    "embedded_at",
+)
 LAYER = "integrations"
 CONTENT_FILE_RUNS = DynamicPartitionsDefinition(name="learn_content_file_run")
 # etl_source is static and the run dynamic, so the key space is their cross
@@ -94,6 +108,15 @@ CONTENT_FILE_PARTITIONS = MultiPartitionsDefinition(
     }
 )
 CONTENT_FILE_PARTITION_EXPR = {"etl_source": "etl_source", "run": "run_readable_id"}
+# pyiceberg checks a partition overwrite against the files added and deleted
+# meanwhile by their column bounds, not their partition, and cuts string bounds to
+# 16 characters by default. Run ids share longer prefixes ("course-v1:MITxT+"), so
+# two runs overwriting at once failed the commit. Full bounds on the run column
+# let runs of different partitions overwrite concurrently, once every file written
+# before this property has been rewritten.
+CONTENT_FILE_TABLE_PROPERTIES = {
+    "write.metadata.metrics.column.run_readable_id": "full"
+}
 # The version of a run with no files.
 EMPTY_TEXT_VERSION = md5_hex("")
 # The document key's scheme. It goes into the chunk asset's code version and into
@@ -124,6 +147,7 @@ _PARTITIONED_METADATA = {
     **_TABLE_METADATA,
     "partition_expr": CONTENT_FILE_PARTITION_EXPR,
     "schema_update_mode": "update",
+    "table_properties": CONTENT_FILE_TABLE_PROPERTIES,
 }
 
 
@@ -366,7 +390,7 @@ def embed_vectors(  # noqa: PLR0913
     *,
     doc_kind: str,
     chunks: pl.DataFrame,
-    vectors: pl.LazyFrame | None,
+    stored_lookup: StoredLookup,
     stored: pl.DataFrame | None,
     learn_fetch: PointFetch | None,
 ) -> tuple[pl.DataFrame, dict[str, MetadataValue], list[str]]:
@@ -381,7 +405,8 @@ def embed_vectors(  # noqa: PLR0913
     :param embeddings: the embedder resource
     :param doc_kind: the kind of document the asset embeds
     :param chunks: the partition's chunk rows
-    :param vectors: the whole vector table, for stored vectors of a vector space
+    :param stored_lookup: stored vectors of a vector space by input checksum:
+        the whole table's for topics, the sibling runs' for a content-file run
     :param stored: the partition's stored vector rows
     :param learn_fetch: reads Learn's points by id, ``None`` where there is no
         Learn cluster
@@ -411,7 +436,7 @@ def embed_vectors(  # noqa: PLR0913
             for checksum, stored in this_run.get(vector_space, {}).items()
             if checksum in wanted
         }
-        found |= known_vectors(vectors, vector_space, wanted - found.keys())
+        found |= stored_lookup(vector_space, wanted - found.keys())
         missing = wanted - found.keys()
         if learn_fetch is not None and missing and vector_space == LEARN_VECTOR_SPACE:
             imported |= learn_vectors(
@@ -512,8 +537,8 @@ def content_file_embedding_vectors(
     embeddings: EmbeddingsResource,
     learn_vectors: LearnVectorsResource,
 ):
-    """Embed one course run's chunks, reusing every stored vector of the space and
-    Learn's vectors of the texts it embedded.
+    """Embed one course run's chunks, reusing the stored vectors of the run's
+    resource's runs and Learn's vectors of the texts it embedded.
     """
     etl_source, run = partition_run(context.partition_key)
     in_partition = {"etl_source": etl_source, "run_readable_id": run}
@@ -523,20 +548,73 @@ def content_file_embedding_vectors(
         CHUNK_SCHEMA.names(),
         **in_partition,
     )
-    vectors = read_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-    stored = read_rows(
-        LAYER,
-        CONTENT_FILE_VECTORS_KEY.path[-1],
-        VECTOR_SCHEMA.names(),
-        **in_partition,
+    source = CONTENT_FILE_SOURCES[etl_source]
+    siblings = sibling_runs(
+        source.run_resources(require_table(LAYER, source.runs_relation)).collect(),
+        run,
     )
+    # The stored vectors searched are those of the run's resource's runs. The
+    # table is partitioned by run and a checksum prunes no files, so a search of
+    # the whole table would read every run's vectors for each run. Here the
+    # siblings' checksums are read first, a few columns of pruned partitions,
+    # then the vectors of the wanted texts from as few siblings as hold them.
+    # A text shared only with another course is taken from Learn or embedded
+    # again.
+    vectors_table = CONTENT_FILE_VECTORS_KEY.path[-1]
+    others = [sibling for sibling in siblings if sibling != run]
+    stored = read_rows(LAYER, vectors_table, VECTOR_SCHEMA.names(), **in_partition)
+
+    @cache
+    def sibling_index() -> pl.DataFrame | None:
+        # Read once, and only when a text is missing from the run's own rows.
+        if not others:
+            return None
+        return read_rows_by_key(
+            LAYER,
+            vectors_table,
+            ["run_readable_id", "vector_space", "input_checksum"],
+            "run_readable_id",
+            others,
+            etl_source=etl_source,
+        )
+
+    def stored_lookup(
+        vector_space: str, checksums: Iterable[str]
+    ) -> dict[str, StoredVector]:
+        # The run's own rows are already read, and on a re-run hold nearly
+        # every text, so the siblings are read only for the rest.
+        wanted_all = set(checksums)
+        found = (
+            known_vectors(stored.lazy(), vector_space, wanted_all)
+            if stored is not None
+            else {}
+        )
+        missing = wanted_all - found.keys()
+        index = sibling_index() if missing else None
+        if index is None:
+            return found
+        for sibling, wanted in sibling_reads(index, vector_space, missing).items():
+            rows = read_rows_by_key(
+                LAYER,
+                vectors_table,
+                list(STORED_VECTOR_COLUMNS),
+                "input_checksum",
+                wanted,
+                etl_source=etl_source,
+                run_readable_id=sibling,
+                vector_space=vector_space,
+            )
+            if rows is not None:
+                found |= known_vectors(rows.lazy(), vector_space, wanted)
+        return found
+
     rows, metadata, failures = embed_vectors(
         context,
         config,
         embeddings,
         doc_kind=CONTENT_FILE_DOC_KIND,
         chunks=chunks,
-        vectors=vectors,
+        stored_lookup=stored_lookup,
         stored=stored,
         learn_fetch=learn_vectors.fetch(
             LEARN_CONTENT_FILES_COLLECTION, text_field="chunk_content"
@@ -583,7 +661,9 @@ def topic_embedding_vectors(
         embeddings,
         doc_kind=TOPIC_DOC_KIND,
         chunks=chunks,
-        vectors=stored.lazy() if stored is not None else None,
+        stored_lookup=partial(
+            known_vectors, stored.lazy() if stored is not None else None
+        ),
         stored=stored,
         learn_fetch=learn_vectors.fetch(LEARN_TOPICS_COLLECTION, text_field="name"),
     )

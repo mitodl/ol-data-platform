@@ -21,77 +21,14 @@ from ml.lib.learn_embeddings import CONTENT_FILE_SOURCES
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 
-# Until the smokecheck against Learn's collections passes, only a sample of runs is
-# registered, so automation and backfills embed only these. To lift it, delete the
-# SAMPLE_ constants and in_sample, and register every run in new_runs below.
-#
-# The sample is the first SAMPLE_RUNS_PER_SOURCE runs of each etl_source in md5
-# order of their run_readable_id, which is stable and spread over the courses,
-# plus runs picked for the smokecheck. The md5 pick skips the runs of B2B orgs,
-# which Learn's courses API does not list, so Learn has no points to compare them
-# with. The exception is nine UAI_SOURCE courses that Learn lists with their
-# UAI_B2C run alone; UAI_ leaves those out too, which only narrows the pick. MITx
-# (one run, of a course Learn does not list) is not here, since the prefix would
-# also match MITxT.
-SAMPLE_RUNS_PER_SOURCE = 5
-SAMPLE_SKIPPED_ORG_PREFIXES = (
-    "B2C",
-    "COORMFG",
-    "HZN",
-    "ISFT",
-    "NTUA_DEV",
-    "SK",
-    "TestX",
-    "UAI_",
-    "UCE",
-)
-SAMPLE_NAMED_RUNS = frozenset(
-    {
-        # Learn's text for an OCW file is the platform's, so these should match
-        # Learn's points exactly: 18.06 spring 2010, 6.0001 fall 2016 and 18.01
-        # fall 2006.
-        ("ocw", "aabc44bdb2e45374d62f30f2a6d4c63e"),  # pragma: allowlist secret
-        ("ocw", "9833b95b8cbb8e0e7928063857ea2761"),  # pragma: allowlist secret
-        ("ocw", "f5d4bf19ee14590de94d9e2b266614ba"),  # pragma: allowlist secret
-        # OLX runs, whose text only approximates Learn's
-        # (docs/learn_embedding_config.md).
-        ("mitxonline", "course-v1:MITxT+7.05x+2T2026"),
-        ("xpro", "course-v1:xPRO+SysEngx2+R28"),
-    }
-)
-
-
-def in_sample(versions: pl.DataFrame) -> pl.DataFrame:
-    """Return the runs of the sample among a sensor tick's run versions.
-
-    :param versions: ``etl_source``, ``run_readable_id`` and ``text_version`` rows
-    :rtype: pl.DataFrame
-    """
-    named = pl.concat_str("etl_source", "run_readable_id", separator="|").is_in(
-        [f"{etl_source}|{run}" for etl_source, run in SAMPLE_NAMED_RUNS]
-    )
-    org = pl.col("run_readable_id").str.extract(r"^course-v1:([^+]+)\+")
-    skipped = pl.any_horizontal(
-        org.str.starts_with(prefix) for prefix in SAMPLE_SKIPPED_ORG_PREFIXES
-    ).fill_null(value=False)
-    # A skipped run has no hash, so no rank, and is never among the first.
-    first = (
-        pl.when(~skipped)
-        .then(pl.col("run_readable_id").map_elements(md5_hex, return_dtype=pl.String))
-        .rank("ordinal")
-        .over("etl_source")
-        <= SAMPLE_RUNS_PER_SOURCE
-    )
-    return versions.filter(named | first)
-
 
 @sensor(
     name="learn_content_file_text_sensor",
     minimum_interval_seconds=3600,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Registers a learn_content_file_run partition for a sample of the course "
-        "runs with content files and a known resource, and reports a digest of "
+        "Registers a learn_content_file_run partition for every course run with "
+        "content files and a known resource, and reports a digest of "
         "each run's files as learn_embeddings/learn_content_file_text's data version. "
         "learn_embeddings_automation_sensor then chunks and embeds the runs "
         "whose version moved."
@@ -101,7 +38,7 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
     """Report every run's text version, once per change.
 
     The cursor is a digest of every run's version, so a tick where none changed
-    and no run joined the sample reports nothing. Observations go out only for
+    and no run is new reports nothing. Observations go out only for
     runs already registered: the daemon records asset events before it adds
     partitions, so a run registered on this tick is observed on the next, and the
     cursor is cleared until then. A registered run that lost its last file is
@@ -122,9 +59,7 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
             contains_invalid_partition_strings, return_dtype=pl.Boolean
         )
     )
-    # Before the digest comparison, so a sample widened in code registers its
-    # runs although no file changed.
-    new_runs = sorted(set(in_sample(valid)["run_readable_id"]) - registered)
+    new_runs = sorted(set(valid["run_readable_id"]) - registered)
     if digest == context.cursor and not new_runs:
         return SensorResult()
 

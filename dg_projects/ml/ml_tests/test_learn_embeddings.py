@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import polars as pl
+import pyarrow as pa
 import pytest
 from dagster import (
     AssetCheckSeverity,
@@ -37,6 +38,7 @@ from ml.assets.learn_embedding_checks import (
 )
 from ml.assets.learn_embeddings import (
     CONTENT_FILE_CHUNKS_KEY,
+    CONTENT_FILE_TABLE_PROPERTIES,
     CONTENT_FILE_TEXT_KEY,
     CONTENT_FILE_VECTORS_KEY,
     EMPTY_TEXT_VERSION,
@@ -57,14 +59,13 @@ from ml.lib.learn_embeddings import (
     TOPICS_RELATION,
     known_vectors,
     learn_vectors,
+    sibling_reads,
+    sibling_runs,
     strategies,
 )
 from ml.lib.learn_parity import CosineStats, LearnPoint, compare_with_learn
 from ml.resources.learn_vectors import LearnVectorsResource
-from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
-    SAMPLE_RUNS_PER_SOURCE,
-    in_sample,
     learn_content_file_text_sensor,
 )
 from ol_llm import LLMRejected, LLMUnavailable
@@ -76,11 +77,15 @@ from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic_ai.embeddings.result import EmbedInputType
-from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.exceptions import NoSuchTableError, ValidationException
+from pyiceberg.expressions import And, BooleanExpression, EqualTo
 from qdrant_client import QdrantClient, models
 
 RUN = "course-v1:MITxT+18.01x+1T2026"
 RESOURCE = "course-v1:MITxT+18.01x"
+# Another run of RESOURCE.
+SIBLING_RUN = "course-v1:MITxT+18.01x+3T2025"
 PARTITION = MultiPartitionKey({"etl_source": "mitxonline", "run": RUN})
 VECTOR_LENGTH = 3072
 TOPIC_UUID = "8b9d6f0a-3c1e-4e7a-9a52-1f0d2c3b4a59"
@@ -127,8 +132,18 @@ def tables(monkeypatch) -> dict[str, pl.DataFrame]:
         )
         return rows.select(columns).collect()
 
+    def read_by_key(
+        database_name, table_name, columns, key_column, keys, *, equals=None
+    ) -> pl.DataFrame:
+        rows = read(database_name, table_name).filter(
+            pl.col(key_column).is_in(list(keys)),
+            *(pl.col(column) == value for column, value in (equals or {}).items()),
+        )
+        return rows.select(columns).collect()
+
     monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
     monkeypatch.setattr(warehouse, "load_matching_rows", read_matching)
+    monkeypatch.setattr(warehouse, "load_rows_by_key", read_by_key)
     return store
 
 
@@ -229,6 +244,7 @@ def runs() -> pl.DataFrame:
     return pl.DataFrame(
         [
             {"readable_id": RESOURCE, "run_id": RUN},
+            {"readable_id": RESOURCE, "run_id": SIBLING_RUN},
             {"readable_id": "course-v1:MITxT+other", "run_id": "other-run"},
         ]
     )
@@ -558,7 +574,9 @@ def test_a_changed_chunk_alone_is_embedded(tables, calls):
     )
 
 
-def stored_vector(text: str, model_id: str, vector_space: str) -> pl.DataFrame:
+def stored_vector(
+    text: str, model_id: str, vector_space: str, run: str = SIBLING_RUN
+) -> pl.DataFrame:
     """Return a vector row of another run, as the vector table stores it."""
     return pl.DataFrame(
         {
@@ -571,7 +589,7 @@ def stored_vector(text: str, model_id: str, vector_space: str) -> pl.DataFrame:
             "embedded_at": [None],
             "run_id": ["earlier"],
             "etl_source": ["mitxonline"],
-            "run_readable_id": ["other-run"],
+            "run_readable_id": [run],
         },
         schema_overrides={
             "vector": pl.List(pl.Float32),
@@ -580,7 +598,66 @@ def stored_vector(text: str, model_id: str, vector_space: str) -> pl.DataFrame:
     )
 
 
-def test_a_text_stored_under_another_run_is_reused(tables, calls):
+def test_a_text_stored_under_another_course_is_not_searched(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Shared syllabus."})
+    strategy = strategies()["learn_v1_content_files"]
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
+        "Shared syllabus.",
+        strategy.model.model_id,
+        strategy.model.vector_space_id,
+        run="other-run",
+    )
+
+    assert build_content_files(tables).success
+
+    assert calls == [["Shared syllabus."]]
+
+
+def test_a_rerun_reads_no_sibling_vectors(tables, calls, monkeypatch):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    calls.clear()
+    keys_read: list[list[str]] = []
+    read_by_key = warehouse.load_rows_by_key
+
+    def spy(*args, **kwargs):
+        keys_read.append(list(args[4]))
+        return read_by_key(*args, **kwargs)
+
+    monkeypatch.setattr(warehouse, "load_rows_by_key", spy)
+    assert build_content_files(tables, dagster_instance).success
+
+    assert calls == []
+    # Every text is in the run's own rows, so no sibling is read, not even the
+    # checksum index.
+    assert keys_read == []
+
+
+def test_sibling_runs_are_the_runs_of_the_resource():
+    assert sibling_runs(runs(), RUN) == sorted([RUN, SIBLING_RUN])
+    # A run the runs model no longer has searches only its own rows.
+    assert sibling_runs(runs(), "gone") == ["gone"]
+
+
+def test_sibling_reads_cover_the_texts_from_the_fewest_runs():
+    space = "text-embedding-3-large@3072"
+    index = pl.DataFrame(
+        {
+            "run_readable_id": ["r1", "r1", "r2", "r2", "r2", "r3", "r3"],
+            "vector_space": [space] * 5 + ["other@1"] * 2,
+            "input_checksum": ["a", "b", "a", "b", "c", "d", "e"],
+        }
+    )
+
+    plan = sibling_reads(index, space, ["a", "b", "c", "d", "z"])
+
+    # r2 holds a, b and c; d is stored only in another space; z nowhere.
+    assert plan == {"r2": ["a", "b", "c"]}
+    assert sibling_reads(index, space, []) == {}
+
+
+def test_a_text_stored_under_a_sibling_run_is_reused(tables, calls):
     load_sources(tables, **{"block-v1:a": "Shared syllabus."})
     strategy = strategies()["learn_v1_content_files"]
     tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
@@ -914,79 +991,22 @@ def load_mitxonline_runs(tables: dict[str, pl.DataFrame], count: int) -> list[st
     return runs_by_hash
 
 
-def test_the_sensor_registers_only_the_sample(tables):
-    runs_by_hash = load_mitxonline_runs(tables, 8)
-
-    result: Any = learn_content_file_text_sensor(
-        build_sensor_context(instance=DagsterInstance.ephemeral())
-    )
-
-    assert result.dynamic_partitions_requests[0].partition_keys == sorted(
-        runs_by_hash[:SAMPLE_RUNS_PER_SOURCE]
-    )
-
-
-def test_widening_the_sample_registers_the_rest_without_a_change(tables, monkeypatch):
+def test_the_sensor_registers_every_run(tables):
     runs_by_hash = load_mitxonline_runs(tables, 8)
     dagster_instance = DagsterInstance.ephemeral()
 
-    def tick(cursor: str | None) -> Any:
-        return learn_content_file_text_sensor(
-            build_sensor_context(instance=dagster_instance, cursor=cursor)
-        )
-
-    first: Any = tick(None)
-    sampled = runs_by_hash[:SAMPLE_RUNS_PER_SOURCE]
-    assert first.dynamic_partitions_requests[0].partition_keys == sorted(sampled)
-    dagster_instance.add_dynamic_partitions("learn_content_file_run", sampled)
-    second: Any = tick(first.cursor)
-    assert len(second.asset_events) == SAMPLE_RUNS_PER_SOURCE
-    unchanged: Any = tick(second.cursor)
-    assert unchanged.asset_events == []
-    assert unchanged.dynamic_partitions_requests == []
-
-    monkeypatch.setattr(sensors, "SAMPLE_RUNS_PER_SOURCE", len(runs_by_hash))
-    widened: Any = tick(second.cursor)
-    rest = runs_by_hash[SAMPLE_RUNS_PER_SOURCE:]
-    assert widened.dynamic_partitions_requests[0].partition_keys == sorted(rest)
-    dagster_instance.add_dynamic_partitions("learn_content_file_run", rest)
-    observed: Any = tick(widened.cursor)
-    assert {
-        event.partition.keys_by_dimension["run"] for event in observed.asset_events
-    } == set(runs_by_hash)
-
-
-def test_the_sample_takes_the_first_runs_by_hash_and_the_named_ones():
-    named = "course-v1:MITxT+7.05x+2T2026"
-    others = [f"course-v1:MITxT+{number}x+1T2026" for number in range(8)]
-    # Ahead of every other run by hash, but in orgs whose courses Learn does not
-    # list.
-    unlisted = [
-        run
-        for run in (
-            f"course-v1:{org}{number}+UAI.1+1T2026"
-            for number in range(300)
-            for org in ("UAI_", "HZN_", "UCE")
-        )
-        if md5_hex(run) < min(map(md5_hex, others))
-    ][:6]
-    versions = pl.DataFrame(
-        {
-            "etl_source": ["mitxonline"] * (9 + len(unlisted)) + ["xpro"],
-            "run_readable_id": [*others, named, *unlisted, "course-v1:xPRO+one+R1"],
-            "text_version": ["v"] * (10 + len(unlisted)),
-        }
+    first: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance)
     )
 
-    sampled = in_sample(versions)
-
-    assert len({run.split("+")[0].rstrip("0123456789") for run in unlisted}) > 1
-    first = sorted([*others, named], key=md5_hex)[:SAMPLE_RUNS_PER_SOURCE]
-    assert set(sampled["run_readable_id"]) == {
-        *first,
-        named,
-        "course-v1:xPRO+one+R1",
-    }
+    assert first.dynamic_partitions_requests[0].partition_keys == sorted(runs_by_hash)
+    dagster_instance.add_dynamic_partitions("learn_content_file_run", runs_by_hash)
+    second: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance, cursor=first.cursor)
+    )
+    assert {
+        event.partition.keys_by_dimension["run"] for event in second.asset_events
+    } == set(runs_by_hash)
 
 
 def test_a_run_that_loses_its_last_file_is_emptied(tables):
@@ -1786,3 +1806,52 @@ def test_strategy_table_has_a_row_per_strategy(tables):
         "learn_v1_content_files",
         "learn_v1_topics",
     ]
+
+
+@pytest.mark.parametrize(
+    "rewritten",
+    [False, True],
+    ids=["old files keep cut bounds", "each partition rewritten once"],
+)
+def test_runs_overwrite_concurrently_once_their_files_have_full_bounds(
+    iceberg_catalog: SqlCatalog, *, rewritten: bool
+):
+    """Production's tables predate the property, and pyiceberg checks the files a
+    concurrent overwrite deletes by their bounds too, so concurrent runs conflict
+    until every partition holding older files has been rewritten once.
+    """
+    first, second = "course-v1:MITxT+CTL.SC0x+1T2027", "course-v1:MITxT+18.01x+3T2025"
+
+    def rows(run: str) -> pa.Table:
+        return pl.DataFrame(
+            {"etl_source": ["mitxonline"], "run_readable_id": [run], "text": [run]}
+        ).to_arrow()
+
+    def partition(run: str) -> BooleanExpression:
+        return And(EqualTo("etl_source", "mitxonline"), EqualTo("run_readable_id", run))
+
+    def load():
+        return iceberg_catalog.load_table("some_db.vectors")
+
+    table = iceberg_catalog.create_table("some_db.vectors", schema=rows(first).schema)
+    with table.update_spec() as spec:
+        spec.add_identity("etl_source")
+        spec.add_identity("run_readable_id")
+    load().append(rows(first))
+    load().append(rows(second))
+    with load().transaction() as update:
+        update.set_properties(CONTENT_FILE_TABLE_PROPERTIES)
+    if rewritten:
+        for run in (first, second):
+            load().overwrite(rows(run), overwrite_filter=partition(run))
+
+    writing = load().transaction()
+    writing.overwrite(rows(first), overwrite_filter=partition(first))
+    load().overwrite(rows(second), overwrite_filter=partition(second))
+
+    if rewritten:
+        writing.commit_transaction()
+        assert sorted(load().scan().to_polars()["run_readable_id"]) == [second, first]
+    else:
+        with pytest.raises(ValidationException):
+            writing.commit_transaction()

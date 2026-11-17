@@ -362,6 +362,59 @@ def chunk_frame(
     return pl.DataFrame(rows, schema=CHUNK_SCHEMA)
 
 
+def sibling_runs(runs: pl.DataFrame, run: str) -> list[str]:
+    """Return the runs of a run's resource, the run included.
+
+    A course's files repeat across its runs, so their vectors are where a run's
+    texts are most often already stored. A run missing from the runs model is
+    its own only sibling.
+
+    :param runs: ``run_id`` and ``readable_id`` (the run's resource) rows
+    :param run: the run's ``run_readable_id``
+    :returns: the run ids, sorted
+    :rtype: list[str]
+    """
+    resources = runs.filter(pl.col("run_id") == run)["readable_id"].to_list()
+    siblings = runs.filter(pl.col("readable_id").is_in(resources))["run_id"]
+    return sorted({run, *siblings.to_list()})
+
+
+def sibling_reads(
+    index: pl.DataFrame, vector_space: str, checksums: Iterable[str]
+) -> dict[str, list[str]]:
+    """Plan which sibling runs to read the wanted texts' vectors from.
+
+    A course's runs are mostly copies, so a few runs hold nearly every text.
+    Runs are taken greedily, the one holding the most of the texts still
+    wanted first (ties by run id), so the vectors read are those of as few runs
+    as the texts need, not every sibling's.
+
+    :param index: ``run_readable_id``, ``vector_space`` and ``input_checksum``
+        rows of the sibling runs' stored vectors
+    :param vector_space: the space wanted
+    :param checksums: the input checksums wanted
+    :returns: per run to read, the sorted checksums to read from it
+    :rtype: dict[str, list[str]]
+    """
+    held = (
+        index.filter(
+            (pl.col("vector_space") == vector_space)
+            & pl.col("input_checksum").is_in(sorted(set(checksums)))
+        )
+        .group_by("run_readable_id")
+        .agg(pl.col("input_checksum").unique())
+    )
+    by_run = {run: set(found) for run, found in held.iter_rows()}
+    remaining = set().union(*by_run.values())
+    plan: dict[str, list[str]] = {}
+    while remaining:
+        run = min(by_run, key=lambda run: (-len(by_run[run] & remaining), run))
+        taken = by_run.pop(run) & remaining
+        plan[run] = sorted(taken)
+        remaining -= taken
+    return plan
+
+
 def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
     """Rebuild the chunk pairs :func:`embed_chunks` takes from a chunk table's rows.
 
