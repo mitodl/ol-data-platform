@@ -12,13 +12,16 @@ import os
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import dagster as dg
 import pytest
+import yaml
 from data_loading.definitions import defs
 from data_loading.defs.ingestion.assets import (
     MITXONLINE_APP_DLT_ENVIRONMENTS,
+    MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_UNIT,
     QA_FIRST_APP_DATABASE_ENVIRONMENTS,
@@ -620,3 +623,69 @@ def test_production_landing_zone_schedules_are_not_defined_in_qa(
     with _repository_for(environment) as repo:
         names = {schedule.name for schedule in repo.schedule_defs}
     assert (schedule_name in names) == (environment != "qa")
+
+
+KEYSET_SENSOR = "mitxonline_app_keyset_automation_sensor"
+_MITXONLINE_APP_UNIT = (
+    Path(__file__).parents[3]
+    / "ingestion"
+    / "inventory"
+    / "units"
+    / "mitxonline__app_postgres.yml"
+)
+
+
+def _keyset_specs(repo: Any) -> dict[str, dg.AssetSpec]:
+    return {
+        key.to_user_string(): assets_def.get_asset_spec(key)
+        for key, assets_def in repo.assets_defs_by_key.items()
+        if key.to_user_string().endswith(keyset.KEYSET_SUFFIX)
+    }
+
+
+@pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))
+def test_each_keyset_depends_on_its_raw_table(environment: str) -> None:
+    """A keyset runs after the load of its own raw table, from either location."""
+    with _repository_for(environment) as repo:
+        specs = _keyset_specs(repo)
+    assert specs
+    for key, spec in specs.items():
+        raw_key = key.removesuffix(keyset.KEYSET_SUFFIX)
+        assert {dep.asset_key.to_user_string() for dep in spec.deps} == {raw_key}
+
+
+@pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))
+def test_keysets_are_automated_only_where_declared(environment: str) -> None:
+    """Condition, freshness policy and sensor come together, or not at all.
+
+    A condition with no declared sensor would be picked up by Dagster's
+    synthesized default sensor, and a freshness policy where keysets run by
+    hand would read FAIL between hand runs.
+    """
+    automated = environment in MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
+    with _repository_for(environment) as repo:
+        specs = _keyset_specs(repo)
+        sensors = {sensor.name for sensor in repo.sensor_defs}
+    for spec in specs.values():
+        assert (spec.automation_condition is not None) == automated
+        assert (spec.freshness_policy is not None) == automated
+    assert (KEYSET_SENSOR in sensors) == automated
+    assert "default_automation_condition_sensor" not in sensors
+
+
+def test_production_keysets_are_not_automated_until_a_sweep_is_timed() -> None:
+    """Production keysets run by hand until one sweep on the replica is timed."""
+    assert "production" not in MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
+
+
+def test_every_keyset_lake_runs_its_keysets_after_each_load() -> None:
+    """A lake in the unit's keyset_lakes needs automated keysets and their policy.
+
+    The lakehouse location starts that lake's history snapshots from the
+    keyset, and from raw changes only while the keyset's freshness policy reads
+    FAIL. With hand-run keysets and no policy, history would move only when
+    someone ran a keyset. The local lake has no Dagster deployment.
+    """
+    unit = yaml.safe_load(_MITXONLINE_APP_UNIT.read_text())
+    lakes = set(unit["history"]["keyset_lakes"]) - {"local"}
+    assert lakes <= MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS

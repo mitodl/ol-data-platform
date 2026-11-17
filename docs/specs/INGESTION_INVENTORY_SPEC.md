@@ -1319,16 +1319,23 @@ tables whose input has to be filtered:
 The macro is meant to be shared with staging (`tk-filter-deleted-keys-out-of-staging-for-keyset-ta-0bda08`).
 The keyset tables are declared as dbt sources in the generated
 `src/ol_dbt/models/staging/_raw_keysets__sources.yml`, and `reconcile` counts them as
-accounted for. The snapshot reads the keyset by relation name, not through `source()`, so it
-adds no Dagster dependency until the orchestration of
-`tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1` is in place.
+accounted for. The snapshot reads the keyset by relation name, not through `source()`, so the
+Dagster dependency comes from the snapshot's `meta.raw_history` instead (`keyset_table` and
+`keyset_lakes`). In a lake its keyset runs in, the lakehouse location adds the keyset asset as
+a dependency and gives the snapshot `keyset_snapshot_upstream_or_code_changes`: it runs on the
+keyset's update, not the raw table's, so a load gives one keyset run and then one snapshot run.
+The keyset assets depend on their raw tables and run after each load where data_loading
+automates them (`MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS`, QA today), with a freshness
+policy that fails at the unit's `max_age_hours` (rendered into `ol_dlt/keyset/tables.json`).
+While that policy reads FAIL, a raw change starts the snapshot again, so a keyset that stops
+running delays deletes but not changes.
 
 ### 11.5 Generated files and the CI check
 
 | File | Contents |
 |---|---|
 | `src/ol_dbt/snapshots/raw_history/<deployment>__<layer>.sql` | One snapshot per table, named `snapshot_<raw_table>` (the pilot's names, which production tables carry) |
-| `src/ol_dbt/snapshots/raw_history/_<deployment>__<layer>__snapshots.yml` | Docs, and `meta.raw_history` (unit, absence, delete capture, markers) |
+| `src/ol_dbt/snapshots/raw_history/_<deployment>__<layer>__snapshots.yml` | Docs, and `meta.raw_history` (unit, absence, delete capture, markers, and for a keyset table its `keyset_table` and `keyset_lakes`) |
 | `src/ol_dbt/models/staging/_raw_keysets__sources.yml` | The keyset tables as dbt sources |
 | `src/ol_dbt/macros/_raw_delete_filters.sql` | `raw_delete_filter_map()` |
 

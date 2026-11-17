@@ -7,7 +7,9 @@ from typing import Any
 
 from dagster import (
     AssetCheckSeverity,
+    AssetDep,
     AssetExecutionContext,
+    AssetSpec,
     AutomationCondition,
     FreshnessPolicy,
     OpExecutionContext,
@@ -28,9 +30,14 @@ from ol_orchestrate.lib.automation_policies import dbt_upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.lib.dbt_environment import (
+    DATA_LAKE_ENV,
     DBT_AUTOMATION_ENABLED,
     DBT_TARGET,
     SKIP_UNIT_TESTS_ARGS,
+)
+from lakehouse.lib.keyset_snapshots import (
+    dbt_automation_condition,
+    snapshot_keyset_key,
 )
 from lakehouse.lib.openmetadata_domains import assign_domains, load_domain_rules
 from lakehouse.lib.stale_descendant_tests import (
@@ -68,11 +75,27 @@ _DBT_AUTOMATION_CONDITION = (
 
 
 class DbtAutomationTranslator(DagsterDbtTranslator):
+    def get_asset_spec(
+        self,
+        manifest: Mapping[str, Any],
+        unique_id: str,
+        project: DbtProject | None,
+    ) -> AssetSpec:
+        """Add the keyset that a keyset-filtered history snapshot reads."""
+        spec = super().get_asset_spec(manifest, unique_id, project)
+        # Sources are under manifest["sources"], not "nodes".
+        if unique_id not in manifest["nodes"]:
+            return spec
+        keyset = snapshot_keyset_key(manifest["nodes"][unique_id], DATA_LAKE_ENV)
+        return spec.merge_attributes(deps=[AssetDep(keyset)]) if keyset else spec
+
     def get_automation_condition(
         self,
-        dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
+        dbt_resource_props: Mapping[str, Any],
     ) -> AutomationCondition | None:
-        return _DBT_AUTOMATION_CONDITION
+        return dbt_automation_condition(
+            dbt_resource_props, DATA_LAKE_ENV, _DBT_AUTOMATION_CONDITION
+        )
 
     def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> str | None:
         """
