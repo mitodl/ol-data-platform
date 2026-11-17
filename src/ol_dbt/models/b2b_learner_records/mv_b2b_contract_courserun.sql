@@ -27,7 +27,9 @@ select
     cr.courserun_readable_id,
     cr.courserun_title,
     cr.courserun_start_on,
-    cr.courserun_end_on
+    cr.courserun_end_on,
+    bcc.program_sort_order,
+    bcc.course_order_in_program
 from {{ source('dimensional', 'bridge_organization_courserun') }} boc
 join {{ source('dimensional', 'dim_contract') }} c
     on boc.contract_fk = c.contract_pk
@@ -35,5 +37,9 @@ join {{ source('dimensional', 'dim_organization') }} org
     on c.organization_fk = org.organization_pk
 join {{ source('dimensional', 'dim_course_run') }} cr
     on boc.courserun_fk = cr.courserun_pk
+-- One row per (contract, course), so the join keeps the view's grain.
+left join {{ source('dimensional', 'bridge_contract_course') }} bcc
+    on boc.contract_fk = bcc.contract_fk
+    and cr.course_fk = bcc.course_fk
 where org.platform = 'mitxonline'
   and cr.is_current = true
