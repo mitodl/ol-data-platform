@@ -3283,6 +3283,9 @@ unit_tests:
   - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
     rows: []
   # Empty, but typed: an empty dict fixture makes event_timestamp VARCHAR.
+  # current_timestamp is the zoned type on Trino and DuckDB and DATETIME on
+  # StarRocks, which has no zoned type. A sql fixture cannot call a project
+  # macro such as null_timestamptz.
   - input: ref('tfact_studentmodule_problems')
     format: sql
     rows: |
@@ -3302,7 +3305,7 @@ unit_tests:
           , cast(null as varchar) as grade
           , cast(null as varchar) as max_grade
           , cast(null as varchar) as success
-          , cast(null as timestamp with time zone) as event_timestamp
+          , current_timestamp as event_timestamp
           , cast(null as varchar) as event_timestamp_iso8601
           , cast(null as integer) as time_fk
           , cast(null as integer) as date_fk
@@ -3317,6 +3320,8 @@ unit_tests:
     - platform_pk: "PLATFORM_EDXORG"
       platform_readable_id: "edxorg"
   # sql format so event_timestamp is a timestamp; a dict fixture infers VARCHAR here.
+  # Neither timestamp value matters: both rows sit at or below the watermark they
+  # set, and the model passes event_timestamp_iso8601 through unread.
   - input: this
     format: sql
     rows: |
@@ -3335,7 +3340,7 @@ unit_tests:
           , cast(null as varchar) as success
           , cast(null as varchar) as grade
           , cast(null as varchar) as max_grade
-          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone) as event_timestamp
+          , current_timestamp as event_timestamp
           , '2024-01-15T00:00:00Z' as event_timestamp_iso8601
           , cast(null as integer) as time_fk
           , cast(null as integer) as date_fk
@@ -3356,7 +3361,7 @@ unit_tests:
           , cast(null as varchar)
           , cast(null as varchar)
           , cast(null as varchar)
-          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone)
+          , current_timestamp
           , '2024-01-15T00:00:00Z'
           , cast(null as integer)
           , cast(null as integer)

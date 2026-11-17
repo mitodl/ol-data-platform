@@ -1092,8 +1092,10 @@ models:
         arguments:
           row_condition: "course_page_is_live=true"
         config:
-          severity: "{{ 'warn' if target.database == 'ol_data_lake_qa' else 'error'\
-            \ }}"
+          # target.catalog on StarRocks, as in raw_data_lake(), which a test config
+          # cannot call.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: course_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').

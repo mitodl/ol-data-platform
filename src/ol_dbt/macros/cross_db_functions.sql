@@ -669,8 +669,8 @@
     DuckDB: json_extract(col, '$.path') cast to varchar[]
 
     A path holding something other than an array of scalars (a string, an object)
-    raises on Trino; with lenient=true it gives NULL instead. lenient does not change
-    the StarRocks SQL.
+    raises on Trino; with lenient=true it gives NULL instead. StarRocks gives NULL
+    either way, and a JSON null gives NULL on every engine.
 
     Usage:
       {{ array_join(json_extract_varchar_array('metadata', "'$.level'"), ', ') }}
@@ -688,8 +688,13 @@
 {%- endmacro %}
 
 {% macro starrocks__json_extract_varchar_array(json_col, json_path, lenient=false) -%}
-    {# StarRocks: json_query returns a JSON value; array casts require v2.4+ #}
-    cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
+    {# The cast turns a JSON string, object or null into [] where Trino gives NULL,
+       which would stop a coalesce onto json_object_key_array, so only an array is
+       cast (as in try_parse_json_array). #}
+    case
+        when left(json_string(json_query(parse_json({{ json_col }}), {{ json_path }})), 1) = '['
+            then cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
+    end
 {%- endmacro %}
 
 {#
