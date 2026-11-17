@@ -7,6 +7,7 @@ between the condition, the event log, and actual run records.
 """
 
 import time
+import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -14,6 +15,8 @@ import dagster as dg
 import pytest
 from dagster import AssetKey, DynamicPartitionsDefinition, Output
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
+from dagster._core.definitions.declarative_automation.operators import SinceCondition
+from dagster._core.definitions.freshness import FreshnessState, FreshnessStateChange
 from dagster._core.events import (
     AssetMaterializationPlannedData,
     DagsterEvent,
@@ -25,6 +28,7 @@ from dagster._core.storage.tags import PARTITION_NAME_TAG
 from dagster._core.test_utils import create_run_for_test
 from ol_orchestrate.lib.automation_policies import (
     dbt_upstream_or_code_changes,
+    keyset_snapshot_upstream_or_code_changes,
     upstream_or_code_changes,
 )
 
@@ -722,3 +726,165 @@ def test_an_expired_hold_stays_released_while_the_child_is_blocked(
     sensor.finish_run(unrelated, "stg_other")
 
     assert sensor.tick() == {"int_extraction_sources"}
+
+
+def test_dbt_condition_tree_is_unchanged() -> None:
+    """The dbt tree hashes as it did before the keyset variant shared its parts."""
+    tree_id = "684227bb783473600a4051b307be588e"  # pragma: allowlist secret
+    assert dbt_upstream_or_code_changes().get_unique_id() == tree_id
+
+
+RAW_KEY = AssetKey(["ol_warehouse_raw_data", "raw__app__postgres__thing"])
+KEYSET_KEY = AssetKey(["ol_warehouse_raw_data", "raw__app__postgres__thing__keyset"])
+SNAPSHOT_KEY = AssetKey(["history", "snapshot_raw__app__postgres__thing"])
+
+
+class KeysetGraph:
+    """A raw table, its keyset and the history snapshot reading both."""
+
+    def __init__(self, instance: dg.DagsterInstance) -> None:
+        self.instance = instance
+        self.cursor = None
+        raw = dg.AssetSpec(RAW_KEY)
+        keyset = dg.AssetSpec(
+            KEYSET_KEY,
+            deps=[RAW_KEY],
+            freshness_policy=dg.FreshnessPolicy.time_window(
+                fail_window=timedelta(hours=12)
+            ),
+        )
+
+        @dg.asset(
+            key=SNAPSHOT_KEY,
+            deps=[RAW_KEY, KEYSET_KEY],
+            automation_condition=keyset_snapshot_upstream_or_code_changes(KEYSET_KEY),
+        )
+        def snapshot() -> None: ...
+
+        self.defs = dg.Definitions(assets=[raw, keyset, snapshot])
+
+    def materialize(self, *keys: AssetKey) -> None:
+        """Materialize each key with a new data version, as a run of it would."""
+        for key in keys:
+            self.instance.report_runless_asset_event(
+                dg.AssetMaterialization(
+                    asset_key=key, tags={DATA_VERSION_TAG: str(uuid.uuid4())}
+                )
+            )
+
+    def keyset_freshness(self, state: FreshnessState) -> None:
+        """Record the keyset's freshness state as the freshness daemon would."""
+        self.instance._report_runless_asset_event(
+            asset_event=FreshnessStateChange(
+                key=KEYSET_KEY,
+                previous_state=FreshnessState.UNKNOWN,
+                new_state=state,
+                state_change_timestamp=time.time(),
+            )
+        )
+
+    def tick(self) -> bool:
+        """Return whether the snapshot is requested."""
+        result = dg.evaluate_automation_conditions(
+            defs=self.defs, instance=self.instance, cursor=self.cursor
+        )
+        self.cursor = result.cursor
+        return bool(result.get_num_requested(SNAPSHOT_KEY))
+
+    def settle(self) -> None:
+        self.keyset_freshness(FreshnessState.PASS)
+        self.materialize(RAW_KEY, KEYSET_KEY, SNAPSHOT_KEY)
+        self.tick()
+        assert not self.tick()
+
+
+@pytest.fixture
+def keyset_graph() -> Iterator[KeysetGraph]:
+    with dg.DagsterInstance.ephemeral() as ephemeral_instance:
+        graph = KeysetGraph(ephemeral_instance)
+        graph.settle()
+        yield graph
+
+
+def test_a_raw_load_alone_does_not_start_the_snapshot(keyset_graph) -> None:
+    """The keyset run after the load is what the snapshot waits for, however long.
+
+    Several ticks, because a latch that shared its cursor with another fired on
+    the second.
+    """
+    keyset_graph.materialize(RAW_KEY)
+
+    assert not any(keyset_graph.tick() for _ in range(4))
+
+
+def test_keyset_snapshot_latches_have_their_own_cursors() -> None:
+    """Different ``since`` latches in the tree key different cursors.
+
+    A since node's cursor id ignores an AnyDepsCondition's allow/ignore
+    selection, so two latches differing only in selection overwrite each other.
+    The same latch used twice (the pending-parent hold's ``armed``) may share.
+    """
+    latches: dict[str, list[dg.AutomationCondition]] = {}
+    pending = [keyset_snapshot_upstream_or_code_changes(KEYSET_KEY)]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, SinceCondition):
+            stable_id = node._get_stable_unique_id(SNAPSHOT_KEY)
+            latches.setdefault(stable_id, []).append(node)
+        pending.extend(node.children)
+    for same_cursor in latches.values():
+        assert all(node == same_cursor[0] for node in same_cursor)
+
+
+def test_the_keyset_after_a_load_starts_the_snapshot_once(keyset_graph) -> None:
+    """Load, then keyset, then one snapshot, and nothing after it."""
+    keyset_graph.materialize(RAW_KEY)
+    assert not keyset_graph.tick()
+
+    keyset_graph.materialize(KEYSET_KEY)
+
+    assert keyset_graph.tick()
+    assert not keyset_graph.tick()
+
+
+def test_a_load_and_keyset_between_ticks_start_one_snapshot(keyset_graph) -> None:
+    """The dbt sensor ticks every four hours, so both usually land between ticks."""
+    keyset_graph.materialize(RAW_KEY, KEYSET_KEY)
+
+    assert keyset_graph.tick()
+    assert not keyset_graph.tick()
+
+
+def test_a_stale_keyset_lets_the_raw_load_start_the_snapshot(keyset_graph) -> None:
+    """A keyset that stopped running holds history back no further than a load."""
+    keyset_graph.keyset_freshness(FreshnessState.FAIL)
+    keyset_graph.materialize(RAW_KEY)
+
+    assert keyset_graph.tick()
+    assert not keyset_graph.tick()
+
+
+def test_a_stale_keyset_alone_starts_nothing(keyset_graph) -> None:
+    """Staleness is not a trigger: with no new load there is nothing to record."""
+    keyset_graph.keyset_freshness(FreshnessState.FAIL)
+
+    assert not keyset_graph.tick()
+
+
+def test_a_load_held_for_the_keyset_runs_with_the_first_load_after_it_goes_stale(
+    keyset_graph,
+) -> None:
+    """Staleness alone releases nothing; the next load does.
+
+    The keyset goes stale two load intervals after its last run, so the held
+    load waits at most one more.
+    """
+    keyset_graph.materialize(RAW_KEY)
+    assert not keyset_graph.tick()
+
+    keyset_graph.keyset_freshness(FreshnessState.FAIL)
+    assert not keyset_graph.tick()
+
+    keyset_graph.materialize(RAW_KEY)
+
+    assert keyset_graph.tick()

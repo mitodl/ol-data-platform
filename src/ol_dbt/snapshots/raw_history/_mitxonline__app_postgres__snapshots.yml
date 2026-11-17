@@ -118,6 +118,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__b2b_userb2bcontract__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -416,6 +419,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_blockedcountry__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -549,6 +555,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -617,6 +626,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_courseruncertificate__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -651,6 +663,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_courserunenrollment__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -685,6 +700,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_courserunenrollmentaudit__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -720,6 +738,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_courserungrade__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -754,6 +775,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_coursestopic__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -788,6 +812,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_department__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -855,6 +882,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_paidcourserun__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -989,6 +1019,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_programcertificate__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1023,6 +1056,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_programenrollment__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1057,6 +1093,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__courses_programenrollmentaudit__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1157,6 +1196,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__django_content_type__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1191,6 +1233,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_basket__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1225,6 +1270,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_basketdiscount__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1259,6 +1307,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_basketitem__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1293,6 +1344,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_discount__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1327,6 +1381,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_discountproduct__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1361,6 +1418,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_discountredemption__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1461,6 +1521,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__ecommerce_product__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1561,6 +1624,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1596,6 +1662,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1664,6 +1733,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1699,6 +1771,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__openedx_openedxuser__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1733,6 +1808,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__reversion_revision__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1767,6 +1845,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__reversion_version__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1932,6 +2013,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__wagtailcore_page__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-
@@ -1999,6 +2083,9 @@ snapshots:
         unit: mitxonline/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__app__postgres__wagtailimages_image__keyset
+        keyset_lakes:
+        - qa
   columns:
   - name: id
     description: >-

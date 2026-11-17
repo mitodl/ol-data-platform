@@ -1,4 +1,4 @@
-from dagster import AutomationCondition
+from dagster import AssetKey, AssetSelection, AutomationCondition
 
 # Midnight UTC. See dbt_upstream_or_code_changes for why the wait spans two ticks.
 PENDING_PARENT_EXPIRY_CRON = "0 0 * * *"
@@ -109,15 +109,86 @@ def dbt_upstream_or_code_changes() -> AutomationCondition:
     moves nothing. The latch and the per-parent state start with empty cursors,
     though, so that model is neither latched nor held on that first tick.
     """
+    return (
+        _upstream_or_code_changes(_own_code_change()) & ~_any_deps_code_change_pending()
+    )
+
+
+def keyset_snapshot_upstream_or_code_changes(
+    keyset_key: AssetKey,
+) -> AutomationCondition:
+    """``dbt_upstream_or_code_changes`` for a raw history snapshot with a keyset.
+
+    The snapshot's delete filter (``raw_delete_filter``) reads the raw table
+    and its keyset, which ``ol_dlt.keyset`` reloads after each load of the
+    raw table. A snapshot started by the raw change would read the previous
+    load's keyset, and a second one would follow the keyset run, so the
+    snapshot ignores its raw parent and runs on the keyset's update instead:
+    load, keyset, snapshot, once per load.
+
+    A keyset that has stopped running must not stop the history. While the
+    keyset's freshness policy reads FAIL, a raw change starts the snapshot as
+    it would without a keyset, and the filter applies the stale keyset (it
+    keeps every row loaded after the keyset's read, so changes are recorded and
+    deletes wait). The keyset's own FAIL state is the alert.
+
+    Both signals are latched until the snapshot is requested, as the shared
+    upstream signal is. The raw signal latches only a raw change that lands
+    while the keyset is stale, so a load that came while the keyset was fresh
+    waits for the keyset run, or for the next load once the keyset goes stale.
+    Staleness is two load intervals, so that costs at most one more load.
+
+    Why the stale gate sits inside the raw latch rather than outside it: a
+    ``since`` node's cursor id hashes its children's names but not an
+    ``AnyDepsCondition``'s allow or ignore selection, so two ``any_deps``
+    latches that differ only in selection share one cursor, and the raw latch's
+    state overwrites the keyset latch's on every tick (a raw load alone then
+    starts the snapshot on the next tick). The ``&`` makes the two structurally
+    different. test_keyset_snapshot_latches_have_their_own_cursors pins it.
+
+    Known double run: the freshness daemon re-evaluates every 30 seconds, but
+    the snapshot's sensor and the keyset's sensor tick independently. On the
+    first load after a stale keyset recovers, the snapshot can be requested
+    for the raw change on the same tick the keyset is, and again once the
+    keyset lands.
+
+    :param keyset_key: the asset key of the snapshot's keyset table.
+    :returns: the condition for the snapshot's asset.
+    :rtype: AutomationCondition
+    """
+    keyset = AssetSelection.assets(keyset_key)
+    handled = (
+        AutomationCondition.newly_requested() | AutomationCondition.initial_evaluation()
+    )
+    deps_changed = AutomationCondition.any_deps_updated().replace(
+        "newly_updated", AutomationCondition.data_version_changed()
+    )
+    keyset_stale = AutomationCondition.any_deps_match(
+        AutomationCondition.freshness_failed()
+    ).allow(keyset)
+    keyset_changed = deps_changed.allow(keyset).since(handled)
+    raw_changed_while_stale = (deps_changed.ignore(keyset) & keyset_stale).since(
+        handled
+    )
+    return (
+        _upstream_or_code_changes(
+            _own_code_change(),
+            has_upstream_changes=keyset_changed | raw_changed_while_stale,
+        )
+        & ~_any_deps_code_change_pending()
+    ).with_label("keyset_snapshot_upstream_or_code_changes")
+
+
+def _own_code_change() -> AutomationCondition:
+    """Latch the asset's own code change until it is requested."""
     # The reset excludes a tick that also sees a change. newly_requested is true
     # on the tick after a request, and since() resolves a tie to the reset, so a
     # change landing while that earlier run is still going would be consumed by
     # a request made before it, and in_progress blocks the bare trigger too.
-    own_code_change = AutomationCondition.code_version_changed().since(
+    return AutomationCondition.code_version_changed().since(
         AutomationCondition.newly_requested()
         & ~AutomationCondition.code_version_changed()
     )
-    return _upstream_or_code_changes(own_code_change) & ~_any_deps_code_change_pending()
 
 
 def _any_deps_code_change_pending() -> AutomationCondition:
@@ -151,22 +222,26 @@ def _any_deps_code_change_pending() -> AutomationCondition:
 
 def _upstream_or_code_changes(
     extra_trigger: AutomationCondition | None = None,
+    *,
+    has_upstream_changes: AutomationCondition | None = None,
 ) -> AutomationCondition:
     """Build the shared tree, with ``extra_trigger`` appended to the trigger ``|``.
 
     Appended last so every existing operand keeps its index, and with it the
-    node id its cursor is stored under.
+    node id its cursor is stored under. ``has_upstream_changes`` replaces the
+    upstream trigger, which reshapes the tree, so only a new condition passes it.
     """
     not_in_progress = ~AutomationCondition.in_progress()
     no_upstream_dependencies_in_process = ~AutomationCondition.any_deps_in_progress()
-    has_upstream_changes = (
-        AutomationCondition.any_deps_updated()
-        .replace("newly_updated", AutomationCondition.data_version_changed())
-        .since(
-            AutomationCondition.newly_requested()
-            | AutomationCondition.initial_evaluation()
+    if has_upstream_changes is None:
+        has_upstream_changes = (
+            AutomationCondition.any_deps_updated()
+            .replace("newly_updated", AutomationCondition.data_version_changed())
+            .since(
+                AutomationCondition.newly_requested()
+                | AutomationCondition.initial_evaluation()
+            )
         )
-    )
     has_code_changes = AutomationCondition.code_version_changed()
     newly_missing = AutomationCondition.newly_missing()
     execution_newly_failed = AutomationCondition.execution_failed().newly_true()

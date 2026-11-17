@@ -1201,6 +1201,38 @@ def keyset_lakes(unit: Unit) -> list[str]:
     return list(history.get("keyset_lakes", [])) if isinstance(history, dict) else []
 
 
+# A keyset older than this many load intervals is stale: the snapshot's delete
+# filter logs it, the keyset asset's freshness policy fails, and the snapshot
+# then runs on raw changes. The filter still applies it (raw_delete_filter says
+# why), so deletes after its read wait for a fresh one.
+STALE_KEYSET_INTERVALS = 2
+
+
+def keyset_max_age_hours(unit: Unit) -> int:
+    """Return how old the unit's keyset may get, in hours, before it is stale.
+
+    Two of the unit's longest production load interval, over its active
+    connections.
+
+    :raises RenderError: when the unit has no active production connection with a
+        sync_interval_hours to judge it by.
+    """
+    hours = [
+        connection["sync_interval_hours"]
+        for connection in unit.connections
+        if connection.get("environment", DEFAULT_ENVIRONMENT) == "production"
+        and connection.get("status") == "active"
+        and isinstance(connection.get("sync_interval_hours"), int)
+    ]
+    if not hours:
+        msg = (
+            f"{unit.key} has keyset tables but no active production connection with a "
+            "sync_interval_hours, so there is no load interval to judge a stale keyset by"
+        )
+        raise RenderError(msg)
+    return STALE_KEYSET_INTERVALS * max(hours)
+
+
 def _cut_over_to_dlt_replace(unit: Unit) -> bool:
     """Return True when production loads the unit by dlt replace, which carries deletes."""
     dlt = unit.data.get("dlt")
@@ -1259,11 +1291,15 @@ def render_keyset_tables(units: list[Unit]) -> str:
 
     The data_loading image carries ol_dlt but not the inventory, so the
     selection is projected into a file inside the package, the same way the
-    metadata-column map is projected into a dbt macro.
+    metadata-column map is projected into a dbt macro. ``max_age_hours`` is
+    each unit's keyset_max_age_hours, the keyset assets' freshness window.
     """
+    tables = keyset_tables(units)
+    units_by_key = {unit.key: unit for unit in units}
     document = {
         "generated_by": "ol-dbt inventory keysets --write",
-        "units": keyset_tables(units),
+        "units": tables,
+        "max_age_hours": {key: keyset_max_age_hours(units_by_key[key]) for key in tables},
     }
     return json.dumps(document, indent=2) + "\n"
 

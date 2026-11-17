@@ -19,6 +19,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__content_feedback_contentfeedback__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -53,6 +55,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_learningresourcetopic__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -88,6 +92,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -123,6 +129,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_search_percolatequery__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -158,6 +166,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -193,6 +203,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_userlist__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -227,6 +239,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_userlist_topics__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -262,6 +276,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__learning_resources_userlistrelationship__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -330,6 +346,8 @@ snapshots:
         unit: mitlearn/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitlearn__app__postgres__profiles_profile_topic_interests__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-

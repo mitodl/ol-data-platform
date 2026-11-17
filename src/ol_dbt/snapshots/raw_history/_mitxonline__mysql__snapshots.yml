@@ -1129,6 +1129,8 @@ snapshots:
         unit: mitxonline/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__openedx__mysql__grades_persistentcoursegrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1163,6 +1165,8 @@ snapshots:
         unit: mitxonline/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1296,6 +1300,8 @@ snapshots:
         unit: mitxonline/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__openedx__mysql__student_anonymoususerid__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1527,6 +1533,8 @@ snapshots:
         unit: mitxonline/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitxonline__openedx__mysql__submissions_submission__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-

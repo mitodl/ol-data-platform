@@ -238,6 +238,18 @@ class TestSettings:
         assert spec.keyset_lakes == ("local", "qa")
         assert "'keyset_lakes': ['local', 'qa']}," in render_history(units)[DELETE_FILTER_MACRO_PATH]
 
+    def test_keyset_snapshot_meta_names_its_keyset_and_lakes(self) -> None:
+        """The lakehouse location starts these snapshots from the keyset, where it runs."""
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["qa"]}
+        docs = yaml.safe_load(render_history([_unit(data)])[SNAPSHOT_DIR / "_mitxonline__mysql__snapshots.yml"])
+        meta = {snapshot["name"]: snapshot["config"]["meta"]["raw_history"] for snapshot in docs["snapshots"]}
+        assert meta["snapshot_raw__mitxonline__openedx__mysql__auth_user"]["keyset_table"] == (
+            "raw__mitxonline__openedx__mysql__auth_user__keyset"
+        )
+        assert meta["snapshot_raw__mitxonline__openedx__mysql__auth_user"]["keyset_lakes"] == ["qa"]
+        assert "keyset_table" not in meta["snapshot_raw__mitxonline__openedx__mysql__course_overviews"]
+
     def test_full_read_needs_no_filter(self) -> None:
         assert _by_name([_unit(DB_UNIT)])["course_overviews"].delete_filter is None
 

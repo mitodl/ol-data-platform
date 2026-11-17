@@ -62,6 +62,7 @@ from ol_orchestrate.lib.failures import with_failure_hooks
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
+    KeysetDltTranslator,
     RawDataDltTranslator,
 )
 from ol_dlt import keyset
@@ -339,9 +340,9 @@ qa_first_app_database_assets: dict[str, AssetsDefinition] = (
     else {}
 )
 # Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
-# history snapshots and staging to tell deleted keys from live ones. Run by hand
-# for now: the run after every load comes with the keyset automation (witan task
-# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
+# history snapshots and staging to tell deleted keys from live ones. Each keyset
+# runs after every load of its raw table where MITXONLINE_APP_KEYSET_AUTOMATED
+# (keyset_automation.py), and by hand elsewhere.
 #
 # Production reads the MITx Online RDS read replica: ol-infrastructure's Dagster
 # stack sets MITXONLINE_APP_DB_HOST to the app stack's rds_replica_host there.
@@ -351,12 +352,26 @@ qa_first_app_database_assets: dict[str, AssetsDefinition] = (
 # history.keyset_lakes names production.
 MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa", "production"})
 MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
+# Where the keysets run after every load and carry a freshness policy at the
+# unit's stale-keyset age. QA only: production joins once one production sweep
+# has been timed on the replica (witan task
+# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
+MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS = frozenset({"qa"})
+MITXONLINE_APP_KEYSET_AUTOMATED = (
+    DAGSTER_ENV in MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
+)
 
 mitxonline_app_keyset_assets = (
     build_ingest_assets(
         name="mitxonline_app_keyset",
         source=keyset.build_unit_keyset_source(MITXONLINE_APP_KEYSET_UNIT),
         pipeline=keyset.unit_keyset_pipeline(MITXONLINE_APP_KEYSET_UNIT),
+        translator=KeysetDltTranslator(
+            max_age_hours=keyset.inventory_keyset_max_age_hours(
+                MITXONLINE_APP_KEYSET_UNIT
+            ),
+            automated=MITXONLINE_APP_KEYSET_AUTOMATED,
+        ),
     )
     if DAGSTER_ENV in MITXONLINE_APP_KEYSET_ENVIRONMENTS
     else None

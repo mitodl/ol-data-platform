@@ -19,6 +19,8 @@ snapshots:
         unit: ocw/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ocw__studio__postgres__gdrive_sync_drivefile__keyset
+        keyset_lakes: []
   columns:
   - name: file_id
     description: >-

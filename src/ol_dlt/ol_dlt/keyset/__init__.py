@@ -200,15 +200,26 @@ def keyset_pipeline_for(
     return config.pipeline_for(f"{spec.name}_keyset", profile=profile)
 
 
+def _rendered_tables() -> dict[str, Any]:
+    return json.loads(resources.files(__package__).joinpath("tables.json").read_text())
+
+
 def inventory_keyset_tables() -> Mapping[str, tuple[KeysetTable, ...]]:
     """Return the rendered keyset tables, by inventory unit (``deployment/layer``)."""
-    rendered = json.loads(
-        resources.files(__package__).joinpath("tables.json").read_text()
-    )
     return {
         unit: tuple(KeysetTable(name=row["table"], key=row["key"]) for row in rows)
-        for unit, rows in rendered["units"].items()
+        for unit, rows in _rendered_tables()["units"].items()
     }
+
+
+def inventory_keyset_max_age_hours(unit: str) -> int:
+    """Return how old ``unit``'s keyset may get, in hours, before it is stale.
+
+    Two of the unit's production load intervals, rendered from the inventory.
+    The history snapshot's delete filter logs a keyset older than this, and the
+    keyset assets' freshness policy fails at it.
+    """
+    return _rendered_tables()["max_age_hours"][unit]
 
 
 def build_unit_keyset_source(unit: str, *, profile: str | None = None) -> Any:  # noqa: ANN401

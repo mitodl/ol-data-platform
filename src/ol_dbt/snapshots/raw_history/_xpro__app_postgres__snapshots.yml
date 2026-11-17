@@ -19,6 +19,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcoupon__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -53,6 +55,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponaudit__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -87,6 +91,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponredemption__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -121,6 +127,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2border__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -155,6 +163,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2borderaudit__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -189,6 +199,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__b2b_ecommerce_b2breceipt__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -419,6 +431,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__cms_externalprogrampage__keyset
+        keyset_lakes: []
   columns:
   - name: page_ptr_id
     description: >-
@@ -486,6 +500,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__cms_programpage__keyset
+        keyset_lakes: []
   columns:
   - name: page_ptr_id
     description: primary key of the xpro/app_postgres cms_programpage record.
@@ -519,6 +535,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__cms_signatorypage__keyset
+        keyset_lakes: []
   columns:
   - name: page_ptr_id
     description: primary key of the xpro/app_postgres cms_signatorypage record.
@@ -552,6 +570,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_course__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres courses_course record.
@@ -617,6 +637,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_courseruncertificate__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -651,6 +673,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_courserunenrollment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -685,6 +709,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_courserungrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -751,6 +777,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_platform__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres courses_platform record.
@@ -784,6 +812,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_program__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres courses_program record.
@@ -817,6 +847,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_programcertificate__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -851,6 +883,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_programenrollment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -885,6 +919,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__courses_programrun__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres courses_programrun record.
@@ -918,6 +954,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__django_content_type__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres django_content_type record.
@@ -951,6 +989,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_basket__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_basket record.
@@ -984,6 +1024,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_basketitem__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1018,6 +1060,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_bulkcouponassignment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1052,6 +1096,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_company__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_company record.
@@ -1085,6 +1131,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_coupon__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_coupon record.
@@ -1118,6 +1166,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponeligibility__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1152,6 +1202,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponpayment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1186,6 +1238,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponpaymentversion__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1220,6 +1274,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponredemption__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1254,6 +1310,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponselection__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1288,6 +1346,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_couponversion__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1355,6 +1415,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_line__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_line record.
@@ -1388,6 +1450,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_linerunselection__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1422,6 +1486,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_order__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_order record.
@@ -1455,6 +1521,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_orderaudit__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1521,6 +1589,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_productcouponassignment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1588,6 +1658,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_programrunline__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1622,6 +1694,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_receipt__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_receipt record.
@@ -1655,6 +1729,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__ecommerce_taxrate__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres ecommerce_taxrate record.
@@ -1814,6 +1890,8 @@ snapshots:
         unit: xpro/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__xpro__app__postgres__wagtailimages_image__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the xpro/app_postgres wagtailimages_image record.

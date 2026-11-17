@@ -23,7 +23,6 @@ import yaml
 
 from ol_dbt_cli.lib.inventory import (
     AIRBYTE_LOADER,
-    DEFAULT_ENVIRONMENT,
     DLT_FIRST_LAKES,
     DLT_LOADER,
     KEYSET_SUFFIX,
@@ -33,6 +32,7 @@ from ol_dbt_cli.lib.inventory import (
     history_absence,
     history_in_scope,
     keyset_lakes,
+    keyset_max_age_hours,
     keyset_tables,
     lake_loader,
 )
@@ -43,10 +43,6 @@ DELETE_FILTER_MACRO_PATH = Path("src/ol_dbt/macros/_raw_delete_filters.sql")
 
 KEYSET_READ_STARTED_AT = "_keyset_read_started_at"
 LATEST_LOAD_COLUMN = "_dlt_load_id"
-# A keyset older than this many load intervals is logged as stale. It still
-# filters the snapshot (raw_delete_filter says why), so deletes after its read
-# wait for a fresh one.
-STALE_KEYSET_INTERVALS = 2
 
 GENERATED_BY = "ol-dbt inventory history --write"
 
@@ -104,24 +100,6 @@ class HistoryTable:
         return f"snapshot_{self.raw_table}"
 
 
-def _unit_interval_hours(unit: Unit) -> int:
-    """Return the longest production load interval of the unit's active connections."""
-    hours = [
-        connection["sync_interval_hours"]
-        for connection in unit.connections
-        if connection.get("environment", DEFAULT_ENVIRONMENT) == "production"
-        and connection.get("status") == "active"
-        and isinstance(connection.get("sync_interval_hours"), int)
-    ]
-    if not hours:
-        msg = (
-            f"{unit.key} has keyset tables but no active production connection with a "
-            "sync_interval_hours, so there is no load interval to judge a stale keyset by"
-        )
-        raise RenderError(msg)
-    return max(hours)
-
-
 def _delete_filter(unit: Unit, table: dict[str, Any], keyset_names: set[str], absence: str) -> DeleteFilter | None:
     if table["name"] in keyset_names:
         loader = str(unit.data["loader"])
@@ -138,7 +116,7 @@ def _delete_filter(unit: Unit, table: dict[str, Any], keyset_names: set[str], ab
             kind="keyset",
             key=str(table["primary_key"][0][0]),
             loader_time_column=loader_time,
-            max_age_hours=STALE_KEYSET_INTERVALS * _unit_interval_hours(unit),
+            max_age_hours=keyset_max_age_hours(unit),
             lake_loader_time_columns=tuple(lake_columns),
             keyset_lakes=tuple(sorted(keyset_lakes(unit))),
         )
@@ -321,6 +299,11 @@ def _snapshot_meta(table: HistoryTable) -> dict[str, Any]:
             else ("full_read" if table.full_read else "none")
         ),
     }
+    if table.delete_filter is not None and table.delete_filter.kind == "keyset":
+        # The lakehouse location reads these to start the snapshot from the
+        # keyset's load rather than the raw table's, where the keyset runs.
+        meta["keyset_table"] = f"{table.raw_table}{KEYSET_SUFFIX}"
+        meta["keyset_lakes"] = list(table.delete_filter.keyset_lakes)
     if table.markers:
         meta["markers"] = [dict(marker) for marker in table.markers]
     return meta

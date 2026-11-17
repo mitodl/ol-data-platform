@@ -5,14 +5,16 @@ These centralize the conventions that used to be spread across six per-source
 storage kinds, and the Glue fully-qualified ``table_name`` metadata.
 """
 
+from datetime import timedelta
 from typing import Any
 
-from dagster import AssetDep, AssetKey, AssetSpec
+from dagster import AssetDep, AssetKey, AssetSpec, FreshnessPolicy
 from dagster._core.definitions.metadata.metadata_set import TableMetadataSet
 from dagster_dlt import DagsterDltTranslator
 from dagster_dlt.translator import DltResourceTranslatorData
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 
-from ol_dlt import config
+from ol_dlt import config, keyset
 
 
 def _storage_kind() -> str:
@@ -92,3 +94,39 @@ class EdxorgDltTranslator(RawDataDltTranslator):
             archive_key = AssetKey(["edxorg", "raw_data", "db_table", short_name])
             spec = spec.replace_attributes(deps=[AssetDep(archive_key)])
         return spec
+
+
+class KeysetDltTranslator(RawDataDltTranslator):
+    """RawDataDltTranslator for keyset tables, which run after their raw table loads.
+
+    Each ``<raw_table>__keyset`` asset depends on ``<raw_table>``, whichever
+    location loads it (data_loading's dlt source, or lakehouse's Airbyte
+    connection). With ``automated``, it carries ``upstream_or_code_changes`` so
+    it runs after each load of its raw table, and a freshness policy that fails
+    at the unit's stale-keyset age; the history snapshot then runs on raw
+    changes instead (keyset_snapshot_upstream_or_code_changes).
+
+    :param max_age_hours: the unit's stale-keyset age (keyset tables.json).
+    :param automated: whether the keyset runs after every load here.
+    """
+
+    def __init__(self, *, max_age_hours: int, automated: bool) -> None:
+        super().__init__()
+        self._freshness_policy = FreshnessPolicy.time_window(
+            fail_window=timedelta(hours=max_age_hours)
+        )
+        self._automated = automated
+
+    def get_asset_spec(self, data: DltResourceTranslatorData) -> AssetSpec:
+        """Return the raw-data spec plus the raw table dep, and automation."""
+        spec = super().get_asset_spec(data)
+        raw_table = data.resource.name.removesuffix(keyset.KEYSET_SUFFIX)
+        spec = spec.replace_attributes(
+            deps=[AssetDep(AssetKey(["ol_warehouse_raw_data", raw_table]))]
+        )
+        if not self._automated:
+            return spec
+        return spec.replace_attributes(
+            automation_condition=upstream_or_code_changes(),
+            freshness_policy=self._freshness_policy,
+        )

@@ -51,6 +51,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__cms_programpage__keyset
+        keyset_lakes: []
   columns:
   - name: page_ptr_id
     description: >-
@@ -118,6 +120,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__courses_courserun__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -152,6 +156,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__courses_electivecourse__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -186,6 +192,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__courses_electivesset__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -220,6 +228,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__courses_program__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -287,6 +297,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__django_content_type__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -321,6 +333,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_coupon__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -355,6 +369,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_couponinvoice__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -389,6 +405,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_line__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -423,6 +441,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_order__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -457,6 +477,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_receipt__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -491,6 +513,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_redeemedcoupon__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -525,6 +549,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__ecommerce_usercoupon__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -559,6 +585,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__exams_examrun__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -593,6 +621,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__grades_combinedfinalgrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -627,6 +657,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__grades_finalgrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -661,6 +693,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__grades_micromasterscoursecertificate__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -730,6 +764,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__grades_proctoredexamgrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -764,6 +800,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__profiles_education__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -798,6 +836,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__profiles_employment__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -865,6 +905,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__social_auth_usersocialauth__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -899,6 +941,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__wagtailcore_page__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -933,6 +977,8 @@ snapshots:
         unit: micromasters/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__micromasters__app__postgres__wagtailimages_image__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-

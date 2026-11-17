@@ -19,6 +19,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__dj_elastictranscoder_encodejob__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -52,6 +54,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__ui_collection__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the ovs/app_postgres ui_collection record.
@@ -85,6 +89,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__ui_collectionedxendpoint__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -118,6 +124,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__ui_edxendpoint__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the ovs/app_postgres ui_edxendpoint record.
@@ -150,6 +158,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__ui_encodejob__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the ovs/app_postgres ui_encodejob record.
@@ -182,6 +192,8 @@ snapshots:
         unit: ovs/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__ovs__postgres__ui_video__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the ovs/app_postgres ui_video record.
