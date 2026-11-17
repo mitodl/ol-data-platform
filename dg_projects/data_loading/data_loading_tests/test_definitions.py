@@ -284,7 +284,8 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
     with _repository_for("production") as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert asset_keys, "code location exposed no assets under production"
-        assert not [key for key in asset_keys if "raw__mitxonline__app__" in key]
+        # The keyset tables are not Airbyte streams, so they collide with nothing.
+        assert not [key for key in asset_keys if _is_mitxonline_app_table(key)]
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
@@ -364,14 +365,6 @@ def test_mitxonline_app_keysets_load_unscheduled(environment: str) -> None:
         for schedule in repo.schedule_defs:
             selected = repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
             assert not {key.to_user_string() for key in selected} & keyset_keys
-
-
-def test_mitxonline_app_keysets_do_not_run_in_production() -> None:
-    """Production keysets read the replica, whose address is not exported yet."""
-    with _repository_for("production") as repo:
-        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
-        assert asset_keys, "code location exposed no assets under production"
-        assert not [key for key in asset_keys if key.endswith(keyset.KEYSET_SUFFIX)]
 
 
 @pytest.mark.parametrize("environment", sorted(XPRO_APP_DLT_ENVIRONMENTS))

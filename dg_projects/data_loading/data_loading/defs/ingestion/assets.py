@@ -343,11 +343,13 @@ qa_first_app_database_assets: dict[str, AssetsDefinition] = (
 # for now: the run after every load comes with the keyset automation (witan task
 # tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
 #
-# Production is absent because its keysets read the RDS read replica, and the
-# MITx Online stack does not export the replica's address yet
-# (tk-export-production-read-replica-addresses-for-the-d2d989).
-# MITXONLINE_APP_DB_HOST in production is the primary.
-MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+# Production reads the MITx Online RDS read replica: ol-infrastructure's Dagster
+# stack sets MITXONLINE_APP_DB_HOST to the app stack's rds_replica_host there.
+# The keyset tables have no Airbyte counterpart, so unlike mitxonline_app_assets
+# these keys do not collide with the lakehouse location's. Staging and the
+# history snapshots read a production keyset only once the unit's
+# history.keyset_lakes names production.
+MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa", "production"})
 MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
 
 mitxonline_app_keyset_assets = (
