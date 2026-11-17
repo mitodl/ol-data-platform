@@ -19,6 +19,8 @@ snapshots:
         unit: learn_ai/app_postgres
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__learn_ai__app__postgres__ai_chatbots_chatresponserating__keyset
+        keyset_lakes: []
   columns:
   - name: checkpoint_id
     description: >-

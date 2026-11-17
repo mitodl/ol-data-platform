@@ -568,6 +568,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__certificates_generatedcertificate__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -668,6 +670,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__course_overviews_courseoverview__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -733,6 +737,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__credit_crediteligibility__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: primary key of the mitx/mysql credit_crediteligibility record.
@@ -1112,6 +1118,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__grades_persistentcoursegrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1146,6 +1154,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__grades_persistentsubsectiongrade__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1180,6 +1190,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-
@@ -1630,6 +1642,8 @@ snapshots:
         unit: mitx/mysql
         absence: deleted
         delete_capture: keyset
+        keyset_table: raw__mitx__openedx__mysql__workflow_assessmentworkflow__keyset
+        keyset_lakes: []
   columns:
   - name: id
     description: >-

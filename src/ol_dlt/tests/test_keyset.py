@@ -41,6 +41,11 @@ def test_every_rendered_unit_has_a_spec() -> None:
     assert set(keyset.inventory_keyset_tables()) == set(KEYSET_SPECS)
 
 
+def test_every_rendered_unit_has_a_max_age() -> None:
+    for unit in keyset.inventory_keyset_tables():
+        assert keyset.inventory_keyset_max_age_hours(unit) > 0
+
+
 @pytest.mark.parametrize("unit", sorted(KEYSET_SPECS))
 def test_keyset_names_follow_the_inventory_raw_tables(unit: str) -> None:
     """Each keyset is named for the raw table the inventory declares, plus the suffix.

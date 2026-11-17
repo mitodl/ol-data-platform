@@ -521,5 +521,17 @@
         "key": "id"
       }
     ]
+  },
+  "max_age_hours": {
+    "learn_ai/app_postgres": 12,
+    "micromasters/app_postgres": 48,
+    "mitlearn/app_postgres": 48,
+    "mitx/mysql": 24,
+    "mitxonline/app_postgres": 12,
+    "mitxonline/mysql": 24,
+    "ocw/app_postgres": 12,
+    "ovs/app_postgres": 12,
+    "xpro/app_postgres": 12,
+    "xpro/mysql": 48
   }
 }

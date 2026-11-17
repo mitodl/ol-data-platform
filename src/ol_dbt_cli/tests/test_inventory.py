@@ -758,6 +758,12 @@ class TestKeysetTables:
         committed = REPO_ROOT / "src" / "ol_dlt" / "ol_dlt" / "keyset" / "tables.json"
         assert committed.read_text() == expected, "Run `ol-dbt inventory keysets --write`."
 
+    def test_keyset_max_age_is_two_production_intervals(self) -> None:
+        """The keyset assets' freshness window, as the delete filter's stale bound."""
+        rendered = json.loads(render_keyset_tables(load_units(REAL_INVENTORY)))
+        assert rendered["max_age_hours"].keys() == rendered["units"].keys()
+        assert rendered["max_age_hours"]["mitxonline/app_postgres"] == 12  # noqa: PLR2004
+
     def test_the_real_inventory_selects_bucket_1(self) -> None:
         """The 124 tables the 826b18 decision doc measured, plus courses_paidcourserun."""
         selected = keyset_tables(load_units(REAL_INVENTORY))
