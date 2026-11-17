@@ -14,9 +14,10 @@ with mitxonline_course_structure as (
     select * from {{ ref('stg__mitxresidential__openedx__api__course_structure') }}
 )
 
--- union all, not union distinct: each staging model keeps one row per block and retrieval, and the
--- platform literal keeps branches apart, so a distinct removes nothing. It still made StarRocks group
--- 22M rows on every column, block_metadata JSON included, which ran a CN out of memory.
+-- union all, not union distinct: the staging models already drop repeated blocks within a retrieval
+-- and the platform literal keeps branches apart, so the distinct removed no rows in production
+-- (2026-11-17). It made StarRocks group every row on every column, block_metadata JSON included,
+-- which ran QA's CN out of memory. The content_block_pk unique test flags a duplicate.
 , combined as (
     select
         'mitxonline' as platform
