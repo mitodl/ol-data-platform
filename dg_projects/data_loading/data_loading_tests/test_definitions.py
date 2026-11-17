@@ -626,13 +626,7 @@ def test_production_landing_zone_schedules_are_not_defined_in_qa(
 
 
 KEYSET_SENSOR = "mitxonline_app_keyset_automation_sensor"
-_MITXONLINE_APP_UNIT = (
-    Path(__file__).parents[3]
-    / "ingestion"
-    / "inventory"
-    / "units"
-    / "mitxonline__app_postgres.yml"
-)
+_INVENTORY_UNITS = Path(__file__).parents[3] / "ingestion" / "inventory" / "units"
 
 
 def _keyset_specs(repo: Any) -> dict[str, dg.AssetSpec]:
@@ -679,13 +673,22 @@ def test_production_keysets_are_not_automated_until_a_sweep_is_timed() -> None:
 
 
 def test_every_keyset_lake_runs_its_keysets_after_each_load() -> None:
-    """A lake in the unit's keyset_lakes needs automated keysets and their policy.
+    """A lake in any unit's keyset_lakes needs automated keysets and their policy.
 
     The lakehouse location starts that lake's history snapshots from the
     keyset, and from raw changes only while the keyset's freshness policy reads
     FAIL. With hand-run keysets and no policy, history would move only when
-    someone ran a keyset. The local lake has no Dagster deployment.
+    someone ran a keyset, and a unit whose keyset assets this location does not
+    define would leave its snapshots depending on assets nothing materializes.
+    The local lake has no Dagster deployment.
     """
-    unit = yaml.safe_load(_MITXONLINE_APP_UNIT.read_text())
-    lakes = set(unit["history"]["keyset_lakes"]) - {"local"}
-    assert lakes <= MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
+    declared: dict[str, set[str]] = {}
+    for path in sorted(_INVENTORY_UNITS.glob("*.yml")):
+        unit = yaml.safe_load(path.read_text())
+        # history and keyset_lakes are optional in the unit schema.
+        lakes = set((unit.get("history") or {}).get("keyset_lakes", [])) - {"local"}
+        if lakes:
+            declared[f"{unit['deployment']}/{unit['layer']}"] = lakes
+    assert set(declared) <= {MITXONLINE_APP_KEYSET_UNIT}
+    for lakes in declared.values():
+        assert lakes <= MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
