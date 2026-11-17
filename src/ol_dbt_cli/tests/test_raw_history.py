@@ -354,6 +354,14 @@ class TestValidation:
         data["history"] = {"keyset_lakes": ["staging"]}
         assert _errors(_validate(inventory, ("mitxonline__mysql", data)))
 
+    def test_keyset_lakes_with_a_composite_keyset_key_is_reported_not_raised(self, inventory: Path) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["history"] = {"keyset_lakes": ["qa"]}
+        data["tables"][0]["primary_key"] = [["id"], ["username"]]
+        errors = _errors(_validate(inventory, ("mitxonline__mysql", data)))
+        assert any("is not one column, which the keyset module cannot read" in message for message in errors)
+        assert not any("has no keyset tables" in message for message in errors)
+
     def test_declared_keyset_lakes_pass(self, inventory: Path) -> None:
         data = copy.deepcopy(DB_UNIT)
         data["history"] = {"keyset_lakes": ["qa"]}

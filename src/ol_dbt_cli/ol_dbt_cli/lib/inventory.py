@@ -543,14 +543,20 @@ def _check_history(unit: Unit, report: ValidationReport) -> None:
             report.add(
                 CHECK, Severity.ERROR, unit.key, f"history marker at {marker.get('at')} names unknown tables {unknown}"
             )
-    if keyset_lakes(unit) and not keyset_tables([unit]):
-        report.add(
-            CHECK,
-            Severity.ERROR,
-            unit.key,
-            "history.keyset_lakes is set but the unit has no keyset tables",
-            "Only a database unit's incremental_deduped_history tables in history scope get a keyset.",
-        )
+    if keyset_lakes(unit):
+        try:
+            has_keysets = bool(keyset_tables([unit]))
+        except RenderError as error:
+            report.add(CHECK, Severity.ERROR, unit.key, str(error))
+            has_keysets = True
+        if not has_keysets:
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                "history.keyset_lakes is set but the unit has no keyset tables",
+                "Only a database unit's incremental_deduped_history tables in history scope get a keyset.",
+            )
 
     for table in unit.tables:
         raw_table = table.get("raw_table", "")
