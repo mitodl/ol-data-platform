@@ -11,14 +11,10 @@
 #
 # Regenerate with: ol-dbt validate --update-qa-baseline
 
-mitx/course_structure raw__mitx__openedx__api__course_structure_blocks: empty
 mitx/mysql raw__mitx__openedx__mysql__courseware_studentmodulehistory: empty
-mitxonline/course_structure raw__mitxonline__openedx__api__course_structure_blocks: empty
-openedx/s3 raw__openedx__s3__course_xml_blocks: empty
 ovs/app_postgres raw__ovs__postgres__dj_elastictranscoder_encodejob: empty
 ovs/app_postgres raw__ovs__postgres__ui_collection: empty
 ovs/app_postgres raw__ovs__postgres__ui_collectionedxendpoint: empty
 ovs/app_postgres raw__ovs__postgres__ui_edxendpoint: empty
 ovs/app_postgres raw__ovs__postgres__ui_encodejob: empty
 ovs/app_postgres raw__ovs__postgres__ui_video: empty
-xpro/course_structure raw__xpro__openedx__api__course_structure_blocks: empty
