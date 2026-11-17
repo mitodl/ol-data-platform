@@ -334,6 +334,39 @@ def test_snapshots_append_and_daily_reports_merge() -> None:
 
 
 @pytest.mark.integration
+def test_change_time_loads_as_the_text_google_sent(
+    sqlite_iceberg_lake: Path, tmp_path: Path
+) -> None:
+    at = "2026-11-08 07:48:27.472871"
+    client = FakeClient(change_event_times=(at,))
+    table = "raw__google_ads__api__change_events"
+    pipeline = dlt.pipeline(
+        pipeline_name="google_ads_change_time_test",
+        destination=dlt.destinations.filesystem(
+            bucket_url=sqlite_iceberg_lake.as_uri()
+        ),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    source = google_ads.google_ads_source(
+        client_factory=lambda: client, today=TODAY
+    ).with_resources(table)
+    source.resources[table].apply_hints(table_format="iceberg")
+
+    pipeline.run(config.with_nullable_load_id(source))
+
+    column = pipeline.default_schema.get_table(table)["columns"][
+        "change_event__change_date_time"
+    ]
+    assert column["data_type"] == "text"
+    with pipeline.sql_client() as client_sql:
+        rows = client_sql.execute_sql(
+            f"SELECT change_event__change_date_time FROM {table}"  # noqa: S608
+        )
+    assert [r[0] for r in rows] == [at]
+
+
+@pytest.mark.integration
 def test_a_snapshot_is_taken_once_per_day(
     sqlite_iceberg_lake: Path, tmp_path: Path
 ) -> None:
