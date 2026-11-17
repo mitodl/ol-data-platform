@@ -5,9 +5,10 @@ with source as (
 select
     course as change_course
     , {{ adapter.quote('row_number') }} as change_row_number
-    -- The UI puts a narrow no-break space before AM/PM.
+    -- The UI puts a narrow no-break space (U+202F) before AM/PM. A literal, because
+    -- StarRocks' char() covers ASCII only.
     , {{ google_ads_local_to_utc(
-        date_parse("replace(date_time, " ~ codepoint_char(8239) ~ ", ' ')", "'%b %d, %Y, %I:%i:%s %p'")
+        date_parse("replace(date_time, ' ', ' ')", "'%b %d, %Y, %I:%i:%s %p'")
         , google_ads_default_time_zone()
     ) }}
     as change_at
