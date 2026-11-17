@@ -115,6 +115,21 @@ tables:
       courserun_fk: fixture-run-1
     - contract_fk: fixture-contract
       courserun_fk: fixture-run-2
+  bridge_contract_course:
+    columns:
+      contract_fk: string
+      course_fk: string
+      program_sort_order: long
+      course_order_in_program: long
+    rows:
+    - contract_fk: fixture-contract
+      course_fk: fixture-course-1
+      program_sort_order: 1
+      course_order_in_program: 1
+    - contract_fk: fixture-contract
+      course_fk: fixture-course-2
+      program_sort_order: 1
+      course_order_in_program: 2
   dim_user:
     columns:
       user_pk: string
