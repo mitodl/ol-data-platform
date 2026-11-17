@@ -18,6 +18,7 @@ import polars as pl
 import pytest
 from dagster import (
     AssetCheckSeverity,
+    AssetKey,
     AssetSelection,
     DagsterInstance,
     Definitions,
@@ -51,12 +52,15 @@ from ml.assets.learn_embeddings import (
 )
 from ml.lib import warehouse
 from ml.lib.learn_embeddings import (
+    LEARN_MODEL_ID,
     STRATEGIES_PATH,
     TOPICS_RELATION,
     known_vectors,
+    learn_vectors,
     strategies,
 )
 from ml.lib.learn_parity import CosineStats, LearnPoint, compare_with_learn
+from ml.resources.learn_vectors import LearnVectorsResource
 from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
     SAMPLE_RUNS_PER_SOURCE,
@@ -67,7 +71,7 @@ from ol_llm import LLMRejected, LLMUnavailable
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
-from ol_orchestrate.lib.embeddings.pipeline import chunk_key
+from ol_orchestrate.lib.embeddings.pipeline import StoredVector, chunk_key
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -249,6 +253,7 @@ def build_content_files(tables, dagster_instance: DagsterInstance | None = None)
         resources={
             "learn_embeddings_io_manager": Warehouse(tables),
             "embeddings": fake_embeddings(),
+            "learn_vectors": LearnVectorsResource(),
         },
         raise_on_error=False,
     )
@@ -491,6 +496,7 @@ def test_topic_point_id_is_the_topic_uuid(tables):
             resources={
                 "io_manager": Warehouse(tables),
                 "embeddings": fake_embeddings(),
+                "learn_vectors": LearnVectorsResource(),
             },
         )
 
@@ -1074,6 +1080,8 @@ def check_content_files(
     tables,
     selection: AssetSelection | None = None,
     partition: MultiPartitionKey = PARTITION,
+    *,
+    take_learns_vectors: bool = False,
 ) -> Any:
     dagster_instance = DagsterInstance.ephemeral()
     dagster_instance.add_dynamic_partitions(
@@ -1090,6 +1098,10 @@ def check_content_files(
         resources={
             "learn_embeddings_io_manager": Warehouse(tables),
             "embeddings": fake_embeddings(),
+            # Off by default, so the checks compare the platform's own vectors.
+            "learn_vectors": LearnVectorsResource(
+                qdrant=fake_qdrant() if take_learns_vectors else None
+            ),
             "learn_qdrant": fake_qdrant(),
         },
         selection=selection,
@@ -1494,6 +1506,7 @@ def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):
         resources={
             "io_manager": Warehouse(tables),
             "embeddings": fake_embeddings(),
+            "learn_vectors": LearnVectorsResource(),
             "learn_qdrant": fake_qdrant(),
         },
     )
@@ -1510,6 +1523,213 @@ def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):
     assert "checksum_matches" not in metadata
 
 
+# ------------------------------------------------------------ vectors from Learn
+class UnreachableQdrant(QdrantResource):
+    def get_client(self) -> QdrantClient:
+        msg = "Learn's cluster is unreachable"
+        raise ConnectionError(msg)
+
+
+def build_taking_learns_vectors(
+    tables, dagster_instance=None, qdrant: QdrantResource | None = None
+) -> Any:
+    return materialize(
+        [content_file_embedding_chunks, content_file_embedding_vectors],
+        partition_key=PARTITION,
+        instance=dagster_instance or instance(),
+        resources={
+            "learn_embeddings_io_manager": Warehouse(tables),
+            "embeddings": fake_embeddings(),
+            "learn_vectors": LearnVectorsResource(qdrant=qdrant or fake_qdrant()),
+        },
+        raise_on_error=False,
+    )
+
+
+def unreachable_qdrant() -> UnreachableQdrant:
+    return UnreachableQdrant(
+        vault=Vault(vault_addr="https://vault.example.com", vault_auth_type="token"),
+        vault_path="pipelines/qdrant",
+        base_collection_name=LEARN_BASE,
+    )
+
+
+def vectors_metadata(result: Any, key: AssetKey) -> dict[str, Any]:
+    (materialization,) = result.asset_materializations_for_node(
+        key.to_python_identifier()
+    )
+    return {name: value.value for name, value in materialization.metadata.items()}
+
+
+def test_a_text_learn_embedded_is_taken_from_learn(tables, calls, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file.", skew=0.5),
+            # Learn loaded b before it changed, so its point has other text.
+            learn_chunk("block-v1:b", "Second, as it was.", skew=0.5),
+        ],
+    )
+
+    result = build_taking_learns_vectors(tables)
+
+    assert calls == [["Second."]]
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    taken = vectors.filter(pl.col("input_checksum") == md5_hex("First file."))
+    assert taken["model_id"].to_list() == [LEARN_MODEL_ID]
+    # Learn's vector as its cosine collection stores it, normalized.
+    learns = fake_vector("First file.", skew=0.5)
+    norm = math.sqrt(sum(value * value for value in learns))
+    assert taken["vector"][0].to_list() == pytest.approx(
+        [value / norm for value in learns], abs=1e-6
+    )
+    embedded = vectors.filter(pl.col("input_checksum") == md5_hex("Second."))
+    assert embedded["model_id"].to_list() == [AZURE_MODEL]
+    metadata = vectors_metadata(result, CONTENT_FILE_VECTORS_KEY)
+    assert metadata["learn_v1_content_files/imported_texts"] == 1
+    assert metadata["learn_v1_content_files/reused_texts"] == 1
+    assert metadata["learn_v1_content_files/embedded_texts"] == 1
+
+
+def test_a_stored_vector_is_not_read_from_learn_again(tables, calls, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files", [learn_chunk("block-v1:a", "First file.")]
+    )
+    dagster_instance = instance()
+    assert build_taking_learns_vectors(tables, dagster_instance).success
+    first = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+
+    # Making a client for Learn's cluster would now fail the run.
+    result = build_taking_learns_vectors(
+        tables, dagster_instance, qdrant=unreachable_qdrant()
+    )
+
+    assert result.success
+    assert calls == []
+    assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].equals(first)
+    metadata = vectors_metadata(result, CONTENT_FILE_VECTORS_KEY)
+    assert metadata["learn_v1_content_files/imported_texts"] == 0
+
+
+def test_an_unreachable_learn_fails_the_run_before_embedding(tables, calls):
+    load_sources(tables, **{"block-v1:a": "First file."})
+
+    result = build_taking_learns_vectors(tables, qdrant=unreachable_qdrant())
+
+    assert not result.success
+    (failure,) = result.get_step_failure_events()
+    assert failure.step_key == CONTENT_FILE_VECTORS_KEY.to_python_identifier()
+    cause = failure.step_failure_data.error.cause
+    assert cause is not None
+    assert cause.cls_name == "ConnectionError"
+    assert "Learn's cluster is unreachable" in cause.message
+    # Nothing is embedded in Learn's place: that would pay for its texts.
+    assert calls == []
+    assert CONTENT_FILE_VECTORS_KEY.path[-1] not in tables
+
+
+def test_a_learn_point_without_a_vector_is_embedded(tables, calls, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file."})
+    point = learn_chunk("block-v1:a", "First file.")
+    # Learn writes a point whose text embedded to zeros with no vectors.
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [models.PointStruct(id=point.id, vector={}, payload=point.payload)],
+    )
+
+    assert build_taking_learns_vectors(tables).success
+
+    assert calls == [["First file."]]
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert vectors["model_id"].to_list() == [AZURE_MODEL]
+
+
+def test_a_topic_learn_embedded_is_taken_from_learn(tables, calls, learn_qdrant):
+    tables[TOPICS_RELATION] = pl.DataFrame(
+        [
+            {
+                "learningresourcetopic_id": 1,
+                "learningresourcetopic_name": "Calculus",
+                "learningresourcetopic_parent_id": None,
+                "learningresourcetopic_uuid": TOPIC_UUID,
+            }
+        ]
+    )
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.topics",
+        [
+            models.PointStruct(
+                id=TOPIC_UUID,
+                vector={DENSE: fake_vector("Calculus", skew=0.5)},
+                payload={"name": "Calculus"},
+            )
+        ],
+    )
+
+    result = materialize(
+        [topic_embedding_chunks, topic_embedding_vectors],
+        resources={
+            "io_manager": Warehouse(tables),
+            "embeddings": fake_embeddings(),
+            "learn_vectors": LearnVectorsResource(qdrant=fake_qdrant()),
+        },
+    )
+
+    assert result.success
+    assert calls == []
+    vectors = tables[TOPIC_VECTORS_KEY.path[-1]]
+    assert vectors["model_id"].to_list() == [LEARN_MODEL_ID]
+    metadata = vectors_metadata(result, TOPIC_VECTORS_KEY)
+    assert metadata["learn_v1_topics/imported_texts"] == 1
+
+
+def test_the_check_passes_on_vectors_taken_from_learn(tables, calls, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file.", skew=0.5),
+            learn_chunk("block-v1:b", "Second.", skew=0.5),
+        ],
+    )
+
+    evaluation = check_content_files(tables, take_learns_vectors=True)
+
+    assert calls == []
+    assert evaluation.passed
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert metadata["compared_vectors"] == 2
+    assert metadata[f"{LEARN_MODEL_ID}/compared_vectors"] == 2
+    assert metadata[f"{LEARN_MODEL_ID}/cosine_min"] == pytest.approx(1.0)
+
+
+def test_learn_vectors_reads_only_until_a_checksum_is_found():
+    matching = LearnPoint(text="Shared.", checksum=None, vector=[1.0, 0.0])
+    reads: list[list[str]] = []
+
+    def fetch(ids):
+        reads.append(list(ids))
+        points = {
+            "p1": matching,
+            "p2": matching,
+            "p3": LearnPoint(text="Shared.", checksum=None, vector=[1.0]),
+        }
+        return {point_id: points[point_id] for point_id in ids if point_id in points}
+
+    found = learn_vectors(
+        fetch,
+        {md5_hex("Shared."): ["p1", "p2"], md5_hex("Other."): ["p1", "p3"]},
+        vector_length=2,
+        batch_size=1,
+    )
+
+    # p1's text is not "Other.", and p3's vector is the wrong length.
+    assert found == {md5_hex("Shared."): StoredVector([1.0, 0.0], LEARN_MODEL_ID)}
+    assert reads == [["p1"], ["p3"], ["p1"]]
+
+
 # ------------------------------------------------------------------- definitions
 @pytest.mark.parametrize("dagster_env", ["dev", "qa"])
 def test_learn_embedding_definitions_load(dagster_env, monkeypatch):
@@ -1517,9 +1737,15 @@ def test_learn_embedding_definitions_load(dagster_env, monkeypatch):
     vault = Vault(vault_addr="https://vault.example.com", vault_auth_type="token")
     resources, checks = learn_parity_definitions(vault, dagster_env)
 
-    # Dev has no Learn cluster, so its vector builds run without the checks.
+    # Dev has no Learn cluster, so its vector builds run without the checks and
+    # take no vectors from Learn.
     assert len(checks) == (0 if dagster_env == "dev" else 2)
-    assert set(resources) == (set() if dagster_env == "dev" else {"learn_qdrant"})
+    assert set(resources) == (
+        {"learn_vectors"} if dagster_env == "dev" else {"learn_qdrant", "learn_vectors"}
+    )
+    learn_vectors = resources["learn_vectors"]
+    assert isinstance(learn_vectors, LearnVectorsResource)
+    assert (learn_vectors.qdrant is None) == (dagster_env == "dev")
     definitions = Definitions(
         assets=[
             learn_content_file_text,

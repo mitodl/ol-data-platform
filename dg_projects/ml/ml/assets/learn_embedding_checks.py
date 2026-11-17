@@ -29,6 +29,7 @@ from dagster import (
     AssetCheckResult,
     AssetChecksDefinition,
     AssetCheckSeverity,
+    ConfigurableResource,
     MetadataValue,
     asset_check,
 )
@@ -44,6 +45,7 @@ from ml.assets.learn_embeddings import (
 from ml.lib.learn_embeddings import (
     CHUNK_SCHEMA,
     CONTENT_FILE_SOURCES,
+    LEARN_MODEL_ID,
     VECTOR_SCHEMA,
     strategies,
 )
@@ -58,10 +60,10 @@ from ml.lib.learn_parity import (
     scroll_point_ids,
 )
 from ml.lib.warehouse import require_rows, require_table
+from ml.resources.learn_vectors import LearnVectorsResource
 from ol_orchestrate.lib.embeddings.learn import (
     LEARN_CONTENT_FILES_COLLECTION,
     LEARN_TOPICS_COLLECTION,
-    LEARN_V1_CONTENT_FILES,
 )
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import QdrantResource
@@ -69,8 +71,6 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 LEARN_V1_CONTENT_FILES_ID = "learn_v1_content_files"
 LEARN_V1_TOPICS_ID = "learn_v1_topics"
-# The model Learn's own vectors come from; a platform row of it was imported.
-LEARN_MODEL_ID = LEARN_V1_CONTENT_FILES.model.model_id
 
 
 def platform_chunks(
@@ -332,29 +332,33 @@ def topic_vectors_match_learn(learn_qdrant: QdrantResource) -> AssetCheckResult:
 
 def learn_parity_definitions(
     vault: Vault, dagster_env: str
-) -> tuple[dict[str, QdrantResource], list[AssetChecksDefinition]]:
-    """Return the ``learn_qdrant`` resource and the checks, for deployed envs.
+) -> tuple[dict[str, ConfigurableResource], list[AssetChecksDefinition]]:
+    """Return the resources that read Learn's cluster, and the checks.
 
     The checks run with every build of the vector assets, so where they are
-    defined their resource must resolve. Dev has no Learn cluster, so it gets
-    neither, and its builds run without the checks. A deployed env without
-    ``LEARN_QDRANT_COLLECTION_BASE`` fails here, when the code location loads.
+    defined their resource must resolve. Dev has no Learn cluster, so it gets no
+    checks and a ``learn_vectors`` with no client, and its builds embed every
+    new text. A deployed env without ``LEARN_QDRANT_COLLECTION_BASE`` fails here,
+    when the code location loads.
 
     :param vault: the Vault resource the Qdrant credentials are read with
     :param dagster_env: ``dev``, ``qa`` or ``production``
     :returns: the resources by key, and the checks
-    :rtype: tuple[dict[str, QdrantResource], list[AssetChecksDefinition]]
+    :rtype: tuple[dict[str, ConfigurableResource], list[AssetChecksDefinition]]
     :raises KeyError: outside dev, when LEARN_QDRANT_COLLECTION_BASE is unset
     """
     if dagster_env == "dev":
-        return {}, []
+        return {"learn_vectors": LearnVectorsResource()}, []
     learn_qdrant = QdrantResource(
         vault=vault,
         vault_path="pipelines/qdrant",
         # e.g. mitlearn-production
         base_collection_name=os.environ["LEARN_QDRANT_COLLECTION_BASE"],
     )
-    return {"learn_qdrant": learn_qdrant}, [
+    return {
+        "learn_qdrant": learn_qdrant,
+        "learn_vectors": LearnVectorsResource(qdrant=learn_qdrant),
+    }, [
         content_file_vectors_match_learn,
         topic_vectors_match_learn,
     ]
