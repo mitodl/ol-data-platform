@@ -614,11 +614,11 @@ def test_a_rerun_reads_no_sibling_vectors(tables, calls, monkeypatch):
     dagster_instance = instance()
     assert build_content_files(tables, dagster_instance).success
     calls.clear()
-    keys_read: list[str] = []
+    keys_read: list[list[str]] = []
     read_by_key = warehouse.load_rows_by_key
 
     def spy(*args, **kwargs):
-        keys_read.append(args[3])
+        keys_read.append(list(args[4]))
         return read_by_key(*args, **kwargs)
 
     monkeypatch.setattr(warehouse, "load_rows_by_key", spy)
