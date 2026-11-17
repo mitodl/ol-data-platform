@@ -183,11 +183,11 @@ CHANGE_EVENT_RESOURCE_TYPES = (
 )
 # The account's local time with no offset. Text, or dlt's iso_timestamp detection
 # loads it as a UTC timestamp; staging converts it with the account's time zone.
-LOCAL_TIME_COLUMNS: dict[str, tuple[str, ...]] = {
-    "raw__google_ads__api__change_events": ("change_event__change_date_time",),
+LOCAL_TIME_FIELDS: dict[str, tuple[str, ...]] = {
+    "raw__google_ads__api__change_events": ("change_event.change_date_time",),
     "raw__google_ads__api__campaign_snapshots": (
-        "campaign__start_date_time",
-        "campaign__end_date_time",
+        "campaign.start_date_time",
+        "campaign.end_date_time",
     ),
 }
 
@@ -458,8 +458,8 @@ def google_ads_source(
             "table_format": table_format,
             "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
             "columns": {
-                column: {"data_type": "text"}
-                for column in LOCAL_TIME_COLUMNS.get(name, ())
+                column_name(field): {"data_type": "text"}
+                for field in LOCAL_TIME_FIELDS.get(name, ())
             },
         }
 
