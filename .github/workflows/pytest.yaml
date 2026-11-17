@@ -17,6 +17,11 @@ on:
     - "src/ol_superset/**"
     - "src/ol_dbt/macros/_raw_metadata_columns.sql"
     - "src/ol_dbt/openmetadata_domains.yml"
+    # Read by ol_dbt_cli's test_dimensional_fixtures.py.
+    - "src/ol_dbt/models/b2b_analytics/**"
+    - "src/ol_dbt/models/b2b_learner_records/**"
+    - "src/ol_dbt/macros/b2b_engagement.sql"
+    - "src/ol_dbt/fixtures/**"
     - "contracts/**"
     - "dg_projects/**"
     - "ingestion/inventory/**"
@@ -34,6 +39,11 @@ on:
     - "src/ol_superset/**"
     - "src/ol_dbt/macros/_raw_metadata_columns.sql"
     - "src/ol_dbt/openmetadata_domains.yml"
+    # Read by ol_dbt_cli's test_dimensional_fixtures.py.
+    - "src/ol_dbt/models/b2b_analytics/**"
+    - "src/ol_dbt/models/b2b_learner_records/**"
+    - "src/ol_dbt/macros/b2b_engagement.sql"
+    - "src/ol_dbt/fixtures/**"
     - "contracts/**"
     - "dg_projects/**"
     - "ingestion/inventory/**"
