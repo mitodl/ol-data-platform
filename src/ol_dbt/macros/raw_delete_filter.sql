@@ -17,7 +17,13 @@
     var('raw_keyset_trust_margin_minutes', 60): such a row existed when the
     keyset was read, and the margin covers replica lag and clock skew. Inside
     the margin a delete waits one load; it is never recorded falsely.
-    - no keyset table yet (the unit's keysets are not running): no filter.
+    - a lake not in the table's keyset_lakes (the unit's `history.keyset_lakes`,
+      where its keysets run): no filter. The lake decides this rather than a
+      lookup of the keyset table, because dbt does not cache source schemas, so
+      a lookup lists the whole raw schema for every model. On StarRocks that
+      took 8-10 s per model on QA's 2,744 raw tables (2026-11-17).
+    - a lake in keyset_lakes whose keyset table is missing: the build fails on
+      the missing table.
     - an empty keyset: raises, since every key would read as deleted.
     - a keyset older than its max_age_hours (two load intervals): still
       applied, and logged. Every key it lacks was deleted before it was read,
@@ -46,15 +52,11 @@
         {{ return(loader_time ~ " = (select max(" ~ loader_time ~ ") from " ~ relation ~ ")") }}
     {%- endif -%}
 
-    {%- set keyset = adapter.get_relation(
-        database=relation.database,
-        schema=relation.schema,
-        identifier=relation.identifier ~ '__keyset'
-    ) -%}
-    {%- if keyset is none -%}
-        {{ log("raw_delete_filter " ~ raw_table ~ ": no keyset table yet, so deletes are not filtered", info=true) }}
+    {%- if raw_data_lake() not in spec['keyset_lakes'] -%}
+        {{ log("raw_delete_filter " ~ raw_table ~ ": no keyset in the " ~ raw_data_lake() ~ " lake, so deletes are not filtered", info=true) }}
         {{ return(none) }}
     {%- endif -%}
+    {%- set keyset = relation.incorporate(path={'identifier': relation.identifier ~ '__keyset'}) -%}
     {%- if flags.WHICH in ['snapshot', 'build', 'run'] -%}
         {%- set check_sql -%}
             select

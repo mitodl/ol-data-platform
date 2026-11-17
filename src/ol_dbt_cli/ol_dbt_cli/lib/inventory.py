@@ -543,6 +543,14 @@ def _check_history(unit: Unit, report: ValidationReport) -> None:
             report.add(
                 CHECK, Severity.ERROR, unit.key, f"history marker at {marker.get('at')} names unknown tables {unknown}"
             )
+    if keyset_lakes(unit) and not keyset_tables([unit]):
+        report.add(
+            CHECK,
+            Severity.ERROR,
+            unit.key,
+            "history.keyset_lakes is set but the unit has no keyset tables",
+            "Only a database unit's incremental_deduped_history tables in history scope get a keyset.",
+        )
 
     for table in unit.tables:
         raw_table = table.get("raw_table", "")
@@ -1179,6 +1187,12 @@ def history_absence(unit: Unit) -> str | None:
     if isinstance(declared, str):
         return declared
     return "deleted" if unit.data.get("layer") in DATABASE_LAYERS else None
+
+
+def keyset_lakes(unit: Unit) -> list[str]:
+    """Return the lakes whose raw schema carries the unit's keyset tables."""
+    history = unit.data.get("history")
+    return list(history.get("keyset_lakes", [])) if isinstance(history, dict) else []
 
 
 def _cut_over_to_dlt_replace(unit: Unit) -> bool:

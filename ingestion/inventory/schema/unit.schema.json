@@ -76,6 +76,12 @@
           "default": false,
           "description": "True builds the unit's snapshots; false generates them disabled. History is rolled out a unit at a time, and a unit's snapshots have to run on its Airbyte tables for at least one load before its dlt cutover. A table's own `history.live` wins."
         },
+        "keyset_lakes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["production", "qa", "local"]},
+          "description": "The lakes whose raw schema carries this unit's keyset tables (`<raw_table>__keyset`, written by ol_dlt.keyset). raw_delete_filter reads the keyset in these lakes, and fails the build if it is missing or empty there, and filters nothing in the others. Add a lake once its keyset assets run there."
+        },
         "markers": {
           "type": "array",
           "description": "Times at which a loader cutover or a source schema change wrote extra versions of every row, so reports can discount versions starting then. Copied into each snapshot's meta.",

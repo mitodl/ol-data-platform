@@ -23,6 +23,12 @@ loader: airbyte
 # which compiles against either loader and stays correct after the cutover.
 raw_metadata_column:
 table_prefix: raw__mitxonline__app__postgres__
+# The mitxonline_app_keyset assets (data_loading) write the keysets in QA. Not
+# production yet: there they have to read the RDS read replica, which the MITx
+# Online stack does not export. Local is left out until a local keyset run is
+# confirmed.
+history:
+  keyset_lakes: [qa]
 # Loads QA and the local lake. Production is still the Airbyte connection below.
 dlt:
   source_module: ol_dlt.sources.mitxonline_app
