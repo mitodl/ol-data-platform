@@ -3284,7 +3284,7 @@ unit_tests:
     rows: []
   # Empty, but typed: an empty dict fixture makes event_timestamp VARCHAR.
   # current_timestamp is the zoned type on Trino and DuckDB and DATETIME on
-  # StarRocks, which has no timestamp type. A sql fixture cannot call a project
+  # StarRocks, which has no zoned type. A sql fixture cannot call a project
   # macro such as null_timestamptz.
   - input: ref('tfact_studentmodule_problems')
     format: sql
@@ -3320,7 +3320,8 @@ unit_tests:
     - platform_pk: "PLATFORM_EDXORG"
       platform_readable_id: "edxorg"
   # sql format so event_timestamp is a timestamp; a dict fixture infers VARCHAR here.
-  # The value is irrelevant: both rows sit at or below the watermark they set.
+  # Neither timestamp value matters: both rows sit at or below the watermark they
+  # set, and the model passes event_timestamp_iso8601 through unread.
   - input: this
     format: sql
     rows: |
