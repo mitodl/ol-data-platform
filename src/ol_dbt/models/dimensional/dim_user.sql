@@ -978,6 +978,74 @@ with mitx_users as (
     where address_row_num = 1
 )
 
+-- A blank demographic on the base row is filled from the person's other accounts, in the
+-- order Learn, MITx Online, then every other source (id_source_rank), newest first within
+-- one. This ranking is separate from row_num so the base row and the address don't move.
+-- A value the base row has is never replaced.
+, ranked_fill as (
+    select
+        user_pk
+        , address_country
+        , highest_education
+        , gender
+        , birth_year
+        , company
+        , job_title
+        , industry
+        , coalesce(
+            nullif(trim(company), '')
+            , nullif(trim(job_title), '')
+            , nullif(trim(industry), '')
+        ) is not null as has_employment
+        , row_number() over (
+            partition by user_pk
+            order by id_source_rank asc nulls last, row_num asc
+        ) as fill_rank
+    from ranked_users
+)
+
+-- One column at a time. The key is nulled on rows without a value, as for agg_full_name.
+, fill_view as (
+    select
+        user_pk
+        , min_by(
+            nullif(trim(address_country), ''), case when nullif(trim(address_country), '') is not null then fill_rank end
+        ) as fill_address_country
+        , min_by(
+            nullif(trim(highest_education), ''), case when nullif(trim(highest_education), '') is not null then fill_rank end
+        ) as fill_highest_education
+        , min_by(
+            nullif(trim(gender), ''), case when nullif(trim(gender), '') is not null then fill_rank end
+        ) as fill_gender
+        , min_by(birth_year, case when birth_year is not null then fill_rank end) as fill_birth_year
+    from ranked_fill
+    group by user_pk
+)
+
+-- Company, job title and industry describe one job, so they come together from the first
+-- account that has any of them. Take one row rather than min_by per column, which skips
+-- NULLs on DuckDB and would fill each from a different account.
+, ranked_employment as (
+    select
+        user_pk
+        , company
+        , job_title
+        , industry
+        , row_number() over (partition by user_pk order by fill_rank asc) as employment_row_num
+    from ranked_fill
+    where has_employment
+)
+
+, employment_view as (
+    select
+        user_pk
+        , nullif(trim(company), '') as company
+        , nullif(trim(job_title), '') as job_title
+        , nullif(trim(industry), '') as industry
+    from ranked_employment
+    where employment_row_num = 1
+)
+
 select
     base.user_pk
     -- Reported as the platform. The key still hashes the two mitxonline id namespaces
@@ -1007,13 +1075,18 @@ select
     , agg.micromasters_user_id
     , base.email
     , coalesce(nullif(trim(base.full_name), ''), agg.agg_full_name) as full_name
-    , base.address_country
-    , base.highest_education
-    , base.gender
-    , base.birth_year
-    , base.company
-    , base.job_title
-    , base.industry
+    -- A case, not coalesce(nullif(trim(...))), so a value the base row has comes out as is.
+    , case
+        when nullif(trim(base.address_country), '') is null then fill_view.fill_address_country else base.address_country
+    end as address_country
+    , case
+        when nullif(trim(base.highest_education), '') is null then fill_view.fill_highest_education else base.highest_education
+    end as highest_education
+    , case when nullif(trim(base.gender), '') is null then fill_view.fill_gender else base.gender end as gender
+    , coalesce(base.birth_year, fill_view.fill_birth_year) as birth_year
+    , case when nullif(trim(base.company), '') is null then employment_view.company else base.company end as company
+    , case when nullif(trim(base.job_title), '') is null then employment_view.job_title else base.job_title end as job_title
+    , case when nullif(trim(base.industry), '') is null then employment_view.industry else base.industry end as industry
     , coalesce(base.address_state, agg.agg_address_state) as address_state
     , address_view.user_street_address
     , address_view.user_address_city
@@ -1042,6 +1115,8 @@ select
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join address_view on base.user_pk = address_view.user_pk
+left join fill_view on base.user_pk = fill_view.user_pk
+left join employment_view on base.user_pk = employment_view.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
 left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
 left join latest_income on agg.mitxonline_application_user_id = latest_income.user_id
