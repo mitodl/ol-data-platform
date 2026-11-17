@@ -187,18 +187,26 @@ QA_FIRST_APP_DATABASE_CRONS = {
     "mitlearn_app": "10 5 * * *",  # mitlearn/app_postgres, 24h
     "learn_ai_app": "30 */6 * * *",  # learn_ai/app_postgres, 6h
     "ocw_studio_app": "50 */6 * * *",  # ocw/app_postgres, 6h
+    "micromasters_app": "25 5 * * *",  # micromasters/app_postgres, 24h
     "mitx_edxapp": "15 */12 * * *",  # mitx/mysql, 12h
     "xpro_edxapp": "35 */12 * * *",  # xpro/mysql, 12h (history: 24h)
     "mitxonline_edxapp": "55 */12 * * *",  # mitxonline/mysql, 12h
 }
 # Defined only where the assets are (QA_FIRST_APP_DATABASE_ENVIRONMENTS), and
-# selected by definition so a table added to a spec needs no edit here.
+# selected by definition so a table added to a spec needs no edit here. RUNNING
+# by default in QA, so a newly added unit loads without someone starting its
+# schedule by hand; CI stays STOPPED.
 qa_first_app_database_schedules = [
     dg.ScheduleDefinition(
         name=f"{name}_ingest_schedule",
         target=dg.AssetSelection.assets(assets),
         cron_schedule=QA_FIRST_APP_DATABASE_CRONS[name],
         execution_timezone="Etc/UTC",
+        default_status=(
+            dg.DefaultScheduleStatus.RUNNING
+            if DAGSTER_ENV == "qa"
+            else dg.DefaultScheduleStatus.STOPPED
+        ),
     )
     for name, assets in qa_first_app_database_assets.items()
 ]

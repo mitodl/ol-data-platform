@@ -10,6 +10,11 @@ strategies:
   local: fixture
 loader: airbyte
 table_prefix: raw__micromasters__app__postgres__
+# Loads QA, so QA staging dedups on dlt's column. Production is still the
+# Airbyte connection below.
+dlt:
+  source_module: ol_dlt.sources.micromasters_app
+  write_disposition: replace
 airbyte:
   source_kind: source-postgres
   replication_method: xmin
@@ -65,6 +70,9 @@ tables:
   namespace: public
   primary_key:
   - - id
+  # micromasters_app (QA) excludes it; production Airbyte still syncs it.
+  excluded_columns:
+  - password
   modeled: true
 - name: cms_programpage
   raw_table: raw__micromasters__app__postgres__cms_programpage
@@ -320,7 +328,11 @@ tables:
   modeled: true
   # extra_data is python-social-auth's JSON, and in production it holds
   # access_token and refresh_token (257,406 rows, read 2026-11-10). No column
-  # name pattern catches it.
+  # name pattern catches it. micromasters_app (QA) excludes it too. The
+  # production Airbyte connection still syncs it: nothing applies
+  # excluded_columns to Airbyte.
+  excluded_columns:
+  - extra_data
   history:
     exclude_columns:
     - extra_data
