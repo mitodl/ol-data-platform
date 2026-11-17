@@ -14,6 +14,9 @@ with mitxonline_course_structure as (
     select * from {{ ref('stg__mitxresidential__openedx__api__course_structure') }}
 )
 
+-- union all, not union distinct: each staging model keeps one row per block and retrieval, and the
+-- platform literal keeps branches apart, so a distinct removes nothing. It still made StarRocks group
+-- 22M rows on every column, block_metadata JSON included, which ran a CN out of memory.
 , combined as (
     select
         'mitxonline' as platform
@@ -27,7 +30,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from mitxonline_course_structure
 
-    union distinct
+    union all
 
     select
         'edxorg' as platform
@@ -41,7 +44,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from edxorg_course_structure
 
-    union distinct
+    union all
 
     select
         'mitxpro' as platform
@@ -55,7 +58,7 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from xpro_course_structure
 
-    union distinct
+    union all
 
     select
         'residential' as platform
