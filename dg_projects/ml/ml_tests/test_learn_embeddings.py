@@ -625,8 +625,9 @@ def test_a_rerun_reads_no_sibling_vectors(tables, calls, monkeypatch):
     assert build_content_files(tables, dagster_instance).success
 
     assert calls == []
-    # Only the siblings' checksum index; every text is in the run's own rows.
-    assert keys_read == ["run_readable_id"]
+    # Every text is in the run's own rows, so no sibling is read, not even the
+    # checksum index.
+    assert keys_read == []
 
 
 def test_sibling_runs_are_the_runs_of_the_resource():

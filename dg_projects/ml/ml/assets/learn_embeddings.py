@@ -19,7 +19,7 @@ a separate step.
 
 from collections.abc import Callable, Collection, Iterable
 from datetime import UTC, datetime
-from functools import partial
+from functools import cache, partial
 
 import polars as pl
 from dagster import (
@@ -551,16 +551,22 @@ def content_file_embedding_vectors(
     # A text shared only with another course is taken from Learn or embedded
     # again.
     vectors_table = CONTENT_FILE_VECTORS_KEY.path[-1]
-    index = read_rows_by_key(
-        LAYER,
-        vectors_table,
-        ["run_readable_id", "vector_space", "input_checksum"],
-        "run_readable_id",
-        siblings,
-        etl_source=etl_source,
-    )
-
+    others = [sibling for sibling in siblings if sibling != run]
     stored = read_rows(LAYER, vectors_table, VECTOR_SCHEMA.names(), **in_partition)
+
+    @cache
+    def sibling_index() -> pl.DataFrame | None:
+        # Read once, and only when a text is missing from the run's own rows.
+        if not others:
+            return None
+        return read_rows_by_key(
+            LAYER,
+            vectors_table,
+            ["run_readable_id", "vector_space", "input_checksum"],
+            "run_readable_id",
+            others,
+            etl_source=etl_source,
+        )
 
     def stored_lookup(
         vector_space: str, checksums: Iterable[str]
@@ -574,10 +580,10 @@ def content_file_embedding_vectors(
             else {}
         )
         missing = wanted_all - found.keys()
-        if index is None or not missing:
+        index = sibling_index() if missing else None
+        if index is None:
             return found
-        others = index.filter(pl.col("run_readable_id") != run)
-        for sibling, wanted in sibling_reads(others, vector_space, missing).items():
+        for sibling, wanted in sibling_reads(index, vector_space, missing).items():
             rows = read_rows_by_key(
                 LAYER,
                 vectors_table,
