@@ -27,11 +27,17 @@ tables:
   primary_key:
   - - course
   - - row_number
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: A one-time load of files that do not change.
 - name: raw__google_ads__s3__change_history_api
   raw_table: raw__google_ads__s3__change_history_api
   sync_mode: full_refresh_overwrite
   primary_key:
   - - course
   - - line_number
-  modeled: false
+  modeled: true
+  history:
+    in_scope: false
+    reason: A one-time load of files that do not change.
