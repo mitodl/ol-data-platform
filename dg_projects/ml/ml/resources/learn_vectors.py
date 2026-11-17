@@ -9,7 +9,6 @@ resource there has no client and the vector assets embed every new text.
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from functools import partial
 
 from dagster import ConfigurableResource
 from ml.lib.learn_parity import LearnPoint, retrieve_points
@@ -31,17 +30,28 @@ class LearnVectorsResource(ConfigurableResource[None]):
     def fetch(self, target: QdrantTarget, text_field: str) -> PointFetch | None:
         """Return a reader of a Learn collection's points by id, ``None`` in dev.
 
+        The client, and the Vault read behind it, is made on the first read, so a
+        run with no text to look up never touches Learn's cluster. A failed read
+        raises and fails the run before anything is embedded: falling back to the
+        model would pay to embed the texts Learn already has, which is most of
+        them.
+
         :param target: Learn's collection, e.g. ``LEARN_CONTENT_FILES_COLLECTION``
         :param text_field: the payload key of the text Learn embedded
         :rtype: PointFetch | None
         """
-        if self.qdrant is None:
+        qdrant = self.qdrant
+        if qdrant is None:
             return None
-        return partial(
-            retrieve_points,
-            self.qdrant.get_client(),
-            self.qdrant.collection_name(target),
-            text_field=text_field,
-            checksum_field=None,
-            vector_name=target.dense_vector_name,
-        )
+
+        def read(ids: Sequence[str]) -> Mapping[str, LearnPoint]:
+            return retrieve_points(
+                qdrant.get_client(),
+                qdrant.collection_name(target),
+                ids,
+                text_field=text_field,
+                checksum_field=None,
+                vector_name=target.dense_vector_name,
+            )
+
+        return read

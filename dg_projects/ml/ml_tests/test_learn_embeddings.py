@@ -1524,7 +1524,15 @@ def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):
 
 
 # ------------------------------------------------------------ vectors from Learn
-def build_taking_learns_vectors(tables, dagster_instance=None) -> Any:
+class UnreachableQdrant(QdrantResource):
+    def get_client(self) -> QdrantClient:
+        msg = "Learn's cluster is unreachable"
+        raise ConnectionError(msg)
+
+
+def build_taking_learns_vectors(
+    tables, dagster_instance=None, qdrant: QdrantResource | None = None
+) -> Any:
     return materialize(
         [content_file_embedding_chunks, content_file_embedding_vectors],
         partition_key=PARTITION,
@@ -1532,8 +1540,17 @@ def build_taking_learns_vectors(tables, dagster_instance=None) -> Any:
         resources={
             "learn_embeddings_io_manager": Warehouse(tables),
             "embeddings": fake_embeddings(),
-            "learn_vectors": LearnVectorsResource(qdrant=fake_qdrant()),
+            "learn_vectors": LearnVectorsResource(qdrant=qdrant or fake_qdrant()),
         },
+        raise_on_error=False,
+    )
+
+
+def unreachable_qdrant() -> UnreachableQdrant:
+    return UnreachableQdrant(
+        vault=Vault(vault_addr="https://vault.example.com", vault_auth_type="token"),
+        vault_path="pipelines/qdrant",
+        base_collection_name=LEARN_BASE,
     )
 
 
@@ -1584,15 +1601,27 @@ def test_a_stored_vector_is_not_read_from_learn_again(tables, calls, learn_qdran
     assert build_taking_learns_vectors(tables, dagster_instance).success
     first = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
 
-    # A read of Learn's collection would now fail the run.
-    learn_qdrant.delete_collection(f"{LEARN_BASE}.content_files")
-    result = build_taking_learns_vectors(tables, dagster_instance)
+    # Making a client for Learn's cluster would now fail the run.
+    result = build_taking_learns_vectors(
+        tables, dagster_instance, qdrant=unreachable_qdrant()
+    )
 
     assert result.success
     assert calls == []
     assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].equals(first)
     metadata = vectors_metadata(result, CONTENT_FILE_VECTORS_KEY)
     assert metadata["learn_v1_content_files/imported_texts"] == 0
+
+
+def test_an_unreachable_learn_fails_the_run_before_embedding(tables, calls):
+    load_sources(tables, **{"block-v1:a": "First file."})
+
+    result = build_taking_learns_vectors(tables, qdrant=unreachable_qdrant())
+
+    assert not result.success
+    # Nothing is embedded in Learn's place: that would pay for its texts.
+    assert calls == []
+    assert CONTENT_FILE_VECTORS_KEY.path[-1] not in tables
 
 
 def test_a_learn_point_without_a_vector_is_embedded(tables, calls, learn_qdrant):
