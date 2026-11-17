@@ -108,6 +108,14 @@ CONTENT_FILE_PARTITIONS = MultiPartitionsDefinition(
     }
 )
 CONTENT_FILE_PARTITION_EXPR = {"etl_source": "etl_source", "run": "run_readable_id"}
+# pyiceberg checks a partition overwrite against the files committed meanwhile by
+# their column bounds, not their partition, and cuts string bounds to 16
+# characters by default. Run ids share longer prefixes ("course-v1:MITxT+"), so
+# two runs overwriting at once failed the commit. Full bounds on the run column
+# let runs of different partitions overwrite concurrently.
+CONTENT_FILE_TABLE_PROPERTIES = {
+    "write.metadata.metrics.column.run_readable_id": "full"
+}
 # The version of a run with no files.
 EMPTY_TEXT_VERSION = md5_hex("")
 # The document key's scheme. It goes into the chunk asset's code version and into
@@ -138,6 +146,7 @@ _PARTITIONED_METADATA = {
     **_TABLE_METADATA,
     "partition_expr": CONTENT_FILE_PARTITION_EXPR,
     "schema_update_mode": "update",
+    "table_properties": CONTENT_FILE_TABLE_PROPERTIES,
 }
 
 

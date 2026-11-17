@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import polars as pl
+import pyarrow as pa
 import pytest
 from dagster import (
     AssetCheckSeverity,
@@ -37,6 +38,7 @@ from ml.assets.learn_embedding_checks import (
 )
 from ml.assets.learn_embeddings import (
     CONTENT_FILE_CHUNKS_KEY,
+    CONTENT_FILE_TABLE_PROPERTIES,
     CONTENT_FILE_TEXT_KEY,
     CONTENT_FILE_VECTORS_KEY,
     EMPTY_TEXT_VERSION,
@@ -75,7 +77,9 @@ from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic_ai.embeddings.result import EmbedInputType
-from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.exceptions import NoSuchTableError, ValidationException
+from pyiceberg.expressions import And, BooleanExpression, EqualTo
 from qdrant_client import QdrantClient, models
 
 RUN = "course-v1:MITxT+18.01x+1T2026"
@@ -1802,3 +1806,46 @@ def test_strategy_table_has_a_row_per_strategy(tables):
         "learn_v1_content_files",
         "learn_v1_topics",
     ]
+
+
+@pytest.mark.parametrize(
+    ("properties", "conflicts"),
+    [({}, True), (CONTENT_FILE_TABLE_PROPERTIES, False)],
+    ids=["default bounds", "content-file table properties"],
+)
+def test_runs_with_a_shared_prefix_overwrite_their_partitions_concurrently(
+    iceberg_catalog: SqlCatalog, properties: dict[str, str], *, conflicts: bool
+):
+    first, second = "course-v1:MITxT+CTL.SC0x+1T2027", "course-v1:MITxT+18.01x+3T2025"
+
+    def rows(run: str) -> pa.Table:
+        return pl.DataFrame(
+            {"etl_source": ["mitxonline"], "run_readable_id": [run], "text": [run]}
+        ).to_arrow()
+
+    def partition(run: str) -> BooleanExpression:
+        return And(EqualTo("etl_source", "mitxonline"), EqualTo("run_readable_id", run))
+
+    table = iceberg_catalog.create_table(
+        "some_db.vectors", schema=rows(first).schema, properties=properties
+    )
+    with table.update_spec() as spec:
+        spec.add_identity("etl_source")
+        spec.add_identity("run_readable_id")
+    table = iceberg_catalog.load_table("some_db.vectors")
+    table.append(rows(first))
+    table.append(rows(second))
+
+    writing = iceberg_catalog.load_table("some_db.vectors").transaction()
+    writing.overwrite(rows(first), overwrite_filter=partition(first))
+    iceberg_catalog.load_table("some_db.vectors").overwrite(
+        rows(second), overwrite_filter=partition(second)
+    )
+
+    if conflicts:
+        with pytest.raises(ValidationException):
+            writing.commit_transaction()
+    else:
+        writing.commit_transaction()
+        stored = iceberg_catalog.load_table("some_db.vectors").scan().to_polars()
+        assert sorted(stored["run_readable_id"]) == sorted([first, second])
