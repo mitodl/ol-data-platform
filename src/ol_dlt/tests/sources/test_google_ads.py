@@ -52,6 +52,14 @@ def _change_event(index: int, at: str) -> Any:  # noqa: ANN401
     return row
 
 
+def _campaign(start: str, end: str) -> Any:  # noqa: ANN401
+    row = GoogleAdsRow()
+    row.campaign.resource_name = f"customers/{COURSE_ID}/campaigns/11"
+    row.campaign.start_date_time = start
+    row.campaign.end_date_time = end
+    return row
+
+
 def _match(pattern: str, text: str) -> re.Match[str]:
     match = re.search(pattern, text)
     assert match, f"{pattern!r} not in {text!r}"
@@ -66,10 +74,13 @@ class FakeClient:
         *,
         client_accounts: tuple[str, ...] = (COURSE_ID,),
         change_event_times: tuple[str, ...] = (),
+        campaign_dates: tuple[str, str] | None = None,
     ) -> None:
         self.queries: list[tuple[str, str]] = []
         self.client_accounts = client_accounts
         self.change_event_times = change_event_times
+        # The campaign snapshot returns one campaign with this start and end when set.
+        self.campaign_dates = campaign_dates
         # Stamped on keyword rows, so a test can tell which run wrote a row.
         self.clicks = 0
         # Dates the next keyword fetch leaves out, as if Google retracted them.
@@ -105,6 +116,8 @@ class FakeClient:
                 for i, at in enumerate(self.change_event_times)
                 if start <= at < end
             ][:limit]
+        elif resource == "campaign" and "segments.date" not in query:
+            rows = [_campaign(*self.campaign_dates)] if self.campaign_dates else []
         else:
             rows = []
         return rows
@@ -331,6 +344,60 @@ def test_snapshots_append_and_daily_reports_merge() -> None:
     assert source.resources[
         "raw__google_ads__api__keyword_daily"
     ].write_disposition == ("merge")
+
+
+def test_local_time_fields_are_ones_the_tables_query() -> None:
+    queried = {
+        "raw__google_ads__api__change_events": google_ads.CHANGE_EVENT_FIELDS,
+        **{name: fields for name, (_, fields, _) in google_ads._SNAPSHOTS.items()},  # noqa: SLF001
+    }
+
+    for table, fields in google_ads.LOCAL_TIME_FIELDS.items():
+        assert set(fields) <= set(queried[table]), table
+
+
+@pytest.mark.integration
+def test_local_times_load_as_the_text_google_sent(
+    sqlite_iceberg_lake: Path, tmp_path: Path
+) -> None:
+    sent = {
+        ("raw__google_ads__api__change_events", "change_event__change_date_time"): (
+            "2026-11-08 07:48:27.472871"
+        ),
+        ("raw__google_ads__api__campaign_snapshots", "campaign__start_date_time"): (
+            "2026-11-01 00:00:00"
+        ),
+        ("raw__google_ads__api__campaign_snapshots", "campaign__end_date_time"): (
+            "2026-12-31 23:59:59"
+        ),
+    }
+    client = FakeClient(
+        change_event_times=(sent[next(iter(sent))],),
+        campaign_dates=("2026-11-01 00:00:00", "2026-12-31 23:59:59"),
+    )
+    tables = sorted(google_ads.LOCAL_TIME_FIELDS)
+    pipeline = dlt.pipeline(
+        pipeline_name="google_ads_local_time_test",
+        destination=dlt.destinations.filesystem(
+            bucket_url=sqlite_iceberg_lake.as_uri()
+        ),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    source = google_ads.google_ads_source(
+        client_factory=lambda: client, today=TODAY
+    ).with_resources(*tables)
+    for table in tables:
+        source.resources[table].apply_hints(table_format="iceberg")
+
+    pipeline.run(config.with_nullable_load_id(source))
+
+    schema = pipeline.default_schema
+    with pipeline.sql_client() as client_sql:
+        for (table, column), value in sent.items():
+            assert schema.get_table(table)["columns"][column]["data_type"] == "text"
+            rows = client_sql.execute_sql(f"SELECT {column} FROM {table}")  # noqa: S608
+            assert [r[0] for r in rows] == [value], column
 
 
 @pytest.mark.integration
