@@ -188,6 +188,43 @@ def test_report_window_stays_inside_the_retention_limit() -> None:
     )
 
 
+def test_click_view_pulls_one_day_per_query_within_90_days() -> None:
+    client = FakeClient()
+    source = google_ads.google_ads_source(client_factory=lambda: client, today=TODAY)
+    list(source.resources["raw__google_ads__api__click_view"])
+
+    days = [
+        _match(r"segments\.date = '([\d-]+)'", q).group(1)
+        for _, q in client.queries
+        if "FROM click_view" in q
+    ]
+    assert days == [(TODAY - timedelta(days=d)).isoformat() for d in range(89, 0, -1)]
+    # A later run starts two days before its last loaded day.
+    assert google_ads.click_window("2026-11-08", date(2026, 11, 12)) == (
+        date(2026, 11, 6),
+        date(2026, 11, 11),
+    )
+
+
+def test_repeated_fields_load_as_json_text() -> None:
+    row = GoogleAdsRow()
+    row.ad_group_ad.ad.final_urls.append("https://learn.mit.edu/a")
+    row.ad_group_ad.ad.responsive_search_ad.headlines.append(
+        {"text": "MIT Systems Thinking"}
+    )
+    fields = (
+        "ad_group_ad.ad.final_urls",
+        "ad_group_ad.ad.responsive_search_ad.headlines",
+    )
+
+    record = google_ads.flatten_row(row, fields)
+
+    assert record["ad_group_ad__ad__final_urls"] == '["https://learn.mit.edu/a"]'
+    assert record["ad_group_ad__ad__responsive_search_ad__headlines"] == (
+        '[{"text": "MIT Systems Thinking"}]'
+    )
+
+
 def test_no_client_accounts_fails_the_run() -> None:
     client = FakeClient(client_accounts=())
     source = google_ads.google_ads_source(client_factory=lambda: client, today=TODAY)

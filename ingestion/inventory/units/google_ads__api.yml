@@ -147,6 +147,109 @@ tables:
   history:
     in_scope: false
     reason: Each day's snapshot is appended, so raw is already a daily history.
+- name: raw__google_ads__api__search_term_daily
+  raw_table: raw__google_ads__api__search_term_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - segments__ad_network_type
+  - - search_term_view__resource_name
+  - - segments__keyword__info__text
+  - - segments__keyword__info__match_type
+  - - segments__search_term_match_type
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's latest numbers, not earlier restated ones. search_term_view__search_term
+      is free text people typed and can hold personal details.
+- name: raw__google_ads__api__landing_page_daily
+  raw_table: raw__google_ads__api__landing_page_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - segments__ad_network_type
+  - - ad_group__id
+  - - landing_page_view__resource_name
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's latest numbers, not earlier restated ones.
+- name: raw__google_ads__api__geographic_daily
+  raw_table: raw__google_ads__api__geographic_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - segments__ad_network_type
+  - - campaign__id
+  - - geographic_view__resource_name
+  - - segments__geo_target_region
+  - - segments__geo_target_city
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's latest numbers, not earlier restated ones.
+- name: raw__google_ads__api__click_view
+  raw_table: raw__google_ads__api__click_view
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - click_view__resource_name
+  modeled: false
+  history:
+    in_scope: false
+    reason: A click does not change. The API keeps 90 days, so older clicks exist
+      only here. click_view__gclid can be joined to a HubSpot contact, so it is personal
+      data.
+- name: raw__google_ads__api__conversion_action_snapshots
+  raw_table: raw__google_ads__api__conversion_action_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - conversion_action__resource_name
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's snapshot is appended, so raw is already a daily history.
+- name: raw__google_ads__api__ad_group_snapshots
+  raw_table: raw__google_ads__api__ad_group_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - ad_group__resource_name
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's snapshot is appended, so raw is already a daily history.
+- name: raw__google_ads__api__ad_snapshots
+  raw_table: raw__google_ads__api__ad_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - ad_group_ad__resource_name
+  modeled: false
+  history:
+    in_scope: false
+    reason: Each day's snapshot is appended, so raw is already a daily history.
 - name: raw__google_ads__api__fetch_log
   raw_table: raw__google_ads__api__fetch_log
   sync_mode: incremental_deduped_history
