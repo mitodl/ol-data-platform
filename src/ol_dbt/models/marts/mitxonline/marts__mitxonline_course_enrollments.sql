@@ -21,7 +21,7 @@ with enrollments as (
             , course_fk
             , row_number() over (
                 partition by courserun_pk
-                order by effective_date desc nulls last, courserun_title ASC, course_fk ASC
+                order by effective_date desc nulls last, courserun_title asc nulls last, course_fk asc nulls last
             ) as _row_num
         from {{ ref('dim_course_run') }}
         where
@@ -44,7 +44,7 @@ with enrollments as (
             , course_number
             , row_number() over (
                 partition by course_pk
-                order by effective_date desc nulls last, course_number ASC
+                order by effective_date desc nulls last, course_number asc nulls last
             ) as _row_num
         from {{ ref('dim_course') }}
         where is_current = true
