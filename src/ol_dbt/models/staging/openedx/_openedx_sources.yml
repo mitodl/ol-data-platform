@@ -43,6 +43,9 @@ sources:
       description: str, for problem blocks, markdown content if present
     - name: retrieved_at
       description: timestamp, ISO8601 timestamp when the block data was extracted
+    - name: static_assets_version
+      description: str, data_version of the static asset bundle written from the same
+        export; null in files written before the archive asset recorded it
   - name: raw__openedx__s3__course_document_text
     description: >
       Text Apache Tika extracted from the documents (PDFs, HTML, Office files) in
@@ -73,6 +76,10 @@ sources:
     - name: static_references
       description: str, JSON array of the static/ paths an html file's body links
         to; null for other files and in files written before the asset recorded them
+    - name: static_assets_version
+      description: str, data_version of the static asset bundle the text was extracted
+        from; null in files written before the asset recorded it and on an empty-file
+        marker row
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at
@@ -103,6 +110,10 @@ sources:
     - name: extracted_at
       description: str, ISO 8601 UTC time the asset extracted the file's text, one
         value per landed file; null in files written before the assets stamped it
+    - name: static_assets_version
+      description: str, data_version of the static asset bundle the transcript was
+        parsed from; null in files written before the asset recorded it and on an
+        empty-file marker row
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

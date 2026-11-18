@@ -54,6 +54,7 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.openedx import STATIC_BUNDLE_SUFFIX
 from upath import UPath
 
 log = logging.getLogger(__name__)
@@ -294,9 +295,6 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
         raise TikaUnavailableError(msg) from error
 
 
-STATIC_BUNDLE_SUFFIX = ".tar.gz"
-
-
 def stamp_static_assets_version(
     rows: Iterable[dict[str, Any]], bundle_location: UPath
 ) -> list[dict[str, Any]]:
@@ -325,13 +323,15 @@ def write_text_snapshot(rows: Iterable[dict[str, Any]], output_file: Path) -> st
     """Write the rows as JSONL, each stamped with one extracted_at, and version them.
 
     The returned SHA-256 is the asset's data version and names the S3 object.
-    It covers the rows *without* the stamp, so it versions the output and not
-    the input bundle: a Tika upgrade, a parser change, or a run whose partial
-    failures later succeed all produce different text from the same bundle, and
-    versioning on the bundle hash let the corrected output overwrite the old
-    one under the same DataVersion while every downstream
+    It covers the rows *without* the extracted_at stamp, so it versions the
+    output and not the input bundle: a Tika upgrade, a parser change, or a run
+    whose partial failures later succeed all produce different text from the
+    same bundle, and versioning on the bundle hash let the corrected output
+    overwrite the old one under the same DataVersion while every downstream
     `data_version_changed()` check saw nothing move. Leaving the stamp out
-    keeps a re-run that produces the same text on the same key.
+    keeps a re-run that produces the same text on the same key. Each row's
+    static_assets_version is covered, so the same text read from another
+    bundle gets a key of its own.
 
     extracted_at is there for staging. It keeps each course's newest landed
     file, and S3 mtimes are whole seconds, so two snapshots of one course can

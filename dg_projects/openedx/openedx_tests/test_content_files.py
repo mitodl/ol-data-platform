@@ -12,6 +12,7 @@ from pathlib import Path
 
 import httpx2 as httpx
 import pytest
+from ol_orchestrate.lib.openedx import STATIC_BUNDLE_SUFFIX
 from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES
 from openedx.assets.content_files import (
     MIN_DOCUMENTS_FOR_RATE_CHECK,
@@ -723,8 +724,10 @@ def test_failed_html_rows_keep_their_static_references():
 
 def test_rows_carry_the_version_of_the_bundle_they_came_from():
     """Staging compares it with the blocks' bundle version to spot a lagging snapshot"""
+    # named as the archive asset names the bundle it writes with the blocks
     bundle = UPath(
-        "s3://bucket/openedx/processed_data/course_static_assets/xpro/c/ab12.tar.gz"
+        "s3://bucket/openedx/processed_data/course_static_assets/xpro/c/"
+        f"ab12{STATIC_BUNDLE_SUFFIX}"
     )
 
     rows = stamp_static_assets_version([{"file_path": "static/a.pdf"}], bundle)
