@@ -1,0 +1,92 @@
+---
+version: 2
+
+models:
+- name: int__google_ads__keyword_daily
+  description: Each course's keyword clicks, cost and conversions per day, as ad_opt_v2's
+    keyword-day pull (reports/kw-day-panel.csv), before the cleaning that ads-optimizer
+    does. Keeps Search campaigns not named EXCLUDE or Experiment, the three keyword
+    match types, days from the course's min_date, ad group keywords with clicks or
+    counted conversions, and the course's ad networks. Where ad_opt_v2 keeps one ad
+    group's row for a keyword, this adds the ad groups together.
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course folder name, from google_ads_courses
+    tests:
+    - not_null
+  - name: report_date
+    description: date, the report day in the account's time zone
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, campaign name as Google gives it
+    tests:
+    - not_null
+  - name: keyword_text
+    description: str, keyword text as Google gives it
+    tests:
+    - not_null
+  - name: keyword_match_type
+    description: str, Broad, Phrase or Exact
+    tests:
+    - accepted_values:
+        arguments:
+          values: [Broad, Phrase, Exact]
+  - name: clicks
+    description: bigint, clicks; 0 on rows with conversions but no clicks
+  - name: cost
+    description: decimal, cost in the account currency, to the cent
+  - name: all_conversions
+    description: double, all_conversions of the course's conversion actions, to two
+      decimals; 0 for a course with none
+  - name: currency_code
+    description: str, account currency; null on rows with conversions but no clicks
+  - name: keyword_first_page_cpc
+    description: decimal, Google's first-page bid estimate; the highest when ad groups
+      combine
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - report_date
+        - campaign_name
+        - keyword_text
+        - keyword_match_type
+
+- name: int__google_ads__campaign_daily
+  description: Each course's Search campaign impressions and impression shares per
+    day, as ad_opt_v2's campaign-day report (reports/campaign-day-report.csv). Keeps
+    campaigns not named EXCLUDE or Experiment, with impressions, from the course's
+    min_date.
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course folder name
+    tests:
+    - not_null
+  - name: report_date
+    description: date, the report day in the account's time zone
+    tests:
+    - not_null
+  - name: campaign_id
+    description: bigint, campaign id
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, campaign name on that day, as Google gives it
+  - name: impressions
+    description: bigint, impressions
+  - name: search_impression_share
+    description: double, share of eligible impressions received; Google reports under
+      10% as 0.0999; null when not eligible
+  - name: search_budget_lost_impression_share
+    description: double, share of eligible impressions lost to budget
+  - name: search_rank_lost_impression_share
+    description: double, share of eligible impressions lost to ad rank
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - report_date
+        - campaign_id

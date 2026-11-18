@@ -73,3 +73,11 @@
         and for an account no longer under the manager. -#}
     'America/New_York'
 {%- endmacro %}
+
+
+{% macro google_ads_is_search_campaign(campaign_name_expr, channel_type_expr) -%}
+    {#- ad_opt_v2's shared campaign filter on every pull. -#}
+    {{ channel_type_expr }} = 'SEARCH'
+    and {{ campaign_name_expr }} not like 'EXCLUDE%'
+    and {{ campaign_name_expr }} not like '%Experiment%'
+{%- endmacro %}

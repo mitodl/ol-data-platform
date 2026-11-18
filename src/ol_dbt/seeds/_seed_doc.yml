@@ -365,3 +365,67 @@ seeds:
     - not_null:
         config:
           error_if: ">0"
+
+- name: google_ads_courses
+  description: The Google Ads account and first report date of each course the ad_opt_v2
+    optimizer plans, from its CUSTOMER_IDS and each course.yaml's min_date. One account
+    per course until marketing merges them.
+  config:
+    column_types:
+      course: varchar
+      account_id: varchar
+      min_date: date
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course folder name, e.g. systems_engineering
+    tests:
+    - not_null
+    - unique
+  - name: account_id
+    description: str, the course's Google Ads account id
+    tests:
+    - not_null
+    - unique
+  - name: min_date
+    description: date, the first day ad_opt_v2 pulls reports for
+    tests:
+    - not_null
+
+- name: google_ads_course_settings
+  description: ad_opt_v2's per-course report filters, from config/default.yaml and
+    each course.yaml. conversion_action names the conversions that count; a course
+    without one counts none. excluded_campaign_pattern marks campaigns the optimizer
+    leaves out (a case-insensitive substring). ad_network keeps only that network;
+    a course without one keeps every network.
+  config:
+    column_types:
+      course: varchar
+      setting: varchar
+      setting_value: varchar
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - setting
+        - setting_value
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course folder name
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('google_ads_courses')
+          field: course
+  - name: setting
+    description: str, conversion_action, excluded_campaign_pattern or ad_network
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['conversion_action', 'excluded_campaign_pattern', 'ad_network']
+  - name: setting_value
+    description: str, the setting's value, e.g. HubSpot - Customers, Remarketing or
+      SEARCH
+    tests:
+    - not_null
