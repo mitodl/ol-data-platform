@@ -41,7 +41,7 @@ with orders as (
             course.course_readable_id = course_enrollment_detail.course_readable_id
             and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
             and course_enrollment_detail.courserunenrollment_enrollment_status is null
-    where published_date is not null
+    where program.published_date is not null
     group by
         course_enrollment_detail.user_email
         , program.program_title
