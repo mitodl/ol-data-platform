@@ -1263,9 +1263,12 @@ On the unit:
   generated disabled until it is rolled out. History rolls out a unit at a time once its
   prerequisites hold (8430c2 items 26-27), and a unit's snapshots have to run for at least one
   load before its dlt cutover (§10.4 step 1).
-- `history.keyset_lakes`: the lakes (`production`, `qa`, `ci`, `local`) whose raw schema
-  carries the unit's keyset tables, i.e. where its keyset assets run. The delete filter reads
-  the keyset only there (§11.4). `validate` fails it on a unit with no keyset tables.
+- `history.keyset_lakes`: the lakes (`production`, `qa`, `ci`, `local`) where staging and the
+  history snapshots apply the unit's keysets. A listed lake turns on the delete filter there
+  (§11.4), and its first build drops every delete accrued in raw. The keyset assets run after
+  each load wherever data_loading automates them, which can include a lake not listed yet (e.g.
+  production for MITx Online). A listed lake other than `local` must have its keysets automated. `validate` fails
+  it on a unit with no keyset tables.
 - `history.markers`: `{at, kind: loader_cutover | schema_change, tables?, note}`. A loader
   cutover or a source schema change writes one extra version of every row, and a marker lets
   reports discount the versions that start then. Markers are copied into each snapshot's
