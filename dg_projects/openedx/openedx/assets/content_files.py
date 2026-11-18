@@ -419,6 +419,7 @@ def build_document_rows(
                     "course_id": course_id,
                     "source_system": source_system,
                     "file_path": relative_path,
+                    "file_extension": file_extension(relative_path),
                     "content_type": content_type,
                     "size_bytes": len(file_bytes),
                     "content": None,

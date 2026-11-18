@@ -57,8 +57,8 @@ sources:
     - name: file_path
       description: str, path of the file within the course export, e.g. static/handout.pdf
     - name: file_extension
-      description: str, lower-cased file extension with its dot; absent on a failed
-        extraction row
+      description: str, lower-cased file extension with its dot; absent on failed
+        rows written before the asset set it on them
     - name: content_type
       description: str, the MIME type the file was sent to Tika as
     - name: size_bytes

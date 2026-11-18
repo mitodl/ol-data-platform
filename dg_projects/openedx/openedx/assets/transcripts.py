@@ -264,6 +264,7 @@ def build_transcript_rows(
                     "course_id": course_id,
                     "source_system": source_system,
                     "file_path": relative_path,
+                    "file_extension": file_extension(relative_path),
                     "content_type": _transcript_content_type(relative_path),
                     "size_bytes": len(raw),
                     "content": None,
