@@ -1325,8 +1325,9 @@ Dagster dependency comes from the snapshot's `meta.raw_history` instead (`keyset
 a dependency and gives the snapshot `keyset_snapshot_upstream_or_code_changes`: it runs on the
 keyset's update, not the raw table's, so a load gives one keyset run and then one snapshot run.
 The keyset assets depend on their raw tables and run after each load where data_loading
-automates them (`MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS`, QA and production), with a freshness
-policy that fails at the unit's `max_age_hours` (rendered into `ol_dlt/keyset/tables.json`).
+automates them (`MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS`, QA and production), with a
+freshness policy that fails at the unit's `max_age_hours` (rendered into
+`ol_dlt/keyset/tables.json`).
 While that policy reads FAIL, a raw change starts the snapshot again, so a keyset that stops
 running delays deletes but not changes.
 
