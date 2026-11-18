@@ -6,6 +6,48 @@ with orders as (
     select * from {{ ref('marts__combined__products') }}
 )
 
+, program as (
+    select * from {{ ref('dim_program') }}
+)
+
+, program_course as (
+    select * from {{ ref('bridge_program_course') }}
+)
+
+, course as (
+    select * from {{ ref('dim_course') }}
+)
+
+, course_enrollment_detail as (
+    select * from {{ ref('marts__combined_course_enrollment_detail') }}
+)
+
+, verified_enrollment_counts as (
+    select
+        course_enrollment_detail.user_email
+        , program.program_title
+        , course_enrollment_detail.platform
+        , count(distinct course_enrollment_detail.course_readable_id) as verified_course_enrollment_count
+    from program
+    inner join program_course
+        on program.program_pk = program_course.program_fk
+    inner join course
+        on
+            program_course.course_fk = course.course_pk
+            and course.is_current = true
+            and course.course_is_live = true
+    inner join course_enrollment_detail
+        on
+            course.course_readable_id = course_enrollment_detail.course_readable_id
+            and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+            and course_enrollment_detail.courserunenrollment_enrollment_status is null
+    where program.published_date is not null
+    group by
+        course_enrollment_detail.user_email
+        , program.program_title
+        , course_enrollment_detail.platform
+)
+
 select
     orders.combined_orders_hash_id
     , orders.platform
@@ -58,7 +100,13 @@ select
     , orders.user_id
     , orders.user_hashed_id
     , products.product_name
+    , verified_enrollment_counts.verified_course_enrollment_count as used_courses_in_program
 from orders
 left join products
     on orders.product_readable_id = products.product_readable_id
     and orders.platform = products.platform
+left join verified_enrollment_counts
+    on orders.user_email = verified_enrollment_counts.user_email
+    and products.product_name = verified_enrollment_counts.program_title
+    and orders.platform = verified_enrollment_counts.platform
+    and products.product_type = 'program'
