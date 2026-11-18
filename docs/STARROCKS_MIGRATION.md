@@ -32,6 +32,9 @@ Against the QA or production lake, `--target starrocks_dev_qa` (with `--env qa`)
 copy. The canonical targets, `starrocks_qa_lake` and `starrocks_production_lake`,
 refuse a `schema_suffix` because their profiles drop it, and
 `starrocks_production_lake` also refuses to run without `--allow-canonical-writes`.
+So does `--env production` on its default `starrocks_production` target, which rebuilds
+the `b2b_analytics` views ol-analytics-api serves, unless it runs with
+`--vault-role readonly`.
 
 ## Decisions that affect models
 

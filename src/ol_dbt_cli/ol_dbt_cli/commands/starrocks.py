@@ -519,8 +519,9 @@ def run(  # noqa: PLR0913
         bool,
         Parameter(
             name="--allow-canonical-writes",
-            help="Let a production lake target build the canonical production layer schemas. "
-            "Without it those targets are refused; use starrocks_dev_production.",
+            help="Let --env production write its canonical schemas: the lake layer schemas "
+            "(starrocks_production_lake) or the default_catalog b2b_analytics views. Without it "
+            "those builds are refused; use starrocks_dev_production or --vault-role readonly.",
         ),
     ] = False,
 ) -> None:
@@ -590,6 +591,15 @@ def run(  # noqa: PLR0913
             f"[red]--target {effective_target} writes the canonical {lake.catalog}.{lake_schema}_<layer> "
             "schemas.[/] Build your own copy with --target starrocks_dev_production "
             "--vars '{schema_suffix: <name>}', or pass --allow-canonical-writes."
+        )
+        sys.exit(1)
+    # The default_catalog targets write the b2b_analytics materialized views that
+    # ol-analytics-api serves, and a build recreates each one empty until its next
+    # refresh. Only a readonly role can't write them.
+    if env == "production" and lake is None and vault_role != "readonly" and not allow_canonical_writes:
+        err_console.print(
+            f"[red]--target {effective_target} writes the production default_catalog schemas "
+            "(b2b_analytics).[/] Pass --vault-role readonly to only read, or --allow-canonical-writes."
         )
         sys.exit(1)
     # substructure/starrocks grants `app` only USAGE on a lake catalog and DML on

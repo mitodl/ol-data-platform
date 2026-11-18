@@ -153,11 +153,12 @@ def test_lake_target_refuses_another_env_s_cluster(mock_fetch, mock_port_forward
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
-def test_developer_lake_target_needs_a_suffix(
-    mock_fetch, mock_port_forward, mock_dbt_run, cli_vars: str | None
+@pytest.mark.parametrize(("env", "target"), [("qa", "starrocks_dev_qa"), ("production", "starrocks_dev_production")])
+def test_developer_lake_target_needs_a_suffix(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str, cli_vars: str | None
 ) -> None:
     with pytest.raises(SystemExit):
-        run(env="qa", target="starrocks_dev_qa", vars=cli_vars)
+        run(env=env, target=target, vars=cli_vars)
 
     mock_fetch.assert_not_called()
 
@@ -227,6 +228,34 @@ def test_canonical_production_lake_target_runs_with_the_flag(
 
     _, kwargs = mock_dbt_run.call_args
     assert kwargs["target"] == "starrocks_production_lake"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_production_default_target_needs_the_flag_to_write(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """--env production defaults to starrocks_production, which rebuilds the b2b_analytics views."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(("vault_role", "allow_canonical_writes"), [("readonly", False), (None, True)])
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_production_default_target_runs_readonly_or_with_the_flag(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, vault_role: str | None, allow_canonical_writes: bool
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    run(env="production", vault_role=vault_role, allow_canonical_writes=allow_canonical_writes)
+
+    _, run_kwargs = mock_dbt_run.call_args
+    assert run_kwargs["target"] == "starrocks_production"
 
 
 @pytest.mark.parametrize(
@@ -571,7 +600,7 @@ def test_explicit_target_keeps_the_env_s_data_lake(mock_fetch, mock_port_forward
     answered separately, so overriding one must leave the other alone.
     """
     mock_fetch.return_value = ("user", "pass")
-    run(env="production", target="starrocks_qa_vault")
+    run(env="production", target="starrocks_qa_vault", allow_canonical_writes=True)
 
     assert os.environ["DBT_DATA_LAKE_ENV"] == "production"
     _, kwargs = mock_dbt_run.call_args
