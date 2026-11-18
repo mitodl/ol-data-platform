@@ -2460,6 +2460,53 @@ unit_tests:
     - {email: nogiven@example.com, full_name: Lovelace}
     - {email: nonames@example.com, full_name: Right Fallback}
     - {email: token@example.com, full_name: My familyName}
+- name: test_dim_user_blank_learn_education_does_not_mask_the_mitx_value
+  description: >
+    A Learn education that is only whitespace is blank, so it does not hide the
+    MITx Online education of the same person.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_global_id: gid-1, user_email: pad@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows:
+    - {user_id: 1, user_name: Pad Person, user_current_education: '   '}
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows: []
+  - input: ref('int__bootcamps__users')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_global_id: gid-1, user_mitxonline_email: pad@example.com, user_highest_education: Doctorate}
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - {email: pad@example.com, highest_education: Doctorate}
 - name: test_dim_user_fills_a_blank_demographic_from_the_next_account
   description: >
     A blank on the base row, the newest account, is filled from the person's other
