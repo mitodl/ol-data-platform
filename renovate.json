@@ -1,23 +1,11 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    ":automergeMinor",
-    ":rebaseStalePrs",
-    ":separateMajorReleases",
-    "config:recommended"
+    "local>mitodl/.github:renovate-config"
   ],
-  "schedule": [
-    "every weekend"
-  ],
-  "timezone": "US/Eastern",
   "gitIgnoredAuthors": [
     "114827586+autofix-ci[bot]@users.noreply.github.com"
   ],
-  "pre-commit": {
-    "enabled": true
-  },
-  "lockFileMaintenance": {
-    "enabled": true
-  },
   "packageRules": [
     {
       "groupName": "dagster-plugins",
