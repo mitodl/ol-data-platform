@@ -1,0 +1,5 @@
+# The empty helper clears any helper set earlier, so git asks only gh for
+# github.com credentials.
+[credential "https://github.com"]
+	helper =
+	helper = !/opt/conda/bin/gh auth git-credential

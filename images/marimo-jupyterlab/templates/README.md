@@ -178,3 +178,26 @@ source.
 `--sandbox` is what builds the environment from the `/// script` header. Without
 it marimo runs in the base environment, which has none of the notebook
 packages.
+
+## Versioning with GitHub
+
+The **Git** panel in the left sidebar clones, commits, diffs, pushes and pulls.
+Sign in to GitHub once, from a terminal (**File > New > Terminal**):
+
+```bash
+gh auth login --web --git-protocol https
+```
+
+Open the URL it prints and enter the code. git then uses that sign-in for every
+`github.com` remote, from the panel and the terminal alike. The token is stored
+under `~/.config/gh` in your home volume, so it survives restarts. It carries
+gh's minimum scopes (`repo`, `read:org`, `gist`), which reach every repository
+your GitHub account can. `gh auth logout` removes it, and you can revoke it
+under GitHub Settings > Applications.
+
+Your commits carry the name and email from your MIT OL login unless you set
+your own, which is kept across restarts:
+
+```bash
+git config --global user.email "you@users.noreply.github.com"
+```

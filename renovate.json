@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "local>mitodl/.github:renovate-config"
+    "local>mitodl/.github:renovate-config",
+    "customManagers:dockerfileVersions"
   ],
   "gitIgnoredAuthors": [
     "114827586+autofix-ci[bot]@users.noreply.github.com"

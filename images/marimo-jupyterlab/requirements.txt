@@ -7,7 +7,10 @@
 # depends on the `uv` wheel, which lands in /opt/conda/bin ahead of
 # /usr/local/bin on PATH, so a copied binary is never the one that runs.
 #
+# jupyterlab-git is the Git panel users version their notebooks with.
+#
 # No data-science packages here: each notebook declares its own via /// script.
+jupyterlab-git==0.55.0
 marimo[sandbox]==0.25.2
 marimo-jupyter-extension==0.5.1
 pydantic-ai-slim[bedrock]>=1.107.0,<3.0.0
