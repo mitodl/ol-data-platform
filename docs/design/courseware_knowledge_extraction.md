@@ -1,6 +1,6 @@
 # Courseware knowledge as platform data: concepts, outcomes, prerequisites and assessments in the dimensional layer
 
-Status: proposed; descriptive discovery pilot only, inferred preparation and readiness remain experimental. Date: 2026-10-16. Architecture revised: 2026-10-20. Related: `embedding_substrate_and_search_engine.md` (branch `embedding-substrate-spec`), `adr_embedding_compute_strategy.md`, hq RFC #13220 (answer separation), hq RFC #13314 (learner memory), hq RFC #11522 (Omnigraph).
+Status: proposed; descriptive discovery pilot only, inferred preparation and readiness remain experimental. Date: 2026-10-16. Architecture revised: 2026-10-20. Related: `embedding_substrate_and_search_engine.md` (branch `embedding-substrate-spec`), `adr_embedding_compute_strategy.md`, hq RFC #13220 (answer separation), hq RFC #13314 (learner memory), hq RFC #11522 (Omnigraph). Term definitions, content levels and roles, relation predicates and what the text stage records are proposed in `courseware_knowledge_ontology.md` (2026-11-18), which takes precedence over this document's terms once agreed.
 
 Sources read on 2026-10-16: this repo at `07eadd990`, mit-learn at `d2eef5677`, learn-ai `main` at `df18361`, the course-profile repo at its single commit (2026-10-15), the "Enhancing course context for hybrid search" document, and the ontology and tooling sources linked in section 6.
 
