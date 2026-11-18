@@ -31,8 +31,8 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.sensors.failure_notification import (
     check_evaluation_records,
     event_records_after,
+    first_freshness_cursor,
     latest_check_evaluation_cursor,
-    latest_event_cursor,
 )
 
 from lakehouse.lib.openmetadata_asset_checks import (
@@ -224,8 +224,8 @@ def build_asset_check_openmetadata_sensor(
         minimum_interval_seconds=300,
         default_status=DefaultSensorStatus.RUNNING,
         description=(
-            "Writes Dagster asset check results (the freshness and column "
-            "schema-change checks; not dbt tests, which arrive through "
+            "Writes Dagster asset check results (the column schema-change "
+            "checks; not dbt tests, which arrive through "
             "run_results.json) to OpenMetadata as test case results on the dbt "
             "model's table."
         ),
@@ -264,7 +264,9 @@ def build_freshness_openmetadata_sensor(
 
     The policies record no check evaluation, so asset_check_openmetadata_sensor
     never sees them. Same cursor rules as that sensor, over the
-    ``FRESHNESS_STATE_CHANGE`` events. See
+    ``FRESHNESS_STATE_CHANGE`` events, except that the first tick starts at
+    ``first_freshness_cursor``. A re-posted result is answered with a 409 and
+    counted as written. See
     ``lakehouse.lib.openmetadata_asset_checks``.
     """
 
@@ -282,11 +284,7 @@ def build_freshness_openmetadata_sensor(
         context: SensorEvaluationContext, openmetadata_api: ApiClientFactory
     ) -> None:
         if not context.cursor:
-            context.update_cursor(
-                latest_event_cursor(
-                    context.instance, DagsterEventType.FRESHNESS_STATE_CHANGE
-                )
-            )
+            context.update_cursor(first_freshness_cursor(context.instance))
             return
         deadline = time.monotonic() + OPENMETADATA_PUSH_SECONDS_PER_TICK
         records = event_records_after(

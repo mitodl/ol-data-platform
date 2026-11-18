@@ -42,6 +42,7 @@ from ol_orchestrate.sensors.failure_notification import (
     error_message,
     failed_on_its_steps,
     failure_to_report,
+    first_freshness_cursor,
     format_check_metadata,
     freshness_failure_message,
     freshness_failure_sensor,
@@ -1973,6 +1974,11 @@ def test_freshness_failure_sensor_posts_each_asset_that_turns_fail(
 
     monkeypatch.setattr(failure_notification, "WebClient", _Slack)
     monkeypatch.setattr(failure_notification, "get_slack_token", lambda: "token")
+    # A lookback into the future puts "before" outside it, as a change from
+    # before the lookback window would be.
+    monkeypatch.setattr(
+        failure_notification, "FRESHNESS_FIRST_TICK_LOOKBACK_SECONDS", -3600
+    )
 
     with DagsterInstance.ephemeral() as instance:
         instance.report_runless_asset_event(
@@ -1982,6 +1988,7 @@ def test_freshness_failure_sensor_posts_each_asset_that_turns_fail(
         freshness_failure_sensor(context)
         initialized = context.cursor
         assert initialized not in {None, "-1"}
+        assert posted == []
 
         for change in [
             _freshness_change(["mart", "stale"], "FAIL", "PASS"),
@@ -1994,7 +2001,7 @@ def test_freshness_failure_sensor_posts_each_asset_that_turns_fail(
 
         assert len(posted) == 1
         text = _block_text(posted[0]["blocks"])
-        # The failure from before the first tick is history, not news.
+        # Older than the lookback: history, not news.
         assert "mart/before" not in text
         assert "mart/stale" in text
         assert "reporting/warned" in text
@@ -2005,6 +2012,25 @@ def test_freshness_failure_sensor_posts_each_asset_that_turns_fail(
         context = build_sensor_context(instance=instance, cursor=context.cursor)
         freshness_failure_sensor(context)
         assert len(posted) == 1
+
+
+def test_a_failure_written_before_the_first_tick_is_still_announced() -> None:
+    """The daemon writes a model's first state as soon as lakehouse loads with
+    its policy, which can be before delivery's sensor first ticks, and it never
+    writes that state again.
+    """
+    with DagsterInstance.ephemeral() as instance:
+        instance.report_runless_asset_event(
+            _freshness_change(["mart", "stale_at_deploy"], "FAIL", "UNKNOWN")
+        )
+
+        cursor = first_freshness_cursor(instance)
+        failures, _ = collect_new_freshness_failures(instance, int(cursor))
+
+    assert cursor == "-1"
+    assert [
+        r.event_log_entry.dagster_event.event_specific_data.key.path for r in failures
+    ] == [["mart", "stale_at_deploy"]]
 
 
 def test_freshness_failure_message_links_each_asset() -> None:
