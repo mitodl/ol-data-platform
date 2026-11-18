@@ -1983,7 +1983,8 @@ models:
       May be null for bootcamps and edX.org.
   - name: used_courses_in_program
     description: numeric, count of verified course enrollments for the user in the
-      associated program on the corresponding platform.
+      associated program on the corresponding platform. Only edx and MITx Online have
+      verified enrollments.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
