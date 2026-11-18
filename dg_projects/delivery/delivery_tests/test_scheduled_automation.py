@@ -29,7 +29,11 @@ from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
 _ENVIRONMENT_SENSITIVE_ROOTS = frozenset({"delivery", "ol_orchestrate"})
 
 FAILURE_NOTIFICATION_SENSOR_NAMES = frozenset(
-    {"run_failure_notification_sensor", "asset_check_failure_sensor"}
+    {
+        "run_failure_notification_sensor",
+        "asset_check_failure_sensor",
+        "freshness_failure_sensor",
+    }
 )
 
 

@@ -10,6 +10,7 @@ from collections.abc import Mapping
 
 from dagster import (
     AssetKey,
+    DagsterEventType,
     DefaultSensorStatus,
     Failure,
     MetadataValue,
@@ -29,10 +30,15 @@ from ol_orchestrate.lib.iceberg_maintenance import (
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.sensors.failure_notification import (
     check_evaluation_records,
+    event_records_after,
     latest_check_evaluation_cursor,
+    latest_event_cursor,
 )
 
-from lakehouse.lib.openmetadata_asset_checks import push_check_evaluations
+from lakehouse.lib.openmetadata_asset_checks import (
+    push_check_evaluations,
+    push_freshness_changes,
+)
 
 log = logging.getLogger(__name__)
 
@@ -249,3 +255,58 @@ def build_asset_check_openmetadata_sensor(
         context.update_cursor(str(handled))
 
     return asset_check_openmetadata_sensor
+
+
+def build_freshness_openmetadata_sensor(
+    table_fqns: Mapping[AssetKey, str],
+) -> SensorDefinition:
+    """Push freshness policy state changes on *table_fqns*' assets to OpenMetadata.
+
+    The policies record no check evaluation, so asset_check_openmetadata_sensor
+    never sees them. Same cursor rules as that sensor, over the
+    ``FRESHNESS_STATE_CHANGE`` events. See
+    ``lakehouse.lib.openmetadata_asset_checks``.
+    """
+
+    @sensor(
+        name="freshness_openmetadata_sensor",
+        minimum_interval_seconds=300,
+        default_status=DefaultSensorStatus.RUNNING,
+        description=(
+            "Writes Dagster freshness policy state changes to OpenMetadata as "
+            "results of the dagster_freshness_check test case on the dbt "
+            "model's table."
+        ),
+    )
+    def freshness_openmetadata_sensor(
+        context: SensorEvaluationContext, openmetadata_api: ApiClientFactory
+    ) -> None:
+        if not context.cursor:
+            context.update_cursor(
+                latest_event_cursor(
+                    context.instance, DagsterEventType.FRESHNESS_STATE_CHANGE
+                )
+            )
+            return
+        deadline = time.monotonic() + OPENMETADATA_PUSH_SECONDS_PER_TICK
+        records = event_records_after(
+            context.instance,
+            DagsterEventType.FRESHNESS_STATE_CHANGE,
+            int(context.cursor),
+        )
+        if not records:
+            return
+        pushed, handled = push_freshness_changes(
+            records, table_fqns, openmetadata_api.client, context.log, deadline
+        )
+        context.log.info(
+            "Pushed %d freshness state changes to OpenMetadata, up to event %d of "
+            "%d-%d",
+            pushed,
+            handled,
+            records[0].storage_id,
+            records[-1].storage_id,
+        )
+        context.update_cursor(str(handled))
+
+    return freshness_openmetadata_sensor

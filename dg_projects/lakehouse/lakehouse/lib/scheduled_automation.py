@@ -190,6 +190,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # results to OpenMetadata on tables named from the image's manifest, which
     # is compiled for production.
     "asset_check_openmetadata": frozenset({"production"}),
+    # Its freshness twin, for the same reason.
+    "freshness_openmetadata": frozenset({"production"}),
     # Compares QA raw with the committed qa_observation.json and fails when
     # the file is wrong about which tables hold rows. QA only: it reads
     # ol_warehouse_qa_raw, and its asset is registered nowhere else.

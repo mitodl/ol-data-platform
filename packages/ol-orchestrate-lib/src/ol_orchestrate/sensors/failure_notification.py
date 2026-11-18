@@ -1,8 +1,9 @@
 """Deployment-wide failure notification.
 
-Two sensors: a run failure sensor that watches every code location and reports
-each failure to both Sentry and Slack, and an asset check sensor that announces
-the check failures no failed run reports.
+Three sensors: a run failure sensor that watches every code location and reports
+each failure to both Sentry and Slack, an asset check sensor that announces the
+check failures no failed run reports, and a freshness sensor that announces each
+asset whose freshness policy turns FAIL.
 
 Sentry and Slack live in one sensor on purpose: Sentry is captured first so the
 Slack message can carry the resulting event ID, which is what turns a
@@ -18,6 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 import sentry_sdk
 from dagster import (
@@ -75,6 +77,10 @@ RUN_STEP_KEY = "run"
 # fails a run because steps failed. Compared as the value because dagster does
 # not export RunFailureReason.
 STEP_FAILURE_REASON = "STEP_FAILURE"
+
+# FreshnessState.FAIL's value, compared as the value because dagster does not
+# export FreshnessState (it is a str enum, so the comparison holds).
+FRESHNESS_FAIL_STATE = "FAIL"
 
 DAGSTER_URL_BY_ENV = {
     "dev": "http://localhost:3000",
@@ -1096,8 +1102,10 @@ def asset_check_failure_message(
     ]
 
 
-def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]:
-    """Read the next batch of asset check evaluation event records above ``cursor``.
+def event_records_after(
+    instance: Any, event_type: DagsterEventType, cursor: int | None
+) -> Sequence[Any]:
+    """Read the next batch of *event_type* event records above ``cursor``.
 
     ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
     after ordering, so descending order returns the *newest* batch above the
@@ -1107,12 +1115,16 @@ def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]
     with no gaps and no repeats.
     """
     return instance.get_event_records(
-        EventRecordsFilter(
-            event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
-            after_cursor=cursor,
-        ),
+        EventRecordsFilter(event_type=event_type, after_cursor=cursor),
         limit=CHECK_EVALUATIONS_PER_TICK,
         ascending=True,
+    )
+
+
+def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]:
+    """Read the next batch of asset check evaluation event records above ``cursor``."""
+    return event_records_after(
+        instance, DagsterEventType.ASSET_CHECK_EVALUATION, cursor
     )
 
 
@@ -1177,10 +1189,16 @@ def latest_check_evaluation_cursor(instance: Any) -> str:
     Returns "-1" when there are no evaluations at all, so the first one ever
     recorded is still reported.
     """
+    return latest_event_cursor(instance, DagsterEventType.ASSET_CHECK_EVALUATION)
+
+
+def latest_event_cursor(instance: Any, event_type: DagsterEventType) -> str:
+    """Return the storage id of the newest *event_type* record, or "-1" if none.
+
+    See latest_check_evaluation_cursor for why a sensor starts here.
+    """
     records = instance.get_event_records(
-        EventRecordsFilter(event_type=DagsterEventType.ASSET_CHECK_EVALUATION),
-        limit=1,
-        ascending=False,
+        EventRecordsFilter(event_type=event_type), limit=1, ascending=False
     )
     return str(records[0].storage_id) if records else "-1"
 
@@ -1226,7 +1244,133 @@ def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
     )
 
 
+def collect_new_freshness_failures(
+    instance: Any, cursor: int | None
+) -> tuple[list[Any], str | None]:
+    """Read the next batch of freshness state changes above ``cursor``.
+
+    Returns the records of the changes to FAIL in that batch and the cursor to
+    store, or an empty list and None when there is nothing new. The freshness
+    daemon records a change only when an asset's state differs from its last
+    one, so an asset that stays stale is reported once, not on every
+    evaluation. Capped at MAX_FAILURES_PER_MESSAGE as collect_new_check_failures
+    is, for the same reason.
+    """
+    records = event_records_after(
+        instance, DagsterEventType.FRESHNESS_STATE_CHANGE, cursor
+    )
+    if not records:
+        return [], None
+    failures = []
+    for record in records:
+        change = record.event_log_entry.dagster_event.event_specific_data
+        if change.new_state == FRESHNESS_FAIL_STATE:
+            failures.append(record)
+            if len(failures) == MAX_FAILURES_PER_MESSAGE:
+                return failures, str(record.storage_id)
+    return failures, str(records[-1].storage_id)
+
+
+def freshness_failure_message(
+    failures: Sequence[tuple[Any, float | None]],
+) -> list[dict[str, Any]]:
+    """Format a batch of freshness state changes to FAIL for Slack.
+
+    :param failures: each change with its asset's last materialization time
+        (epoch seconds), or None when the asset has never materialized.
+    """
+
+    def _detail_text(change: Any, last_materialized: float | None) -> str:
+        updated = (
+            datetime.fromtimestamp(last_materialized, UTC).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
+            if last_materialized is not None
+            else "never"
+        )
+        return truncate_text(
+            f"*{change.key.to_user_string()}* -- freshness policy FAIL "
+            f"(was {change.previous_state.value})\nLast materialized: {updated}"
+        )
+
+    detail_blocks = [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": _detail_text(change, last)},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View asset"},
+                "url": f"{dagster_url}/assets/"
+                + "/".join(quote(part, safe="") for part in change.key.path),
+            },
+        }
+        for change, last in failures
+    ]
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": (
+                    f"Dagster {DAGSTER_ENV.capitalize()} Freshness Failure "
+                    f"({len(failures)})"
+                ),
+            },
+        },
+        *detail_blocks,
+    ]
+
+
+@sensor(
+    name="freshness_failure_sensor",
+    minimum_interval_seconds=300,
+    default_status=DefaultSensorStatus.RUNNING,
+    description=(
+        "Announces each asset whose freshness policy turns FAIL in Slack. The "
+        "freshness daemon evaluates the policies and records the state "
+        "changes; no run or asset check is involved, so neither of the other "
+        "failure sensors sees them."
+    ),
+)
+def freshness_failure_sensor(context: SensorEvaluationContext) -> None:
+    """Post assets that newly failed their freshness policy to Slack."""
+    if not context.cursor:
+        context.update_cursor(
+            latest_event_cursor(
+                context.instance, DagsterEventType.FRESHNESS_STATE_CHANGE
+            )
+        )
+        return
+
+    records, next_cursor = collect_new_freshness_failures(
+        context.instance, int(context.cursor)
+    )
+    if next_cursor is None:
+        return
+
+    context.update_cursor(next_cursor)
+
+    if not records:
+        return
+
+    failures = []
+    for record in records:
+        change = record.event_log_entry.dagster_event.event_specific_data
+        latest = context.instance.get_latest_materialization_event(change.key)
+        failures.append((change, latest.timestamp if latest else None))
+    client = WebClient(token=get_slack_token())
+    client.chat_postMessage(
+        channel=slack_channel,
+        blocks=freshness_failure_message(failures),
+        text=(
+            f"Dagster {DAGSTER_ENV}: {len(failures)} asset"
+            f"{'s' if len(failures) > 1 else ''} failed freshness"
+        ),
+    )
+
+
 FAILURE_NOTIFICATION_SENSORS = (
     run_failure_notification_sensor,
     asset_check_failure_sensor,
+    freshness_failure_sensor,
 )

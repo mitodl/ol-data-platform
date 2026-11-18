@@ -126,6 +126,9 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # declare default_status=RUNNING.
     "run_failure_notification_sensor": frozenset({"production"}),
     "asset_check_failure_sensor": frozenset({"production"}),
+    # Production only like its siblings. It replaced the freshness checks
+    # asset_check_failure_sensor announced, which also posted in production only.
+    "freshness_failure_sensor": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {
