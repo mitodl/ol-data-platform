@@ -36,6 +36,7 @@ unit_tests:
     rows:
     - {etl_source: xpro, run_readable_id: "course-v1:X+Y+R1", external_id: "block-v1:X+Y+R1+type@sequential+block@s1",
       kind: unit, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/s1",
-      unit_order: 0, content_files: '[["block-v1:X+Y+R1+type@html+block@h1", "core"]]'}
+      unit_order: 0, content_files: '[["block-v1:X+Y+R1+type@html+block@h1", "core"]]',
+      course_xml_version: v1}
     - {etl_source: xpro, run_readable_id: "course-v1:X+Y+R1", external_id: context,
-      kind: context, url: '', unit_order: 1, content_files: '[]'}
+      kind: context, url: '', unit_order: 1, content_files: '[]', course_xml_version: v1}

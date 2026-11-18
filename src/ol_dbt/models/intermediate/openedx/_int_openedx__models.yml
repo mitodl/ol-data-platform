@@ -62,6 +62,9 @@ models:
       the file to learners, from the OLX start dates on its path down from the course.
       Null when Learn leaves the file undated, for a run not yet checked, and for
       a run whose exclusions were written before the asset dated files.
+  - name: course_xml_version
+    description: str, the version of the export the run's blocks came from, when the
+      exclusions asset ran over it; null when is_exclusion_checked is false
   - name: is_exclusion_checked
     description: boolean, true when the exclusions asset ran over the export this
       run's blocks came from, so is_excluded is known

@@ -139,6 +139,7 @@ with blocks as (
     select distinct
         courserun_readable_id
         , content_file_source_system as source_system
+        , content_file_course_xml_version as course_xml_version
     from file_exclusions
 )
 
@@ -149,6 +150,7 @@ with blocks as (
     select
         candidate_files.*
         , checked_runs.courserun_readable_id is not null as is_exclusion_checked
+        , checked_runs.course_xml_version
         , case
             when checked_runs.courserun_readable_id is not null
                 then coalesce(file_exclusions.content_file_is_excluded, false)
@@ -282,6 +284,7 @@ select
     , module_files.extraction_status
     , module_files.extracted_at
     , module_files.release_date
+    , module_files.course_xml_version
     , module_files.is_exclusion_checked
     , module_files.is_excluded
     , module_files.exclusion_reason

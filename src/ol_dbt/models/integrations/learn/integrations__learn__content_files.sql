@@ -141,5 +141,6 @@ select
     , true as published
     , extracted_at as last_modified
     , key_release_date as release_date
+    , course_xml_version
 from content_files
 where key_rank = 1
