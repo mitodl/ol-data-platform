@@ -2049,7 +2049,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "networkit", specifier = ">=11.2" },
-    { name = "ol-llm", extras = ["anthropic", "bedrock", "google", "openai"], specifier = "==0.0.14" },
+    { name = "ol-llm", extras = ["anthropic", "bedrock", "google", "openai"], specifier = "==0.0.16" },
     { name = "ol-orchestrate-lib", extras = ["embeddings"], editable = "../../packages/ol-orchestrate-lib" },
     { name = "openai" },
     { name = "opik", specifier = ">=2.2.58" },
@@ -2332,7 +2332,7 @@ wheels = [
 
 [[package]]
 name = "ol-llm"
-version = "0.0.14"
+version = "0.0.16"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -2346,9 +2346,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/e8/865669292272dd97c5d775ec456eadb086e70110d783859f162db75b9cfc/ol_llm-0.0.14.tar.gz", hash = "sha256:cf47cfefcdbb5c6838e4b18219be9b40a02e51952518a274e9efe4335d71a28e", size = 392689, upload-time = "2026-11-13T18:23:18.783Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/57/74/4863562c24fbdc1934c52d395cf451ae8fc68435ed652f39f3c5b3f76949/ol_llm-0.0.16.tar.gz", hash = "sha256:cbbf6c4ca4973674a20225bbd28da90318f7955a0d3763e481c51a067d241455", size = 405599, upload-time = "2026-11-18T18:07:05.616Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/1e/756587e760242c08110ce54884772671d9559bfb49260815e23a80fc5b5c/ol_llm-0.0.14-py3-none-any.whl", hash = "sha256:9c4fd7c0dfed096b8385782b00948ee6d277d318f4a553feacfb7f35969b9055", size = 215589, upload-time = "2026-11-13T18:23:17.165Z" },
+    { url = "https://files.pythonhosted.org/packages/24/d2/951361116a8b75be066c1212d14c170df5c0d65422fbd29278c1a888e400/ol_llm-0.0.16-py3-none-any.whl", hash = "sha256:07f09dbe5cf79bc832408b2a360829f894244d5590520f5154ba6cab670fe686", size = 222268, upload-time = "2026-11-18T18:07:03.802Z" },
 ]
 
 [package.optional-dependencies]
@@ -2419,7 +2419,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
     { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.3" },
-    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.14" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.16" },
     { name = "pandas", specifier = "~=3.1.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
@@ -2570,7 +2570,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.2.143"
+version = "2.2.144"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -2594,9 +2594,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/27/f2/9d697979c013e7c8f64effcd57192a1e6021f6bb2ae8ad07496a27f6625c/opik-2.2.143.tar.gz", hash = "sha256:5e598742ca350c82e6ed819ccb41fd23ddadcd9997f925b178299fc0e9855683", size = 1433526, upload-time = "2026-11-06T08:43:48.202Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/f2/6a7d4ed0ee8861c9ef449ac1c5f8428a0143da683d7803717c19b3a3566e/opik-2.2.144.tar.gz", hash = "sha256:34faef6cb67b2db4b6aa434ff26c54cbfa61236acb27e047e8d845db092dedfd", size = 1437084, upload-time = "2026-11-16T09:59:16.552Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/e0/c8d2fa58b3dc6f84f34afec20faf6d4f07eac69d8f0fd453ad55b8bb464c/opik-2.2.143-py3-none-any.whl", hash = "sha256:c6abe799a74706430b4f83b0be53033cc6faa479c9536eaf3bfffab3cf79f5fd", size = 2186292, upload-time = "2026-11-06T08:43:46.227Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/b4/b344b47be05ee2ac8882fdea0b4961d87b46d29d23986adaf74ca19d3761/opik-2.2.144-py3-none-any.whl", hash = "sha256:5925c5acb8759d7a09cd0709d035028a34cb835b49b0f59401310bf4c8b596dd", size = 2190921, upload-time = "2026-11-16T09:59:14.028Z" },
 ]
 
 [[package]]
