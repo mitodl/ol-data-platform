@@ -30,12 +30,14 @@ from ol_orchestrate.lib.embeddings.learn import (
     ContentFileDocument,
     ContentFilePointMapper,
 )
-from ol_orchestrate.lib.embeddings.models import Embedder, EmbeddingBatch
+from ol_orchestrate.lib.embeddings.models import (
+    Embedder,
+    EmbeddingBatch,
+    EmbeddingModelSpec,
+)
 from ol_orchestrate.lib.embeddings.pipeline import (
     ChunkRow,
-    StoredVector,
     chunk_documents,
-    embed_chunks,
 )
 from ol_orchestrate.lib.embeddings.strategy import (
     EmbeddingStrategy,
@@ -158,6 +160,33 @@ EMBEDDED_SCHEMA = pl.Schema(
     }
 )
 VECTOR_SCHEMA = pl.Schema({**EMBEDDED_SCHEMA, "run_id": pl.String()})
+# Vectors already computed in a vector space, one row per input checksum, with
+# the model that computed each. Kept as a frame rather than per-text Python
+# lists: a list of 3,072 floats is about 100 KB, so a 30K-text course run held
+# that way outgrew an 8 GiB run pod.
+KNOWN_SCHEMA = pl.Schema(
+    {
+        "input_checksum": pl.String(),
+        "vector": pl.List(pl.Float32()),
+        "model_id": pl.String(),
+    }
+)
+
+
+# Requests per process_batch chunk. A chunk's results are held as Python lists
+# until it is persisted into a frame, and ol-llm's default of 200 requests of up
+# to 256 texts covers a whole course run.
+REQUESTS_PER_CHUNK = 8
+
+
+def no_vectors() -> pl.DataFrame:
+    """Return an empty frame of ``KNOWN_SCHEMA``."""
+    return pl.DataFrame(schema=KNOWN_SCHEMA)
+
+
+def checksums_of(known: pl.DataFrame) -> set[str]:
+    """Return the input checksums of a ``KNOWN_SCHEMA`` frame."""
+    return set(known["input_checksum"].to_list())
 
 
 @cache
@@ -416,10 +445,10 @@ def sibling_reads(
 
 
 def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
-    """Rebuild the chunk pairs :func:`embed_chunks` takes from a chunk table's rows.
+    """Rebuild the chunk pairs :func:`embed_strategy` takes from a chunk table's rows.
 
     The document is rebuilt from the row's key and kind only, which is all
-    ``embed_chunks`` reads for a strategy without a context template.
+    ``embed_strategy`` reads for a strategy without a context template.
 
     :param chunks: rows of a chunk table
     :rtype: list[tuple[Document, ChunkRow]]
@@ -437,7 +466,7 @@ def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
 
 def known_vectors(
     vectors: pl.LazyFrame | None, vector_space: str, checksums: Iterable[str]
-) -> dict[str, StoredVector]:
+) -> pl.DataFrame:
     """Look up stored vectors of a vector space by the checksum of the text embedded.
 
     :param vectors: a vector table, ``None`` before it exists
@@ -445,13 +474,13 @@ def known_vectors(
         ``text-embedding-3-large@3072``
     :param checksums: the input checksums wanted
     :returns: per checksum found, the vector of its earliest stored row and the
-        model that produced it
-    :rtype: dict[str, StoredVector]
+        model that produced it, in ``KNOWN_SCHEMA``
+    :rtype: pl.DataFrame
     """
     wanted = sorted(set(checksums))
     if vectors is None or not wanted:
-        return {}
-    found = (
+        return no_vectors()
+    return (
         vectors.filter(
             (pl.col("vector_space") == vector_space)
             & pl.col("input_checksum").is_in(wanted)
@@ -460,13 +489,10 @@ def known_vectors(
         # when two models of the space stored one.
         .sort("input_checksum", "embedded_at", "model_id", "chunk_key")
         .unique("input_checksum", keep="first", maintain_order=True)
-        .select("input_checksum", "vector", "model_id")
+        .select(KNOWN_SCHEMA.names())
+        .cast(KNOWN_SCHEMA)
         .collect()
     )
-    return {
-        checksum: StoredVector([float(value) for value in vector], model_id)
-        for checksum, vector, model_id in found.iter_rows()
-    }
 
 
 def point_ids_by_checksum(
@@ -496,7 +522,7 @@ def learn_vectors(
     point_ids: Mapping[str, Sequence[str]],
     vector_length: int,
     batch_size: int = QDRANT_BATCH_SIZE,
-) -> dict[str, StoredVector]:
+) -> pl.DataFrame:
     """Take Learn's vector for each text Learn embedded, from its points by id.
 
     A point's vector is taken for a checksum only when the MD5 of the text
@@ -511,15 +537,18 @@ def learn_vectors(
     :param vector_length: the strategy's vector length; a vector of another
         length is not taken
     :param batch_size: ids per read
-    :returns: per checksum found, Learn's vector, as ``LEARN_MODEL_ID``'s
-    :rtype: dict[str, StoredVector]
+    :returns: per checksum found, Learn's vector, as ``LEARN_MODEL_ID``'s, in
+        ``KNOWN_SCHEMA``
+    :rtype: pl.DataFrame
     """
     pending = [
         (point_id, checksum)
         for checksum, ids in sorted(point_ids.items())
         for point_id in ids
     ]
-    found: dict[str, StoredVector] = {}
+    found: set[str] = set()
+    # One frame per read, so only a batch of points is held as Python lists.
+    frames = [no_vectors()]
     for start in range(0, len(pending), batch_size):
         batch = [
             (point_id, checksum)
@@ -529,6 +558,7 @@ def learn_vectors(
         if not batch:
             continue
         points = fetch([point_id for point_id, _ in batch])
+        taken: dict[str, list[float]] = {}
         for point_id, checksum in batch:
             point = points.get(point_id)
             if (
@@ -540,8 +570,21 @@ def learn_vectors(
                 or md5_hex(point.text) != checksum
             ):
                 continue
-            found[checksum] = StoredVector(point.vector, LEARN_MODEL_ID)
-    return found
+            found.add(checksum)
+            taken[checksum] = point.vector
+        frames.append(_known_frame(taken, LEARN_MODEL_ID))
+    return pl.concat(frames)
+
+
+def _known_frame(vectors: Mapping[str, list[float]], model_id: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "input_checksum": list(vectors),
+            "vector": list(vectors.values()),
+            "model_id": model_id,
+        },
+        schema=KNOWN_SCHEMA,
+    )
 
 
 @dataclass(frozen=True)
@@ -586,11 +629,29 @@ def _request_batches(
     return batches
 
 
+def _check_inputs(
+    model: EmbeddingModelSpec, embedder: Embedder, known: pl.DataFrame
+) -> None:
+    # A wrong embedder or a vector of another length would be stored under the
+    # strategy's vector space and reused by every later run.
+    if embedder.spec != model:
+        msg = f"embedder is for {embedder.spec.model_id}, not {model.model_id}"
+        raise ValueError(msg)
+    # A null vector has a null length, which any() would skip.
+    lengths = known["vector"].list.len()
+    if lengths.is_null().any() or (lengths != model.vector_length).any():
+        msg = (
+            f"known vectors must be {model.vector_length} long, as "
+            f"{model.vector_space_id}"
+        )
+        raise ValueError(msg)
+
+
 def embed_strategy(  # noqa: PLR0913
     strategy: EmbeddingStrategy,
     chunks: Sequence[tuple[Document, ChunkRow]],
     embedder: Embedder,
-    lookup: Callable[[str, Iterable[str]], dict[str, StoredVector]],
+    lookup: Callable[[str, Iterable[str]], pl.DataFrame],
     *,
     embedded_at: datetime,
     max_workers: int = 1,
@@ -613,31 +674,41 @@ def embed_strategy(  # noqa: PLR0913
     :param chunks: the partition's chunks of the strategy's chunker
     :param embedder: an embedder for the strategy's model
     :param lookup: stored vectors and their models by input checksum, for a
-        vector space
+        vector space, in ``KNOWN_SCHEMA``
     :param embedded_at: the time put on new rows
     :param max_workers: requests in flight at once
     :param logger: where ``process_batch`` logs, e.g. ``context.log``
     :returns: the vector rows, without ``run_id``, and what the run did
     :rtype: tuple[pl.DataFrame, StrategyOutcome]
+    :raises ValueError: when the embedder is for another model, or a known
+        vector is not the strategy model's length
     """
+    model = strategy.model
     texts = [strategy.embedding_text(document, row.chunk) for document, row in chunks]
     checksums = [md5_hex(text) for text in texts]
-    known = lookup(strategy.model.vector_space_id, checksums)
-    reused = len(set(checksums) & set(known))
+    known = lookup(model.vector_space_id, checksums)
+    _check_inputs(model, embedder, known)
+    known_checksums = checksums_of(known)
+    reused = len(set(checksums) & known_checksums)
     new_texts = {
         checksum: text
         for checksum, text in zip(checksums, texts, strict=True)
-        if checksum not in known
+        if checksum not in known_checksums
     }
 
-    embedded: dict[str, list[float]] = {}
+    embedded = [no_vectors()]
     input_tokens = 0
     failure = None
 
     def persist(chunk: Chunk[RequestBatch, EmbeddingBatch]) -> None:
         nonlocal input_tokens
         for batch, result in chunk.succeeded:
-            embedded.update(zip(batch.checksums, result.vectors, strict=True))
+            embedded.append(
+                _known_frame(
+                    dict(zip(batch.checksums, result.vectors, strict=True)),
+                    model.model_id,
+                )
+            )
             input_tokens += result.input_tokens
 
     def send(batches: list[RequestBatch]) -> BatchReport[RequestBatch]:
@@ -646,6 +717,7 @@ def embed_strategy(  # noqa: PLR0913
                 batches,
                 lambda batch: embedder.embed(batch.texts, input_type="document"),
                 persist,
+                chunk_size=max(max_workers, REQUESTS_PER_CHUNK),
                 max_workers=max_workers,
                 breaker=CircuitBreaker(),
                 logger=logger,
@@ -668,31 +740,39 @@ def embed_strategy(  # noqa: PLR0913
             if singles:
                 reports.append(send(singles))
 
-    known.update(
-        (checksum, StoredVector(vector, strategy.model.model_id))
-        for checksum, vector in embedded.items()
+    new = pl.concat(embedded)
+    # A chunk whose request failed has no vector, so the inner join drops it.
+    frame = (
+        pl.DataFrame(
+            {
+                "chunk_key": [row.chunk_key for _, row in chunks],
+                "input_checksum": checksums,
+            },
+            schema={"chunk_key": pl.String(), "input_checksum": pl.String()},
+        )
+        .join(
+            pl.concat([known, new]),
+            on="input_checksum",
+            how="inner",
+            maintain_order="left",
+        )
+        .with_columns(
+            pl.lit(strategy.strategy_id).alias("strategy_id"),
+            pl.lit(model.vector_space_id).alias("vector_space"),
+            pl.lit(embedded_at).alias("embedded_at"),
+        )
+        .select(EMBEDDED_SCHEMA.names())
+        .cast(EMBEDDED_SCHEMA)
     )
-    vectored = [
-        pair
-        for pair, checksum in zip(chunks, checksums, strict=True)
-        if checksum in known
-    ]
-    if len(vectored) < len(chunks):
+    if frame.height < len(chunks):
         failure = " Then one text per request: ".join(
             report.describe() for report in reports
         )
-    outcome = embed_chunks(
-        strategy, vectored, embedder, known_vectors=known, embedded_at=embedded_at
-    )
-    frame = pl.DataFrame(
-        [row.model_dump() for row in outcome.rows],
-        schema=EMBEDDED_SCHEMA,
-    )
     return frame, StrategyOutcome(
         chunks=len(chunks),
-        embedded_texts=len(embedded),
+        embedded_texts=new.height,
         reused_texts=reused,
-        failed_chunks=len(chunks) - len(vectored),
+        failed_chunks=len(chunks) - frame.height,
         input_tokens=input_tokens,
         failure=failure,
     )

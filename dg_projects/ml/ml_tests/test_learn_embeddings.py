@@ -54,9 +54,11 @@ from ml.assets.learn_embeddings import (
 )
 from ml.lib import warehouse
 from ml.lib.learn_embeddings import (
+    KNOWN_SCHEMA,
     LEARN_MODEL_ID,
     STRATEGIES_PATH,
     TOPICS_RELATION,
+    embed_strategy,
     known_vectors,
     learn_vectors,
     sibling_reads,
@@ -69,10 +71,10 @@ from ml.sensors.learn_embeddings import (
     learn_content_file_text_sensor,
 )
 from ol_llm import LLMRejected, LLMUnavailable
-from ol_orchestrate.lib.embeddings.documents import md5_hex
+from ol_orchestrate.lib.embeddings.documents import Document, md5_hex
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
-from ol_orchestrate.lib.embeddings.pipeline import StoredVector, chunk_key
+from ol_orchestrate.lib.embeddings.pipeline import chunk_documents, chunk_key
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -738,8 +740,8 @@ def test_the_space_wide_lookup_takes_the_earliest_row():
     for frame in (rows, rows.reverse()):
         (found,) = known_vectors(
             frame.lazy(), "text-embedding-3-large@3072", [md5_hex("Text.")]
-        ).values()
-        assert (found.model_id, found.vector[0]) == (
+        ).iter_rows(named=True)
+        assert (found["model_id"], found["vector"][0]) == (
             "openai:text-embedding-3-large@3072",
             1.0,
         )
@@ -1725,6 +1727,34 @@ def test_the_check_passes_on_vectors_taken_from_learn(tables, calls, learn_qdran
     assert metadata[f"{LEARN_MODEL_ID}/cosine_min"] == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("vector", [None, [1.0, 2.0]])
+def test_a_known_vector_of_the_wrong_length_is_an_error(vector):
+    strategy = strategies()["learn_v1_content_files"]
+    (pair,) = chunk_documents(
+        [Document(doc_key="d", doc_kind=strategy.doc_kind, text="Text.")],
+        strategy.chunker,
+    )
+    known = pl.DataFrame(
+        {
+            "input_checksum": [md5_hex("Text.")],
+            "vector": [vector],
+            "model_id": [strategy.model.model_id],
+        },
+        schema=KNOWN_SCHEMA,
+    )
+    calls: list[list[str]] = []
+
+    with pytest.raises(ValueError, match="known vectors must be 3072 long"):
+        embed_strategy(
+            strategy,
+            [pair],
+            FakeEmbedder(strategy.model, calls, set(), set()),
+            lambda _space, _checksums: known,
+            embedded_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    assert calls == []
+
+
 def test_learn_vectors_reads_only_until_a_checksum_is_found():
     matching = LearnPoint(text="Shared.", checksum=None, vector=[1.0, 0.0])
     reads: list[list[str]] = []
@@ -1746,7 +1776,13 @@ def test_learn_vectors_reads_only_until_a_checksum_is_found():
     )
 
     # p1's text is not "Other.", and p3's vector is the wrong length.
-    assert found == {md5_hex("Shared."): StoredVector([1.0, 0.0], LEARN_MODEL_ID)}
+    assert found.to_dicts() == [
+        {
+            "input_checksum": md5_hex("Shared."),
+            "vector": [1.0, 0.0],
+            "model_id": LEARN_MODEL_ID,
+        }
+    ]
     assert reads == [["p1"], ["p3"], ["p1"]]
 
 
