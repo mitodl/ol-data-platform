@@ -999,7 +999,7 @@ with mitx_users as (
         ) is not null as has_employment
         , row_number() over (
             partition by user_pk
-            order by id_source_rank asc nulls last, row_num asc
+            order by id_source_rank asc nulls last, row_num asc nulls last
         ) as fill_rank
     from ranked_users
 )
@@ -1031,7 +1031,7 @@ with mitx_users as (
         , company
         , job_title
         , industry
-        , row_number() over (partition by user_pk order by fill_rank asc) as employment_row_num
+        , row_number() over (partition by user_pk order by fill_rank asc nulls last) as employment_row_num
     from ranked_fill
     where has_employment
 )
