@@ -102,7 +102,6 @@ These replace the bare aggregate, array and string calls:
    - Trino: `arbitrary(x)` (native)
    - DuckDB: `any_value(x)` (DuckDB's `arbitrary()` is `first()` and can return NULL)
    - StarRocks: `any_value(x)` (no `arbitrary()`)
-   - `marts__micromasters_summary_timeseries` still calls `arbitrary()` directly
 
 8. **`approx_percentile(expr, percentage)`** - Approximate percentile
    - Trino: `approx_percentile(x, p)`, a value of `x`'s type
