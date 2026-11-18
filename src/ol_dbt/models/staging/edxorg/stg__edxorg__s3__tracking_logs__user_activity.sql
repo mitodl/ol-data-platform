@@ -48,7 +48,7 @@ with source as (
         --- use regex here to preserve the nanoseconds as date_parse truncates the fraction of second to milliseconds
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences(adapter.quote('time'), "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
-        )) }} as useractivity_timestamp
+        ), fractional_digits=9) }} as useractivity_timestamp
     from most_recent_source
 )
 
