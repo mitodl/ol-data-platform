@@ -35,3 +35,14 @@ USER root
 RUN install -d -o "${NB_UID}" -g "${NB_GID}" "${UV_CACHE_DIR}" "${UV_CACHE_SEED_DIR}"
 USER ${NB_UID}
 RUN prewarm-uv-cache
+
+# gh supplies the GitHub credentials for the Git panel. A user signs in once
+# with `gh auth login` in a terminal, which keeps the token under ~/.config/gh
+# on the persistent home volume, and /etc/gitconfig hands it to git for
+# github.com remotes. These come after the cache seed so a gh bump doesn't
+# rebuild it.
+# renovate: datasource=conda depName=conda-forge/gh
+ARG GH_VERSION=2.104.0
+RUN mamba install --yes --quiet "gh=${GH_VERSION}" && \
+    mamba clean --all -f -y
+COPY gitconfig /etc/gitconfig
