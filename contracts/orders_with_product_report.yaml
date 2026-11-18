@@ -104,7 +104,7 @@ contract:
     description: The table has a description.
     rule: '{"!!": [{"var": "description"}]}'
     enabled: true
-  # Dagster's freshness check fails once the table is older than
+  # Dagster's freshness policy fails once the table is older than
   # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
   sla:
     refreshFrequency:
