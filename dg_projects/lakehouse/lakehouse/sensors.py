@@ -11,10 +11,12 @@ from collections.abc import Mapping
 from dagster import (
     AssetKey,
     DagsterEventType,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Failure,
     MetadataValue,
     RunRequest,
+    ScheduleDefinition,
     SensorDefinition,
     SensorEvaluationContext,
     SensorResult,
@@ -38,6 +40,7 @@ from ol_orchestrate.sensors.failure_notification import (
 from lakehouse.lib.openmetadata_asset_checks import (
     push_check_evaluations,
     push_freshness_changes,
+    reconcile_freshness_test_cases,
 )
 
 log = logging.getLogger(__name__)
@@ -308,3 +311,50 @@ def build_freshness_openmetadata_sensor(
         context.update_cursor(str(handled))
 
     return freshness_openmetadata_sensor
+
+
+def build_freshness_openmetadata_reconcile_schedule(
+    table_fqns: Mapping[AssetKey, str],
+) -> ScheduleDefinition:
+    """Daily, give each covered table that lacks a freshness test case one.
+
+    A job rather than a sensor tick: an OpenMetadata write can take seconds
+    (see OPENMETADATA_PUSH_SECONDS_PER_TICK), and a run of new models can need
+    more of them than fit in a tick. See
+    ``lakehouse.lib.openmetadata_asset_checks.reconcile_freshness_test_cases``.
+    """
+
+    # context is unannotated, like repair_lagging_snapshot_pointers': under
+    # `from __future__ import annotations` Dagster sees the annotation as a
+    # string and refuses it.
+    @op(name="reconcile_freshness_test_cases")
+    def reconcile(context, openmetadata_api: ApiClientFactory) -> None:
+        states = context.instance.get_freshness_state_records(list(table_fqns))
+        created = reconcile_freshness_test_cases(
+            states, table_fqns, openmetadata_api.client, context.log
+        )
+        context.log.info(
+            "Created %d freshness test cases in OpenMetadata, of %d assets with a "
+            "freshness state",
+            created,
+            len(states),
+        )
+
+    @job(
+        name="freshness_openmetadata_reconcile",
+        description=(
+            "Give each dbt model's table that lacks a dagster_freshness_check "
+            "test case in OpenMetadata one, with the model's current freshness "
+            "state."
+        ),
+    )
+    def reconcile_job() -> None:
+        reconcile()
+
+    return ScheduleDefinition(
+        name="freshness_openmetadata_reconcile_daily",
+        job=reconcile_job,
+        cron_schedule="0 12 * * *",
+        execution_timezone="UTC",
+        default_status=DefaultScheduleStatus.RUNNING,
+    )

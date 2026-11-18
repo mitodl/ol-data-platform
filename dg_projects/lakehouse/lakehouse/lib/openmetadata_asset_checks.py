@@ -196,18 +196,74 @@ def freshness_test_case_result_request(
 
     :param change: a ``FreshnessStateChange``.
     """
-    status = FRESHNESS_TEST_CASE_STATUS.get(change.new_state.value)
+    return _freshness_result(
+        change.new_state.value,
+        timestamp_ms,
+        f"(was {change.previous_state.value}).",
+    )
+
+
+def _freshness_result(
+    state: str, timestamp_ms: int, detail: str
+) -> dict[str, Any] | None:
+    status = FRESHNESS_TEST_CASE_STATUS.get(state)
     if status is None:
         return None
     return {
         "timestamp": timestamp_ms,
         "testCaseStatus": status,
-        "result": (
-            f"Dagster freshness policy {change.new_state.value} "
-            f"(was {change.previous_state.value})."
-        ),
+        "result": f"Dagster freshness policy {state} {detail}",
         "testResultValue": [],
     }
+
+
+def reconcile_freshness_test_cases(
+    states: Mapping[AssetKey, Any],
+    table_fqns: Mapping[AssetKey, str],
+    client: OpenMetadataApiClient,
+    log: logging.Logger,
+) -> int:
+    """Give each table that lacks a freshness test case one, with its current state.
+
+    push_freshness_changes skips a change on a table OpenMetadata has not
+    ingested yet, and the daemon does not repeat a state, so a new model's
+    first state (written right after its first build, usually before
+    OpenMetadata catalogs the table) would otherwise never arrive. A table that
+    has the test case already gets every change through that sensor, so it is
+    left alone. A table OpenMetadata still lacks is skipped with a warning and
+    tried again on the next run.
+
+    :param states: each asset's current ``FreshnessStateRecord``.
+    :returns: how many test cases were created.
+    :rtype: int
+    """
+    created = 0
+    defined = False
+    for key, record in states.items():
+        if key not in table_fqns:
+            continue
+        body = _freshness_result(
+            record.freshness_state.value,
+            int(record.updated_at.timestamp() * 1000),
+            "(current state, written when the test case was created).",
+        )
+        if body is None:
+            continue
+        table_fqn = table_fqns[key]
+        name = test_case_request(FRESHNESS_CHECK_NAME, table_fqn)["name"]
+        if _exists(
+            client,
+            "v1/dataQuality/testCases/name/" + quote(f"{table_fqn}.{name}", safe=""),
+        ):
+            continue
+        if not defined:
+            _ensure_test_definition(client)
+            defined = True
+        test_case_fqn = _ensure_test_case(client, FRESHNESS_CHECK_NAME, table_fqn, log)
+        if test_case_fqn is not None:
+            _post_result(client, test_case_fqn, body)
+            created += 1
+    return created
 
 
 def push_freshness_changes(

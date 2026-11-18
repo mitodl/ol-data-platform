@@ -120,6 +120,7 @@ from lakehouse.resources.starrocks_iceberg_maintenance import (
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
     build_asset_check_openmetadata_sensor,
+    build_freshness_openmetadata_reconcile_schedule,
     build_freshness_openmetadata_sensor,
     iceberg_snapshot_pointer_lag_sensor,
     iceberg_snapshot_pointer_repair_job,
@@ -860,6 +861,9 @@ asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
 freshness_openmetadata_sensor = build_freshness_openmetadata_sensor(
     openmetadata_table_fqns
 )
+freshness_openmetadata_reconcile_schedule = (
+    build_freshness_openmetadata_reconcile_schedule(openmetadata_table_fqns)
+)
 
 defs = Definitions(
     assets=with_failure_hooks(
@@ -964,6 +968,10 @@ defs = Definitions(
             ("posthog_staging_hourly", posthog_staging_schedule),
             *non_airbyte_staging_schedules,
             ("learn_integrations_qa_daily", learn_integrations_qa_schedule),
+            (
+                "freshness_openmetadata_reconcile_daily",
+                freshness_openmetadata_reconcile_schedule,
+            ),
         ]
     ),
 )

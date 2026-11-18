@@ -65,7 +65,10 @@ That policy replaces the 26-hour default the dimensional, mart and reporting
 groups otherwise get, and a contracted model in any other group gets one too.
 `freshness_failure_sensor` posts each model that turns FAIL to Slack, and
 `freshness_openmetadata_sensor` writes each state change to the table's
-`dagster_freshness_check` test case in OpenMetadata.
+`dagster_freshness_check` test case in OpenMetadata. A change on a table
+OpenMetadata hasn't ingested yet is skipped, so `freshness_openmetadata_reconcile_daily`
+creates the test case, with the current state, for each covered table still
+missing one.
 A `dbt_model` contract that sets `maxLatency` must also set `refreshFrequency`,
 since the latency is grace on it. `sla` on `dbt_source` and `fqn` contracts is
 recorded in OpenMetadata only, so either field may stand alone there.

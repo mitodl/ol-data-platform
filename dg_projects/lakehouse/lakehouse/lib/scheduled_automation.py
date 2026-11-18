@@ -192,6 +192,9 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "asset_check_openmetadata": frozenset({"production"}),
     # Its freshness twin, for the same reason.
     "freshness_openmetadata": frozenset({"production"}),
+    # Creates the freshness test cases that sensor could not, on the same
+    # production tables.
+    "freshness_openmetadata_reconcile_daily": frozenset({"production"}),
     # Compares QA raw with the committed qa_observation.json and fails when
     # the file is wrong about which tables hold rows. QA only: it reads
     # ol_warehouse_qa_raw, and its asset is registered nowhere else.
