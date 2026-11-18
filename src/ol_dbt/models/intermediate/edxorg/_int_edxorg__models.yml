@@ -224,6 +224,12 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_id", "courserun_readable_id"]
+      config:
+        # QA MicroMasters (RC) course runs 2 and 14 are one edX run in old and
+        # course-v1 key formats (2026-11-18), which fans out the micromasters join;
+        # production has no such pair.
+        severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+          \ target.database) == 'ol_data_lake_qa' else 'error' }}"
 
 - name: int__edxorg__mitx_users
   description: Intermediate User model for edx.org that contains the most recent user
