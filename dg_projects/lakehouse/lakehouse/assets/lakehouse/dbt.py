@@ -1,7 +1,6 @@
 import json
 import os
 from collections.abc import Mapping, Sequence
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +10,6 @@ from dagster import (
     AssetExecutionContext,
     AssetSpec,
     AutomationCondition,
-    FreshnessPolicy,
     OpExecutionContext,
     build_column_schema_change_checks,
     job,
@@ -427,6 +425,8 @@ def dbt_docs_artifacts_job() -> None:
 # These add the two runtime signals dbt tests cannot express, on the declared
 # contract boundary (models/dimensional, see models/dimensional/README.md):
 #   1. freshness      — has each dimensional table actually rebuilt recently?
+#                       (a FreshnessPolicy, which definitions.py attaches since
+#                       it needs the data contracts)
 #   2. schema change  — did a table's column set/types drift between builds?
 #
 # The dimensional layer is the group whose asset-key first path component is
@@ -434,16 +434,6 @@ def dbt_docs_artifacts_job() -> None:
 # already uses to build the Superset datasets).
 # ---------------------------------------------------------------------------
 DIMENSIONAL_GROUP = "dimensional"
-
-# Dimensional models rebuild on the nightly dbt cadence (automation sensor +
-# 02:00 UTC layer schedule). Warn if a table has not updated in 30h (a run
-# slipped) and fail at 48h (roughly two missed cycles). Evaluated automatically
-# by the Dagster daemon — no sensor required. definitions.py attaches it to the
-# dimensional assets without a data contract SLA, since it needs the contracts.
-DIMENSIONAL_FRESHNESS_POLICY = FreshnessPolicy.time_window(
-    fail_window=timedelta(hours=48),
-    warn_window=timedelta(hours=30),
-)
 
 dimensional_asset_keys = [
     key for key in full_dbt_project.keys if key.path[0] == DIMENSIONAL_GROUP

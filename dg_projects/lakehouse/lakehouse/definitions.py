@@ -12,9 +12,9 @@ from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    FreshnessPolicy,
     RunConfig,
     ScheduleDefinition,
-    build_sensor_for_freshness_checks,
     define_asset_job,
     with_source_code_references,
 )
@@ -60,11 +60,9 @@ from lakehouse.assets.lake_orphan_sweep import (
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
-    DIMENSIONAL_FRESHNESS_POLICY,
     dbt_docs_artifacts_job,
     dbt_project,
     dbt_source_freshness_job,
-    dimensional_asset_keys,
     dimensional_schema_change_checks,
     full_dbt_project,
 )
@@ -92,11 +90,10 @@ from lakehouse.lib.automation_targets import (
     ocw_learn_target,
 )
 from lakehouse.lib.contract_freshness import (
-    build_freshness_checks,
     contract_freshness_bounds,
     dbt_model_key_lookup,
     find_contracts_dir,
-    with_uncontracted_freshness_policy,
+    with_freshness_policies,
 )
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
@@ -123,6 +120,7 @@ from lakehouse.resources.starrocks_iceberg_maintenance import (
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
     build_asset_check_openmetadata_sensor,
+    build_freshness_openmetadata_sensor,
     iceberg_snapshot_pointer_lag_sensor,
     iceberg_snapshot_pointer_repair_job,
 )
@@ -386,17 +384,30 @@ dbt_models_for_superset_datasets = {
     "dimensional",
 }  # relevant dbt models to sync with superset
 
-# The freshness bound each dbt model with a data contract SLA (contracts/) is
-# checked against, in place of its layer's default.
+# Freshness policies on the layers the business actually reads. Deliberately not
+# applied to every dbt asset: staging and intermediate models are refreshed on
+# their own cadences and would generate far more noise than signal. The
+# FreshnessDaemon evaluates them; freshness_failure_sensor (delivery) posts each
+# asset that turns FAIL to Slack.
+FRESHNESS_POLICY_GROUPS = {"mart", "reporting", "dimensional"}
+
+# 26 hours against the 24-hour default sync cadence: a nightly build that runs a
+# little late must not page anyone.
+LAYER_FRESHNESS_POLICY = FreshnessPolicy.time_window(fail_window=timedelta(hours=26))
+
+# A model with a data contract SLA (contracts/) fails at that bound instead, in
+# any group, so the contract is the one place its freshness is declared.
 dbt_contract_bounds = contract_freshness_bounds(
     load_contracts(find_contracts_dir()),
     dbt_model_key_lookup(full_dbt_project),
 )
-full_dbt_project = with_uncontracted_freshness_policy(
+full_dbt_project = with_freshness_policies(
     full_dbt_project,
-    keys=dimensional_asset_keys,
+    default_keys=[
+        key for key in full_dbt_project.keys if key.path[0] in FRESHNESS_POLICY_GROUPS
+    ],
+    default_policy=LAYER_FRESHNESS_POLICY,
     contract_bounds=dbt_contract_bounds,
-    policy=DIMENSIONAL_FRESHNESS_POLICY,
 )
 dbt_model_keys = full_dbt_project.keys
 
@@ -835,40 +846,19 @@ resources_dict = {
 if not SKIP_AIRBYTE:
     resources_dict["airbyte"] = airbyte_workspace
 
-# Freshness checks on the layers the business actually reads. Deliberately not
-# applied to every dbt asset: staging and intermediate models are refreshed on
-# their own cadences and would generate far more noise than signal.
-FRESHNESS_CHECKED_GROUPS = {"mart", "reporting", "dimensional"}
-freshness_checked_assets = [
-    key for key in dbt_model_keys if key.path[0] in FRESHNESS_CHECKED_GROUPS
-]
-
-# A model with a data contract SLA (contracts/) is checked against that
-# instead, in any group, so the contract is the one place its freshness is
-# declared. The default is 26 hours, against the 24-hour default sync cadence
-# -- a nightly build that runs a little late must not page anyone.
-dbt_layer_freshness_checks = build_freshness_checks(
-    default_keys=freshness_checked_assets,
-    default_bound=timedelta(hours=26),
-    contract_bounds=dbt_contract_bounds,
-)
-
-dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
-    freshness_checks=dbt_layer_freshness_checks,
-    name="dbt_layer_freshness_sensor",
-    minimum_interval_seconds=3600,
-    default_status=DefaultSensorStatus.STOPPED,
-)
-
 # The image's manifest is compiled for the production target, so these are
 # production's table FQNs whatever environment loads this. That is one reason
-# the sensor is registered in production only.
+# the sensors are registered in production only.
+openmetadata_table_fqns = table_fqns_by_asset_key(
+    *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
+    asset_keys=set(full_dbt_project.keys),
+    service=TRINO_SERVICE,
+)
 asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
-    table_fqns_by_asset_key(
-        *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
-        asset_keys=set(full_dbt_project.keys),
-        service=TRINO_SERVICE,
-    )
+    openmetadata_table_fqns
+)
+freshness_openmetadata_sensor = build_freshness_openmetadata_sensor(
+    openmetadata_table_fqns
 )
 
 defs = Definitions(
@@ -891,7 +881,6 @@ defs = Definitions(
         ]
     ),
     asset_checks=[
-        *dbt_layer_freshness_checks,
         *dimensional_schema_change_checks,
         # A plan check reports a broken declaration by raising, so it needs
         # the Sentry hook the assets get. AssetChecksDefinition subclasses
@@ -904,9 +893,11 @@ defs = Definitions(
     ),
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
-        dbt_layer_freshness_sensor,
         *schedules_for_environment(
-            [("asset_check_openmetadata", asset_check_openmetadata_sensor)]
+            [
+                ("asset_check_openmetadata", asset_check_openmetadata_sensor),
+                ("freshness_openmetadata", freshness_openmetadata_sensor),
+            ]
         ),
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
