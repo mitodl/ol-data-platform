@@ -358,10 +358,10 @@ qa_first_app_database_assets: dict[str, AssetsDefinition] = (
 MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa", "production"})
 MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
 # Where the keysets run after every load and carry a freshness policy at the
-# unit's stale-keyset age. QA only: production joins once one production sweep
-# has been timed on the replica (witan task
-# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
-MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS = frozenset({"qa"})
+# unit's stale-keyset age. In production a raw table's load is its Airbyte sync
+# in the lakehouse location. The first production sweep on the replica read all
+# 29 tables in 39 s (run 6f864f0b, 2026-11-18), against a 6 h load interval.
+MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS = frozenset({"qa", "production"})
 MITXONLINE_APP_KEYSET_AUTOMATED = (
     DAGSTER_ENV in MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
 )
