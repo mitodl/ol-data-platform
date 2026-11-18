@@ -34,7 +34,16 @@ def test_row_keeps_xml_attributes_as_one_json_column() -> None:
     assert json.loads(row["xml_attributes"] or "") == _BLOCK["xml_attributes"]
     assert row["weight"] == "1.0"
     assert row["duration"] is None
-    assert list(row) == list(course_xml_blocks.XML_BLOCK_FIELDS)
+    assert list(row) == list(course_xml_blocks.OPENEDX.fields)
+    # Files written before the archive asset recorded the bundle version.
+    assert row["static_assets_version"] is None
+
+
+def test_row_keeps_the_static_assets_version() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps({**_BLOCK, "static_assets_version": "a1b2"})
+    )
+    assert row["static_assets_version"] == "a1b2"
 
 
 def test_row_missing_a_field_fails() -> None:
@@ -131,6 +140,7 @@ def test_content_text_row_allows_a_missing_file_extension() -> None:
     assert list(row) == list(course_xml_blocks.DOCUMENT_TEXT_FIELDS)
     # Files written before the asset recorded static references have none.
     assert row["static_references"] is None
+    assert row["static_assets_version"] is None
 
 
 def test_document_text_row_keeps_static_references_as_json() -> None:
@@ -298,7 +308,7 @@ def test_empty_text_file_marker_names_its_course() -> None:
     assert marker["course_id"] == "course-v1:xPRO+QCFx1+R24"
     assert marker["source_system"] == "xpro"
     assert marker["file_path"] is None
-    assert list(marker) == list(course_xml_blocks.CONTENT_TEXT_FIELDS)
+    assert list(marker) == list(course_xml_blocks.TRANSCRIPT_TEXT_FIELDS)
 
 
 @pytest.mark.integration

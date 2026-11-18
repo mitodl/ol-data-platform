@@ -294,6 +294,33 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
         raise TikaUnavailableError(msg) from error
 
 
+STATIC_BUNDLE_SUFFIX = ".tar.gz"
+
+
+def stamp_static_assets_version(
+    rows: Iterable[dict[str, Any]], bundle_location: UPath
+) -> list[dict[str, Any]]:
+    """Record on each row the version of the static asset bundle it came from.
+
+    The archive asset writes the bundle as <course>/<data_version>.tar.gz and
+    records the same data_version on the export's course_xml_blocks rows, so
+    int__openedx__content_files can hold back a run whose text is from an older
+    export's bundle while extraction catches up.
+
+    :param rows: The rows built from the bundle.
+    :param bundle_location: The bundle the rows were read from.
+    :returns: The rows, each with static_assets_version.
+    :rtype: list[dict[str, Any]]
+    :raises ValueError: The bundle's name isn't <data_version>.tar.gz.
+    """
+    name = bundle_location.name
+    if not name.endswith(STATIC_BUNDLE_SUFFIX):
+        msg = f"Can't read a bundle version from {bundle_location}"
+        raise ValueError(msg)
+    version = name.removesuffix(STATIC_BUNDLE_SUFFIX)
+    return [{**row, "static_assets_version": version} for row in rows]
+
+
 def write_text_snapshot(rows: Iterable[dict[str, Any]], output_file: Path) -> str:
     """Write the rows as JSONL, each stamped with one extracted_at, and version them.
 
@@ -538,6 +565,7 @@ def extract_course_document_text(
                 is_supported=tika.is_supported,
             )
         assert_extraction_healthy(counters, course_id)
+        rows = stamp_static_assets_version(rows, course_static_assets)
 
         output_file = Path(
             NamedTemporaryFile(delete=False, suffix="_document_text.jsonl").name

@@ -118,6 +118,37 @@ with blocks as (
     select * from static_files
 )
 
+-- Runs whose document or transcript text was extracted from another export's
+-- static asset bundle than the one written with the run's newest blocks, i.e.
+-- extraction hasn't caught up with a new export yet. A version recorded on
+-- only one side (text or blocks written before both did) is no evidence.
+, lagging_runs as (
+    select distinct snapshots.courserun_readable_id, snapshots.source_system
+    from (
+        select
+            courserun_readable_id
+            , content_file_source_system as source_system
+            , content_file_static_assets_version as static_assets_version
+        from documents
+        union all
+        select
+            courserun_readable_id
+            , content_file_source_system as source_system
+            , content_file_static_assets_version as static_assets_version
+        from transcripts
+    ) as snapshots
+    inner join (
+        select distinct
+            courserun_readable_id
+            , coursestructure_xml_source_system as source_system
+            , coursestructure_xml_static_assets_version as static_assets_version
+        from blocks
+    ) as block_bundles
+        on snapshots.courserun_readable_id = block_bundles.courserun_readable_id
+        and snapshots.source_system = block_bundles.source_system
+    where snapshots.static_assets_version != block_bundles.static_assets_version
+)
+
 -- The exclusions asset's rows for the export the run's blocks came from.
 -- Exclusions from an older export would miss a block hidden since.
 , file_exclusions as (
@@ -151,6 +182,7 @@ with blocks as (
         candidate_files.*
         , checked_runs.courserun_readable_id is not null as is_exclusion_checked
         , checked_runs.course_xml_version
+        , lagging_runs.courserun_readable_id is null as is_text_current
         , case
             when checked_runs.courserun_readable_id is not null
                 then coalesce(file_exclusions.content_file_is_excluded, false)
@@ -162,6 +194,9 @@ with blocks as (
     left join checked_runs
         on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
         and candidate_files.source_system = checked_runs.source_system
+    left join lagging_runs
+        on candidate_files.courserun_readable_id = lagging_runs.courserun_readable_id
+        and candidate_files.source_system = lagging_runs.source_system
     left join file_exclusions
         on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
         and candidate_files.source_system = file_exclusions.content_file_source_system
@@ -285,6 +320,7 @@ select
     , module_files.extracted_at
     , module_files.release_date
     , module_files.course_xml_version
+    , module_files.is_text_current
     , module_files.is_exclusion_checked
     , module_files.is_excluded
     , module_files.exclusion_reason

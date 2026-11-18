@@ -844,7 +844,15 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
         )
         temp_files.append(course_xml_blocks_file)
         with jsonlines.open(course_xml_blocks_file, "w") as writer:
-            writer.write_all(block.model_dump() for block in xml_blocks)
+            # The text assets stamp the bundle version they read, so staging can
+            # tell their snapshots from an older export's.
+            writer.write_all(
+                {
+                    **block.model_dump(),
+                    "static_assets_version": static_bundle.data_version,
+                }
+                for block in xml_blocks
+            )
         course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{source_system}/{context.partition_key}/{data_version}.json"  # noqa: E501
         yield Output(
             (course_xml_blocks_file, course_xml_blocks_object_key),

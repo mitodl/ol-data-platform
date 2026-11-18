@@ -21,6 +21,7 @@ from openedx.assets.content_files import (
     build_document_rows,
     file_extension,
     open_bundle_members,
+    stamp_static_assets_version,
     static_references,
     write_text_snapshot,
 )
@@ -718,3 +719,19 @@ def test_failed_html_rows_keep_their_static_references():
 
     assert rows[0]["extraction_status"] == "failed"
     assert rows[0]["static_references"] == ["static/slides.pdf"]
+
+
+def test_rows_carry_the_version_of_the_bundle_they_came_from():
+    """Staging compares it with the blocks' bundle version to spot a lagging snapshot"""
+    bundle = UPath(
+        "s3://bucket/openedx/processed_data/course_static_assets/xpro/c/ab12.tar.gz"
+    )
+
+    rows = stamp_static_assets_version([{"file_path": "static/a.pdf"}], bundle)
+
+    assert rows == [{"file_path": "static/a.pdf", "static_assets_version": "ab12"}]
+
+
+def test_a_bundle_named_otherwise_has_no_version():
+    with pytest.raises(ValueError, match="bundle version"):
+        stamp_static_assets_version([], UPath("s3://bucket/c/bundle.zip"))

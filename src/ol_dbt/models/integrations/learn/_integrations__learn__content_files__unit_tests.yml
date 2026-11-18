@@ -8,7 +8,8 @@ unit_tests:
     failed extraction. Of files that share a key it keeps one: a file with text
     before a failed one, a file that is not XML before XML, then the first path.
     The row takes the latest release date of every file of the key, empty or
-    not. Its URL is get_url_from_module_id's on the source's LMS.
+    not. Its URL is get_url_from_module_id's on the source's LMS. A run whose text
+    is from an older export's bundle is left out whole.
   model: integrations__learn__content_files
   given:
   - input: ref('int__openedx__content_files')
@@ -17,78 +18,93 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/video/0123456789abcdef0123456789abcdef.xml,
       file_extension: .xml, edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
       content: <video/>, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/chapter/week_1.xml,
       file_extension: .xml, edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1",
       content: <chapter/>, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
     # A transcript jumps to its video; any other static file has its asset URL.
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/intro
         clip-en.srt, file_extension: .srt, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt",
       video_url_name: intro_video, content: Hi, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/Dash
         2010.pdf, file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf",
-      content: null, extraction_status: failed, is_exclusion_checked: true, is_excluded: false}
+      content: null, extraction_status: failed, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     # Dropped: residential MITx, which is not a Learn source.
     - {courserun_readable_id: "course-v1:MITx+Z+R1", source_system: mitx, source_path: course/static/notes.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:MITx+Z+R1+type@asset+block@notes.pdf",
-      content: Notes, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: Notes, extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     # Dropped: excluded, not a Learn text type, an asset manifest, a draft, no text.
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/answer_key.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@answer_key.pdf",
       content: Answers, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: true}
+      is_text_current: true, is_excluded: true}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/grades.csv,
       file_extension: .csv, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@grades.csv",
-      content: "a,b", extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: "a,b", extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/policies/assets.json,
       file_extension: .json, edx_module_id: "block-v1:X+Y+R1+type@policies+block@assets",
-      content: "{}", extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: "{}", extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/drafts/vertical/v1.xml,
       file_extension: .xml, edx_module_id: "block-v1:X+Y+R1+type@vertical+block@v1",
       content: <vertical/>, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/about/effort.html,
       file_extension: .html, edx_module_id: "block-v1:X+Y+R1+type@about+block@effort",
-      content: null, extraction_status: empty, is_exclusion_checked: true, is_excluded: false}
+      content: null, extraction_status: empty, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     # Shared keys. The empty twin's later date still counts.
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/notes_1.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf",
       content: Notes, extraction_status: extracted, release_date: "2031-01-01T00:00:00.000000Z",
-      is_exclusion_checked: true, is_excluded: false}
+      is_exclusion_checked: true, is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/notes
         1.pdf, file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf",
       content: null, extraction_status: empty, release_date: "2032-06-01T12:00:00.000000Z",
-      is_exclusion_checked: true, is_excluded: false}
+      is_exclusion_checked: true, is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/html/abcd.xml,
       file_extension: .xml, edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd",
       content: Welcome, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/html/abcd.html,
       file_extension: .html, edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd",
-      content: Hello, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: Hello, extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/c
         d.pdf, file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@c_d.pdf",
-      content: null, extraction_status: failed, is_exclusion_checked: true, is_excluded: false}
+      content: null, extraction_status: failed, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/c_d.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@c_d.pdf",
-      content: Cd, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: Cd, extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/a_b.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@a_b.pdf",
-      content: Ab, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: Ab, extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/a
         b.pdf, file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@a_b.pdf",
-      content: A b, extraction_status: extracted, is_exclusion_checked: true, is_excluded: false}
+      content: A b, extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
+      is_excluded: false}
     # A run the exclusions check has not covered has no rows.
     - {courserun_readable_id: "course-v1:X+Y+R2", source_system: xpro, source_path: course/chapter/week_1.xml,
       file_extension: .xml, edx_module_id: "block-v1:X+Y+R2+type@chapter+block@week_1",
       content: <chapter/>, extraction_status: extracted, is_exclusion_checked: false,
       is_excluded: null}
+    # A run whose text is from an older export's bundle waits, whole.
+    - {courserun_readable_id: "course-v1:X+Y+R4", source_system: xpro, source_path: course/static/late.pdf,
+      file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R4+type@asset+block@late.pdf",
+      content: Late, extraction_status: extracted, is_exclusion_checked: true, is_text_current: false,
+      is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R3", source_system: mitxonline, source_path: course/static/handout.pdf,
       file_extension: .pdf, edx_module_id: "asset-v1:X+Y+R3+type@asset+block@handout.pdf",
       content: Handout, extraction_status: extracted, is_exclusion_checked: true,
-      is_excluded: false}
+      is_text_current: true, is_excluded: false}
   expect:
     rows:
     - {run_readable_id: "course-v1:X+Y+R1", key: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",

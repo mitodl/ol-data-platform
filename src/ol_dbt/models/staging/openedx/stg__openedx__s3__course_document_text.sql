@@ -2,6 +2,7 @@
    of a file the document text asset wrote after it began recording links. #}
 {% set raw_documents = source('ol_warehouse_raw_data', 'raw__openedx__s3__course_document_text') %}
 {% set static_references_exist = relation_has_column(raw_documents, 'static_references') %}
+{% set static_assets_version_exists = relation_has_column(raw_documents, 'static_assets_version') %}
 
 with source as (
     {{ newest_course_file_rows(raw_documents, extracted_at_column='extracted_at') }}
@@ -21,6 +22,8 @@ select
     , extraction_status                     as content_file_extraction_status
     , _file_modified_at                     as content_file_extracted_at
     , {{ 'static_references' if static_references_exist else 'cast(null as varchar)' }} as content_file_static_references
+    , {{ 'static_assets_version' if static_assets_version_exists else 'cast(null as varchar)' }}
+    as content_file_static_assets_version
 from source
 -- An empty snapshot loads as one marker row so it can become the newest file;
 -- the marker itself is not a file.

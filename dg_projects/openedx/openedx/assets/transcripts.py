@@ -52,6 +52,7 @@ from openedx.assets.content_files import (
     file_extension,
     is_transcript,
     open_bundle_members,
+    stamp_static_assets_version,
     write_text_snapshot,
 )
 
@@ -360,6 +361,7 @@ def extract_course_transcript_text(
                 members, course_id=course_id, source_system=source_system
             )
         assert_parsing_healthy(counters, course_id)
+        rows = stamp_static_assets_version(rows, course_static_assets)
 
         output_file = Path(
             NamedTemporaryFile(delete=False, suffix="_transcript_text.jsonl").name

@@ -162,10 +162,19 @@ CONTENT_TEXT_FIELDS = (
     "extraction_status",
     "extracted_at",
 )
+# Both text assets also record, on every row, the version of the static asset
+# bundle they read (its data_version), so staging can tell a snapshot from an
+# older export's bundle. Absent from files written before they did. It comes
+# last so the raw tables' existing columns keep their order.
+TRANSCRIPT_TEXT_FIELDS = (*CONTENT_TEXT_FIELDS, "static_assets_version")
 # The document text asset also records, on each html row, the static files the
 # body links to, as a list that lands as JSON text. Absent from files written
 # before it did.
-DOCUMENT_TEXT_FIELDS = (*CONTENT_TEXT_FIELDS, "static_references")
+DOCUMENT_TEXT_FIELDS = (
+    *CONTENT_TEXT_FIELDS,
+    "static_references",
+    "static_assets_version",
+)
 
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
@@ -303,6 +312,10 @@ OPENEDX = XmlBlocksTable(
         f"{deployment}/openedx/processed_data/course_xml_blocks/**/*.json"
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
+    # The version of the static asset bundle written from the same export,
+    # absent from files written before the archive asset recorded it.
+    fields=(*XML_BLOCK_FIELDS, "static_assets_version"),
+    optional_fields=frozenset({"static_assets_version"}),
 )
 OPENEDX_STRUCTURE_BLOCKS = {
     deployment: XmlBlocksTable(
@@ -324,7 +337,9 @@ OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=DOCUMENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension", "extracted_at", "static_references"}),
+    optional_fields=frozenset(
+        {"file_extension", "extracted_at", "static_references", "static_assets_version"}
+    ),
     pipeline_name="course_document_text__openedx",
     marks_empty_files=True,
 )
@@ -335,8 +350,10 @@ OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
         f"{deployment}/openedx/processed_data/course_transcript_text/**/*.jsonl"
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
-    fields=CONTENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension", "extracted_at"}),
+    fields=TRANSCRIPT_TEXT_FIELDS,
+    optional_fields=frozenset(
+        {"file_extension", "extracted_at", "static_assets_version"}
+    ),
     pipeline_name="course_transcript_text__openedx",
     marks_empty_files=True,
 )
