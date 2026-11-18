@@ -89,15 +89,14 @@ models:
     - relationships:
         to: ref('dim_date')
         field: date_key
-        where: "courserun_start_date_key is not null and courserun_start_date_key\
-          \ <= 20301231"
+        where: "courserun_start_date_key is not null"
   - name: courserun_end_date_key
     description: Foreign key to dim_date for course run end date
     tests:
     - relationships:
         to: ref('dim_date')
         field: date_key
-        where: "courserun_end_date_key is not null and courserun_end_date_key <= 20301231"
+        where: "courserun_end_date_key is not null and courserun_end_date_key <= 20991231"
   - name: enrollment_start_date_key
     description: Foreign key to dim_date for enrollment period start
   - name: enrollment_end_date_key
