@@ -77,7 +77,7 @@ from f_problem_engagement
 left join problems_in_block
     on f_problem_engagement.chapter_block_fk = problems_in_block.chapter_block_id
 inner join d_user
-    on f_problem_engagement.openedx_user_id = d_user.mitxonline_openedx_user_id
+    on f_problem_engagement.user_fk = d_user.user_pk
 left join course_to_courserun_ref
     on f_problem_engagement.courserun_readable_id = course_to_courserun_ref.courserun_readable_id
     and f_problem_engagement.platform = course_to_courserun_ref.platform
