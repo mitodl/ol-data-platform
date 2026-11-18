@@ -594,14 +594,17 @@ models:
           - open-learning.identifiability.direct-identifier
           - open-learning.ferpa-classification.directory-information
   - name: address_country
-    description: str, country code provided by the user on the corresponding platform
+    description: str, country code provided by the user on the corresponding platform.
+      A blank value is filled from the user's other accounts, Learn first, then MITx
+      Online, then the rest.
     config:
       meta:
         openmetadata:
           glossary:
           - open-learning.identifiability.indirect-identifier
   - name: highest_education
-    description: str, user's level of education
+    description: str, user's level of education. A blank value is filled from the
+      user's other accounts, Learn first, then MITx Online, then the rest.
     config:
       meta:
         openmetadata:
@@ -609,7 +612,8 @@ models:
           - open-learning.identifiability.indirect-identifier
   - name: gender
     description: str, Gender selected by the user on their profile on the corresponding
-      platform
+      platform. A blank value is filled from the user's other accounts, Learn first,
+      then MITx Online, then the rest.
     config:
       meta:
         openmetadata:
@@ -617,14 +621,17 @@ models:
           - open-learning.identifiability.indirect-identifier
           - open-learning.ferpa-classification.education-record
   - name: birth_year
-    description: int, user's birth year
+    description: int, user's birth year. A blank value is filled from the user's other
+      accounts, Learn first, then MITx Online, then the rest.
     config:
       meta:
         openmetadata:
           glossary:
           - open-learning.identifiability.indirect-identifier
   - name: company
-    description: str, user's company
+    description: str, user's company. A blank value is filled from the user's other
+      accounts, Learn first, then MITx Online, then the rest. Blank company, job title
+      and industry are filled together from one account.
     config:
       meta:
         openmetadata:
@@ -632,7 +639,9 @@ models:
           - open-learning.identifiability.indirect-identifier
           - open-learning.ferpa-classification.education-record
   - name: job_title
-    description: str, user's job title
+    description: str, user's job title. A blank value is filled from the user's other
+      accounts, Learn first, then MITx Online, then the rest. Blank company, job title
+      and industry are filled together from one account.
     config:
       meta:
         openmetadata:
@@ -640,7 +649,9 @@ models:
           - open-learning.identifiability.indirect-identifier
           - open-learning.ferpa-classification.education-record
   - name: industry
-    description: str, user's job industry
+    description: str, user's job industry. A blank value is filled from the user's
+      other accounts, Learn first, then MITx Online, then the rest. Blank company,
+      job title and industry are filled together from one account.
     config:
       meta:
         openmetadata:
@@ -2449,6 +2460,127 @@ unit_tests:
     - {email: nogiven@example.com, full_name: Lovelace}
     - {email: nonames@example.com, full_name: Right Fallback}
     - {email: token@example.com, full_name: My familyName}
+- name: test_dim_user_blank_learn_education_does_not_mask_the_mitx_value
+  description: >
+    A Learn education that is only whitespace is blank, so it does not hide the
+    MITx Online education of the same person.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_global_id: gid-1, user_email: pad@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows:
+    - {user_id: 1, user_name: Pad Person, user_current_education: '   '}
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows: []
+  - input: ref('int__bootcamps__users')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_global_id: gid-1, user_mitxonline_email: pad@example.com, user_highest_education: Doctorate}
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - {email: pad@example.com, highest_education: Doctorate}
+- name: test_dim_user_fills_a_blank_demographic_from_the_next_account
+  description: >
+    A blank on the base row, the newest account, is filled from the person's other
+    accounts in the order Learn, MITx Online, then the rest, newest first within a
+    tier, and not newest first overall. A value the base row has stays as it is,
+    padding included. Company, job title and industry come together from one
+    account, so a job title the first account lacks stays null and is not taken
+    from a later one.
+  model: dim_user
+  given:
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_username: dana-pro, user_email: dana@example.com, user_is_active: true,
+      user_joined_on: '2020-01-01T00:00:00'}
+    - {user_id: 2, user_username: erin-pro, user_email: erin@example.com, user_is_active: true,
+      user_joined_on: '2020-01-01T00:00:00'}
+    - {user_id: 3, user_username: frank-pro, user_email: frank@example.com, user_is_active: true,
+      user_joined_on: '2020-01-01T00:00:00'}
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows:
+    - {user_id: 1, user_gender: Female, user_birth_year: 1990, user_highest_education: Doctorate}
+    - {user_id: 2, user_company: Pro Co, user_job_title: Engineer, user_industry: Software}
+    - {user_id: 3, user_company: Pro Co}
+  - input: ref('int__bootcamps__users')
+    rows:
+    - {user_id: 1, user_username: dana-boot, user_email: dana@example.com, user_is_active: true,
+      user_joined_on: '2025-01-01T00:00:00', user_gender: '', user_address_country: ' CA ',
+      user_highest_education: ''}
+    - {user_id: 2, user_username: erin-boot, user_email: erin@example.com, user_is_active: true,
+      user_joined_on: '2025-01-01T00:00:00', user_company: Boot Co, user_job_title: ''}
+    - {user_id: 3, user_username: frank-boot, user_email: frank@example.com, user_is_active: true,
+      user_joined_on: '2022-01-01T00:00:00', user_job_title: Bootcamp Role}
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows:
+    - {user_id: 1, user_username: dana-res, user_email: dana@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00'}
+    - {user_id: 3, user_username: frank-res, user_email: frank@example.com, user_is_active: true,
+      user_joined_on: '2025-06-01T00:00:00'}
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows:
+    - {user_id: 1, user_gender: Male, user_birth_year: 1985, user_highest_education: Master's}
+    - {user_id: 3, user_gender: Male}
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  expect:
+    rows:
+    - {email: dana@example.com, gender: Female, address_country: ' CA ', birth_year: 1990,
+      highest_education: Doctorate, company: null, job_title: null, industry: null}
+    - {email: erin@example.com, gender: null, address_country: null, birth_year: null,
+      highest_education: null, company: Boot Co, job_title: Engineer, industry: Software}
+    - {email: frank@example.com, gender: Male, address_country: null, birth_year: null,
+      highest_education: null, company: Pro Co, job_title: null, industry: null}
 - name: test_dim_user_address_parts_come_from_one_account
   description: >
     Street, city and postal code are filled from a single account. The
