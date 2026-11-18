@@ -669,9 +669,9 @@ def test_keysets_are_automated_only_where_declared(environment: str) -> None:
     assert "default_automation_condition_sensor" not in sensors
 
 
-def test_production_keysets_are_not_automated_until_a_sweep_is_timed() -> None:
-    """Production keysets run by hand until one sweep on the replica is timed."""
-    assert "production" not in MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
+def test_keysets_run_after_each_load_in_qa_and_production() -> None:
+    """Production joined after its first sweep on the replica took 39 s."""
+    assert {"qa", "production"} == MITXONLINE_APP_KEYSET_AUTOMATION_ENVIRONMENTS
 
 
 def test_every_keyset_lake_runs_its_keysets_after_each_load() -> None:
