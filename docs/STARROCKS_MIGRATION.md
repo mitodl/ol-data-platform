@@ -26,6 +26,13 @@ assets in `dg_projects/lakehouse/lakehouse/assets/lakehouse/dbt_starrocks.py`.
 Locally, `ol-dbt starrocks build --env dev` builds the layered warehouse into the
 Iceberg catalog of the local-dev StarRocks cluster. See [LOCAL_LAKE.md](LOCAL_LAKE.md).
 
+Against the QA or production lake, `--target starrocks_dev_qa` (with `--env qa`) or
+`--target starrocks_dev_production` (with `--env production`) and
+`--vars '{schema_suffix: <name>}'` build your own `ol_warehouse_<env>_<name>_<layer>`
+copy. The canonical targets, `starrocks_qa_lake` and `starrocks_production_lake`,
+refuse a `schema_suffix` because their profiles drop it, and
+`starrocks_production_lake` also refuses to run without `--allow-canonical-writes`.
+
 ## Decisions that affect models
 
 The dbt-built layers stay Iceberg tables in Glue. StarRocks writes staging,

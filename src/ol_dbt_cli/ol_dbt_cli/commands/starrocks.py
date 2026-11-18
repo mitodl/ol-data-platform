@@ -31,6 +31,10 @@ Workflow::
     # Your own copy of the QA warehouse in ol_data_lake_qa
     ol-dbt starrocks run --target starrocks_dev_qa --vars '{schema_suffix: alice}' --select +my_model
 
+    # The same in ol_data_lake_production
+    ol-dbt starrocks run --env production --target starrocks_dev_production \
+        --vars '{schema_suffix: alice}' --select +my_model
+
     # A PR build in the CI lake: no deferral, so select the parents too
     ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select +my_model
 
@@ -213,6 +217,9 @@ _LAKE_TARGETS: dict[str, _LakeTarget] = {
     "starrocks_production_lake": _LakeTarget(
         "production", "ol_data_lake_production", "ol_warehouse_production", "none"
     ),
+    "starrocks_dev_production": _LakeTarget(
+        "production", "ol_data_lake_production", "ol_warehouse_production", "required"
+    ),
     # CI builds the parents of what it builds from the fixtures in its own raw
     # schema rather than reading QA's tables through ol_data_lake_ci.
     "ci": _LakeTarget("ci", "ol_data_lake_ci", "ol_warehouse_ci", "optional", can_defer=False),
@@ -223,13 +230,26 @@ def _profile_schema(target: str, lake: _LakeTarget, cli_vars: dict[str, Any]) ->
     """Return the schema the *target* profile renders for these ``--vars``.
 
     :raises SystemExit: when the profile needs a ``schema_suffix`` and none was
-        passed, or the result is not a name Iceberg can load from Glue.
+        passed, ignores one that was, or the result is not a name Iceberg can
+        load from Glue.
     """
     suffix = cli_vars.get("schema_suffix")
     if lake.suffix == "required" and not suffix:
         err_console.print(f"[red]--target {target} needs a schema suffix:[/] pass --vars '{{schema_suffix: <name>}}'.")
         sys.exit(1)
-    schema = f"{lake.schema}_{suffix}" if suffix and lake.suffix != "none" else lake.schema
+    # dbt would accept the var and build the canonical schemas anyway, which is
+    # the opposite of what passing one asks for.
+    if lake.suffix == "none" and suffix:
+        suffixed = [
+            name for name, other in _LAKE_TARGETS.items() if other.catalog == lake.catalog and other.suffix != "none"
+        ]
+        err_console.print(
+            f"[red]--target {target} ignores schema_suffix:[/] it builds the canonical "
+            f"{lake.catalog}.{lake.schema}_<layer> schemas. For your own copy use --target "
+            f"{' or '.join(suffixed)}."
+        )
+        sys.exit(1)
+    schema = f"{lake.schema}_{suffix}" if suffix else lake.schema
     if not _GLUE_DATABASE_NAME.fullmatch(schema):
         err_console.print(
             f"[red]Schema {schema!r} is not one Iceberg can load from Glue:[/] "
@@ -495,6 +515,14 @@ def run(  # noqa: PLR0913
             show_default=False,
         ),
     ] = None,
+    allow_canonical_writes: Annotated[
+        bool,
+        Parameter(
+            name="--allow-canonical-writes",
+            help="Let a production lake target build the canonical production layer schemas. "
+            "Without it those targets are refused; use starrocks_dev_production.",
+        ),
+    ] = False,
 ) -> None:
     """Run dbt against StarRocks with Vault-issued credentials.
 
@@ -555,6 +583,15 @@ def run(  # noqa: PLR0913
     # dbt reads --vars as YAML too.
     cli_vars: dict[str, Any] = (yaml.safe_load(vars) or {}) if vars else {}
     lake_schema = _profile_schema(effective_target, lake, cli_vars) if lake is not None else None
+    # The canonical production layer schemas are the ones the production Trino
+    # build writes until the cutover (see profiles.yml).
+    if lake is not None and lake.env == "production" and lake.suffix == "none" and not allow_canonical_writes:
+        err_console.print(
+            f"[red]--target {effective_target} writes the canonical {lake.catalog}.{lake_schema}_<layer> "
+            "schemas.[/] Build your own copy with --target starrocks_dev_production "
+            "--vars '{schema_suffix: <name>}', or pass --allow-canonical-writes."
+        )
+        sys.exit(1)
     # substructure/starrocks grants `app` only USAGE on a lake catalog and DML on
     # its tables. Building one takes CREATE DATABASE and CREATE TABLE.
     if vault_role is None:

@@ -113,8 +113,9 @@ _RENDER_CASES = [
     ("ci", {"schema_suffix": ""}, "ol_warehouse_ci"),
     ("ci", {"schema_suffix": "pr_123"}, "ol_warehouse_ci_pr_123"),
     ("starrocks_dev_qa", {"schema_suffix": "alice"}, "ol_warehouse_qa_alice"),
-    ("starrocks_qa_lake", {"schema_suffix": "alice"}, "ol_warehouse_qa"),
+    ("starrocks_qa_lake", {}, "ol_warehouse_qa"),
     ("starrocks_production_lake", {}, "ol_warehouse_production"),
+    ("starrocks_dev_production", {"schema_suffix": "alice"}, "ol_warehouse_production_alice"),
 ]
 
 
@@ -172,14 +173,77 @@ def test_lake_target_refuses_a_schema_glue_cannot_load(mock_fetch, mock_port_for
 
 
 @pytest.mark.parametrize(
+    ("env", "target", "allow_canonical_writes"),
+    [
+        ("qa", "starrocks_qa_lake", False),
+        # The flag allows the canonical schemas, not a suffix the profile drops.
+        ("production", "starrocks_production_lake", True),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_lake_target_refuses_a_schema_suffix(  # noqa: PLR0913
+    mock_fetch,
+    mock_port_forward,
+    mock_dbt_run,
+    env: str,
+    target: str,
+    allow_canonical_writes: bool,  # noqa: FBT001
+) -> None:
+    """The profile drops the suffix, so dbt would build the canonical schemas the caller asked to avoid."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env=env, target=target, vars="{schema_suffix: alice}", allow_canonical_writes=allow_canonical_writes)
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_production_lake_target_needs_the_flag(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """A laptop build of starrocks_production_lake writes the schemas the production build owns."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production", target="starrocks_production_lake")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_production_lake_target_runs_with_the_flag(
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    run(env="production", target="starrocks_production_lake", allow_canonical_writes=True)
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_production_lake"
+
+
+@pytest.mark.parametrize(
     ("env", "target", "cli_vars", "schema", "host"),
     [
         ("ci", "ci", None, "ol_warehouse_ci", _ENVS["ci"]["host"]),
         ("ci", "ci", "{schema_suffix: pr_123}", "ol_warehouse_ci_pr_123", _ENVS["ci"]["host"]),
         # qa reaches the FE through the port-forward.
         ("qa", "starrocks_dev_qa", "{schema_suffix: alice}", "ol_warehouse_qa_alice", "127.0.0.1"),
-        # The profile ignores schema_suffix, so the schema made must too.
-        ("qa", "starrocks_qa_lake", "{schema_suffix: alice}", "ol_warehouse_qa", "127.0.0.1"),
+        ("qa", "starrocks_qa_lake", None, "ol_warehouse_qa", "127.0.0.1"),
+        (
+            "production",
+            "starrocks_dev_production",
+            "{schema_suffix: alice}",
+            "ol_warehouse_production_alice",
+            "127.0.0.1",
+        ),
     ],
 )
 @patch("mysql.connector.connect")
