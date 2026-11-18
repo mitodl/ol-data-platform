@@ -91,7 +91,8 @@ sources:
     - name: file_path
       description: str, path of the file within the course export
     - name: file_extension
-      description: str, lower-cased file extension with its dot
+      description: str, lower-cased file extension with its dot; absent on failed
+        rows written before the asset set it on them
     - name: content_type
       description: str, MIME type of the subtitle format
     - name: size_bytes
