@@ -72,7 +72,7 @@ from ol_llm import LLMRejected, LLMUnavailable
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
-from ol_orchestrate.lib.embeddings.pipeline import StoredVector, chunk_key
+from ol_orchestrate.lib.embeddings.pipeline import chunk_key
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -738,8 +738,8 @@ def test_the_space_wide_lookup_takes_the_earliest_row():
     for frame in (rows, rows.reverse()):
         (found,) = known_vectors(
             frame.lazy(), "text-embedding-3-large@3072", [md5_hex("Text.")]
-        ).values()
-        assert (found.model_id, found.vector[0]) == (
+        ).iter_rows(named=True)
+        assert (found["model_id"], found["vector"][0]) == (
             "openai:text-embedding-3-large@3072",
             1.0,
         )
@@ -1746,7 +1746,13 @@ def test_learn_vectors_reads_only_until_a_checksum_is_found():
     )
 
     # p1's text is not "Other.", and p3's vector is the wrong length.
-    assert found == {md5_hex("Shared."): StoredVector([1.0, 0.0], LEARN_MODEL_ID)}
+    assert found.to_dicts() == [
+        {
+            "input_checksum": md5_hex("Shared."),
+            "vector": [1.0, 0.0],
+            "model_id": LEARN_MODEL_ID,
+        }
+    ]
     assert reads == [["p1"], ["p3"], ["p1"]]
 
 

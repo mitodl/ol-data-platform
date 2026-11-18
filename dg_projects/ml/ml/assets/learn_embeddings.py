@@ -43,11 +43,13 @@ from ml.lib.learn_embeddings import (
     CHUNK_SCHEMA,
     CONTENT_FILE_SOURCES,
     EMBEDDED_SCHEMA,
+    KNOWN_SCHEMA,
     LEARN_VECTOR_SPACE,
     TOPIC_DOC_KIND,
     TOPICS_RELATION,
     VECTOR_SCHEMA,
     active_chunkers,
+    checksums_of,
     chunk_frame,
     chunkers_version,
     content_file_documents,
@@ -55,6 +57,7 @@ from ml.lib.learn_embeddings import (
     known_vectors,
     learn_vectors,
     merge_vectors,
+    no_vectors,
     point_ids_by_checksum,
     sibling_reads,
     sibling_runs,
@@ -80,13 +83,13 @@ from ol_orchestrate.lib.embeddings.learn import (
     LEARN_CONTENT_FILES_COLLECTION,
     LEARN_TOPICS_COLLECTION,
 )
-from ol_orchestrate.lib.embeddings.pipeline import StoredVector
 from ol_orchestrate.resources.embeddings import EmbeddingsResource
 from pydantic import Field
 
 GROUP_NAME = "learn_embeddings"
-# Stored vectors of a vector space by input checksum, for the texts asked for.
-StoredLookup = Callable[[str, Iterable[str]], dict[str, StoredVector]]
+# Stored vectors of a vector space by input checksum, for the texts asked for,
+# in KNOWN_SCHEMA.
+StoredLookup = Callable[[str, Iterable[str]], pl.DataFrame]
 # The vector-table columns known_vectors reads.
 STORED_VECTOR_COLUMNS = (
     "chunk_key",
@@ -421,38 +424,41 @@ def embed_vectors(  # noqa: PLR0913
     failures = []
     # This run's vectors by vector space and input checksum, so a later strategy
     # in the same space reuses what an earlier one embedded.
-    this_run: dict[str, dict[str, StoredVector]] = {}
+    this_run: dict[str, pl.DataFrame] = {}
 
     def lookup(
         vector_space: str,
         checksums: Iterable[str],
         strategy_chunks: pl.DataFrame,
         vector_length: int,
-        imported: dict[str, StoredVector],
-    ) -> dict[str, StoredVector]:
+        imported: list[pl.DataFrame],
+    ) -> pl.DataFrame:
         wanted = set(checksums)
-        found = {
-            checksum: stored
-            for checksum, stored in this_run.get(vector_space, {}).items()
-            if checksum in wanted
-        }
-        found |= stored_lookup(vector_space, wanted - found.keys())
-        missing = wanted - found.keys()
-        if learn_fetch is not None and missing and vector_space == LEARN_VECTOR_SPACE:
-            imported |= learn_vectors(
-                learn_fetch,
-                point_ids_by_checksum(strategy_chunks, missing),
-                vector_length,
+        found = [
+            this_run.get(vector_space, no_vectors()).filter(
+                pl.col("input_checksum").is_in(sorted(wanted))
             )
-            found |= imported
-        return found
+        ]
+        missing = wanted - checksums_of(found[0])
+        found.append(stored_lookup(vector_space, missing))
+        missing -= checksums_of(found[-1])
+        if learn_fetch is not None and missing and vector_space == LEARN_VECTOR_SPACE:
+            imported.append(
+                learn_vectors(
+                    learn_fetch,
+                    point_ids_by_checksum(strategy_chunks, missing),
+                    vector_length,
+                )
+            )
+            found.append(imported[-1])
+        return pl.concat(found)
 
     for strategy in chosen:
         strategy_chunks = chunks.filter(
             pl.col("chunker_id") == strategy.chunker.chunker_id
         )
         pairs = stored_chunks(strategy_chunks)
-        imported: dict[str, StoredVector] = {}
+        imported: list[pl.DataFrame] = []
         frame, outcome = embed_strategy(
             strategy,
             pairs,
@@ -467,12 +473,11 @@ def embed_vectors(  # noqa: PLR0913
             max_workers=config.max_workers,
             logger=context.log,
         )
-        this_run.setdefault(strategy.model.vector_space_id, {}).update(
-            (checksum, StoredVector(vector, model_id))
-            for checksum, vector, model_id in frame.select(
-                "input_checksum", "vector", "model_id"
-            ).iter_rows()
-        )
+        space = strategy.model.vector_space_id
+        this_run[space] = pl.concat(
+            [this_run.get(space, no_vectors()), frame.select(KNOWN_SCHEMA.names())]
+        ).unique("input_checksum", keep="first", maintain_order=True)
+        imported_texts = sum(found.height for found in imported)
         frames.append(frame)
         context.log.info(
             "%s: %d chunks, %d texts embedded, %d reused (%d of them from Learn), "
@@ -481,14 +486,14 @@ def embed_vectors(  # noqa: PLR0913
             outcome.chunks,
             outcome.embedded_texts,
             outcome.reused_texts,
-            len(imported),
+            imported_texts,
             outcome.failed_chunks,
         )
         prefix = strategy.strategy_id
         metadata |= {
             f"{prefix}/embedded_texts": MetadataValue.int(outcome.embedded_texts),
             f"{prefix}/reused_texts": MetadataValue.int(outcome.reused_texts),
-            f"{prefix}/imported_texts": MetadataValue.int(len(imported)),
+            f"{prefix}/imported_texts": MetadataValue.int(imported_texts),
             f"{prefix}/failed_chunks": MetadataValue.int(outcome.failed_chunks),
             f"{prefix}/input_tokens": MetadataValue.int(outcome.input_tokens),
         }
@@ -578,21 +583,19 @@ def content_file_embedding_vectors(
             etl_source=etl_source,
         )
 
-    def stored_lookup(
-        vector_space: str, checksums: Iterable[str]
-    ) -> dict[str, StoredVector]:
+    def stored_lookup(vector_space: str, checksums: Iterable[str]) -> pl.DataFrame:
         # The run's own rows are already read, and on a re-run hold nearly
         # every text, so the siblings are read only for the rest.
         wanted_all = set(checksums)
-        found = (
-            known_vectors(stored.lazy(), vector_space, wanted_all)
-            if stored is not None
-            else {}
-        )
-        missing = wanted_all - found.keys()
+        found = [
+            known_vectors(
+                stored.lazy() if stored is not None else None, vector_space, wanted_all
+            )
+        ]
+        missing = wanted_all - checksums_of(found[0])
         index = sibling_index() if missing else None
         if index is None:
-            return found
+            return found[0]
         for sibling, wanted in sibling_reads(index, vector_space, missing).items():
             rows = read_rows_by_key(
                 LAYER,
@@ -605,8 +608,8 @@ def content_file_embedding_vectors(
                 vector_space=vector_space,
             )
             if rows is not None:
-                found |= known_vectors(rows.lazy(), vector_space, wanted)
-        return found
+                found.append(known_vectors(rows.lazy(), vector_space, wanted))
+        return pl.concat(found)
 
     rows, metadata, failures = embed_vectors(
         context,
