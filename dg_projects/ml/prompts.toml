@@ -1,10 +1,14 @@
 # The version of each managed prompt that Production runs. Merging a change here
 # moves Opik's production label (.github/workflows/prompt-promotion.yaml). Commit
-# `ol-llm-prompts export prompts.toml`'s output with the change; it is the
-# embedded default a run falls back to when Opik cannot be reached. See
+# `ol-llm-prompts export prompts.toml`'s output with the change. For
+# feedback-summary it is the embedded default a run falls back to when Opik
+# cannot be reached; the other prompts are read through render_prompt
+# (ml/resources/opik_auth.py), which falls back to the template in their code. See
 # https://github.com/mitodl/ol-llm/blob/main/docs/prompt-promotion.md.
 app = "dagster-ml"
 exports = "ml/prompts"
 
 [prompts]
+feedback-category-proposal = "v2"
+feedback-sentiment-classify = "v1"
 feedback-summary = "v4"

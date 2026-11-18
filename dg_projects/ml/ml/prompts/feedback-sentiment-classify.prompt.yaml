@@ -1,0 +1,9 @@
+name: feedback-sentiment-classify
+app: dagster-ml
+version: v1
+type: mustache
+template_hash: c633d332e6c9a8994daf7964c9342002c9ee98a059982554588b79d39983cab1
+template: |-
+  Classify the sentiment of this support conversation from the requester's point of view, as expressed at the end of the conversation. Respond with only one word: positive or negative.
+
+  {{conversation_text}}
