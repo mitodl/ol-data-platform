@@ -30,7 +30,12 @@ models:
   - name: examrun_semester
     description: str, semester for the exam run, e.g., 2T2022.
     tests:
-    - not_null
+    - not_null:
+        config:
+          # QA-only warn for the RC exam runs with no semester; see
+          # stg__micromasters__app__postgres__exams_examrun.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: examrun_passing_grade
     description: float, passing grade for the exam run, range between 0 to 1. Default
       to 0.5.

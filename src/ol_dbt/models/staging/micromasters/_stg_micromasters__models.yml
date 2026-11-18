@@ -594,7 +594,13 @@ models:
   - name: examrun_semester
     description: str, semester for the exam run, e.g., 2T2022.
     tests:
-    - not_null
+    - not_null:
+        config:
+          # QA MicroMasters (RC) has test exam runs with no semester (30 of 39,
+          # 2026-11-18); production has none. target.catalog on StarRocks, as in
+          # raw_data_lake(), which a test config cannot call.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: examrun_description
     description: str, description for the exam run
   - name: examrun_is_authorized
