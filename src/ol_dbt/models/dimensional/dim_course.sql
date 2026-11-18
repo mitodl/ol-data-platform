@@ -48,7 +48,7 @@ with mitxonline_courses as (
                 order by
                     is_on_mitxonline desc
                     , mitxonline_course_id asc nulls last
-                    , course_readable_id asc
+                    , course_readable_id asc nulls last
             ) as _row_num
         from {{ ref('int__mitx__courses') }}
         where course_number is not null and course_title is not null
