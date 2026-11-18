@@ -141,7 +141,13 @@ models:
   - name: courseruncertificate_download_url
     description: str, the full URL to the certificate
     tests:
-    - not_null
+    - not_null:
+        config:
+          # The QA edX.org mirror nullifies certificate_download_url
+          # (ingestion/inventory/units/irx__bigquery.yml). target.catalog on
+          # StarRocks, as in raw_data_lake(), which a test config cannot call.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: courseruncertificate_download_uuid
     description: str, A hash code that identifies this student’s certificate. Included
       as part of the download_url.
