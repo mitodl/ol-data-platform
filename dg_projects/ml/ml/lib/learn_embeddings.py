@@ -637,7 +637,9 @@ def _check_inputs(
     if embedder.spec != model:
         msg = f"embedder is for {embedder.spec.model_id}, not {model.model_id}"
         raise ValueError(msg)
-    if (known["vector"].list.len() != model.vector_length).any():
+    # A null vector has a null length, which any() would skip.
+    lengths = known["vector"].list.len()
+    if lengths.is_null().any() or (lengths != model.vector_length).any():
         msg = (
             f"known vectors must be {model.vector_length} long, as "
             f"{model.vector_space_id}"
