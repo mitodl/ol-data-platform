@@ -487,7 +487,12 @@ models:
   - name: courseruncertificate_url
     description: str, URL to the course certificate
     tests:
-    - not_null
+    - not_null:
+        config:
+          # edX.org rows carry the QA edX.org mirror's nullified
+          # certificate_download_url; see int__edxorg__mitx_courserun_certificates.
+          severity: "{{ 'warn' if (target.catalog if target.type == 'starrocks' else\
+            \ target.database) == 'ol_data_lake_qa' else 'error' }}"
   - name: courseruncertificate_created_on
     description: timestamp, date and time when this course certificate was initially
       created
