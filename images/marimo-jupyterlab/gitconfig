@@ -1,5 +1,4 @@
-# The empty helper clears any helper set earlier, so git asks only gh for
-# github.com credentials.
+# git asks gh first for github.com credentials. A helper the user configures
+# in ~/.gitconfig or a repo's config runs after it, as a fallback.
 [credential "https://github.com"]
-	helper =
 	helper = !/opt/conda/bin/gh auth git-credential
