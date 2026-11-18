@@ -2033,6 +2033,21 @@ def test_a_failure_written_before_the_first_tick_is_still_announced() -> None:
     ] == [["mart", "stale_at_deploy"]]
 
 
+def test_a_failure_that_recovered_in_the_same_batch_is_not_announced() -> None:
+    records = [
+        _record(1, _freshness_change(["mart", "recovered"], "FAIL", "PASS")),
+        _record(2, _freshness_change(["mart", "still_stale"], "FAIL", "PASS")),
+        _record(3, _freshness_change(["mart", "recovered"], "PASS", "FAIL")),
+    ]
+
+    failures, next_cursor = collect_new_freshness_failures(
+        _instance_returning(records, {}), 0
+    )
+
+    assert [f.storage_id for f in failures] == [2]
+    assert next_cursor == "3"
+
+
 def test_freshness_failure_message_links_each_asset() -> None:
     change = _freshness_change(["mart", "a b"], "FAIL", "PASS")
 

@@ -1310,12 +1310,21 @@ def collect_new_freshness_failures(
     )
     if not records:
         return [], None
+    # A FAIL that a later change in the same batch superseded (it recovered) is
+    # not news. Matters most on a first tick, which re-reads a day of changes.
+    latest = {
+        record.event_log_entry.dagster_event.event_specific_data.key: record.storage_id
+        for record in records
+    }
     return _one_message_of(
         records,
         lambda record: (
             record
-            if record.event_log_entry.dagster_event.event_specific_data.new_state
+            if (
+                change := record.event_log_entry.dagster_event.event_specific_data
+            ).new_state
             == FRESHNESS_FAIL_STATE
+            and latest[change.key] == record.storage_id
             else None
         ),
     )
