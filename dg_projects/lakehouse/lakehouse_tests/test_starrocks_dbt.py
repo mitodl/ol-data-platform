@@ -46,6 +46,8 @@ from lakehouse.lib.starrocks_dbt import (
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
+from lakehouse_tests.asset_source import parse_asset_module
+
 # Verbatim from the failed run: an FE rolling restart began 39s into the build,
 # so the follower dbt was connected to could no longer forward DDL to the leader.
 FE_ROLLOUT_FAILURE = """The dbt CLI process with command
@@ -1313,11 +1315,6 @@ class TestStarRocksCredentials:
         assert os.environ["DBT_STARROCKS_USERNAME"] == "v-user-1"
 
 
-def _asset_module(name: str) -> ast.Module:
-    source = Path(lakehouse.__file__).parent / "assets" / "lakehouse" / name
-    return ast.parse(source.read_text())
-
-
 def _spawns_outside(module: ast.Module, wrapper: str) -> list[str]:
     """Every ``.cli()`` call not lexically inside ``with <wrapper>(...)``."""
     wrapped: set[int] = set()
@@ -1351,4 +1348,4 @@ def test_every_dbt_spawn_gets_credentials(module, wrapper):
     cutover; one missed spawn (the surrogate-key repair, docs, freshness) fails
     only there.
     """
-    assert _spawns_outside(_asset_module(module), wrapper) == []
+    assert _spawns_outside(parse_asset_module(module), wrapper) == []

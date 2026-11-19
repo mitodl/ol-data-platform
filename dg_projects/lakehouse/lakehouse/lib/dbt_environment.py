@@ -238,20 +238,24 @@ DBT_TARGET = resolve_for_environment(
 DBT_PROFILE_NAME = "open_learning"
 
 
-def dbt_target_type(profiles_path: Path, target: str) -> str:
-    """Return the adapter type profiles.yml declares for *target*, e.g. starrocks.
+VAULT_LOGIN_VARIABLE = "DBT_STARROCKS_USERNAME"
 
-    Read from the profile rather than declared in another map, so the engine
-    the code location prepares credentials for cannot disagree with the one dbt
-    connects to, including under a DAGSTER_DBT_TARGET override. The credentials
-    themselves come from the ``starrocks`` resource, which follows the
-    environment: in ``dev`` that is the local cluster's root login, so a dev
-    override to a deployed StarRocks profile gets a login it cannot use.
+
+def dbt_target_reads_vault_login(profiles_path: Path, target: str) -> bool:
+    """Return whether *target* logs in with the DBT_STARROCKS_* variables.
+
+    Those are the profiles a Vault dynamic login has to be exported for. Trino
+    profiles, the local profiles (a passwordless root) and starrocks_qa (an
+    OIDC token file) don't read them, and exporting one would only overwrite
+    the host they connect to. Read from the profile rather than declared in
+    another map, so it cannot disagree with how dbt connects, including under
+    a DAGSTER_DBT_TARGET override.
 
     :raises KeyError: when profiles.yml has no output named *target*.
     """
     profiles = yaml.safe_load(profiles_path.read_text())
-    return profiles[DBT_PROFILE_NAME]["outputs"][target]["type"]
+    output = profiles[DBT_PROFILE_NAME]["outputs"][target]
+    return output["type"] == "starrocks" and VAULT_LOGIN_VARIABLE in output["username"]
 
 
 STARROCKS_DBT_TARGET = resolve_for_environment(

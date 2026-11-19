@@ -33,7 +33,8 @@ from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     DBT_TARGET,
     SKIP_UNIT_TESTS_ARGS,
-    dbt_target_type,
+    STARROCKS_IS_LOCAL,
+    dbt_target_reads_vault_login,
 )
 from lakehouse.lib.keyset_snapshots import (
     dbt_automation_condition,
@@ -67,23 +68,30 @@ OPENMETADATA_DOMAIN_RULES_ARTIFACT = "openmetadata_domains.json"
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
 
-# A StarRocks target has no static login in the pod: every dbt invocation this
-# project spawns needs Vault credentials first. ci builds on StarRocks today;
-# the other environments follow as DBT_TARGET_MAP moves them off Trino.
-DBT_TARGET_IS_STARROCKS = (
-    dbt_target_type(DBT_REPO_DIR / "profiles.yml", DBT_TARGET) == "starrocks"
+# A deployed StarRocks target has no static login in the pod: every dbt
+# invocation this project spawns needs a Vault login first. ci builds on
+# StarRocks today; the other environments follow as DBT_TARGET_MAP moves them
+# off Trino. In dev the `starrocks` resource is the local root login, so a
+# developer pointing DAGSTER_DBT_TARGET at a deployed profile keeps the
+# DBT_STARROCKS_* they exported (bin/starrocks-auth) rather than having it
+# replaced.
+DBT_TARGET_NEEDS_VAULT_LOGIN = not STARROCKS_IS_LOCAL and dbt_target_reads_vault_login(
+    DBT_REPO_DIR / "profiles.yml", DBT_TARGET
 )
 
 
 def dbt_credentials(starrocks: StarRocksResource) -> AbstractContextManager[None]:
     """Wrap the spawn of a dbt invocation that may need StarRocks credentials.
 
-    Exports fresh Vault credentials when the target is StarRocks and does
-    nothing on Trino, whose profile reads a static login from the pod. Wrap only
-    the ``.cli()`` call; see `starrocks_credentials`.
+    Exports a fresh Vault login when the target reads one and does nothing
+    otherwise (Trino, whose profile reads a static login from the pod, or a
+    profile with its own login). Wrap only the ``.cli()`` call; see
+    `starrocks_credentials`.
     """
     return (
-        starrocks_credentials(starrocks) if DBT_TARGET_IS_STARROCKS else nullcontext()
+        starrocks_credentials(starrocks)
+        if DBT_TARGET_NEEDS_VAULT_LOGIN
+        else nullcontext()
     )
 
 

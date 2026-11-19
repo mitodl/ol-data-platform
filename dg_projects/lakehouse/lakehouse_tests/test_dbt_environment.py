@@ -22,7 +22,7 @@ from lakehouse.lib.dbt_environment import (
     STARROCKS_HOST_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
-    dbt_target_type,
+    dbt_target_reads_vault_login,
     iceberg_maintenance_engine,
     resolve_for_environment,
     starrocks_is_local,
@@ -286,25 +286,35 @@ def test_an_override_naming_no_engine_raises():
 
 @pytest.mark.parametrize("environment", ENVIRONMENTS)
 def test_every_main_target_names_a_profile_output(environment):
-    """The code location reads the target's type at import to decide on credentials.
+    """The code location reads the target's profile at import to decide on a login.
 
     A target missing from profiles.yml would fail the whole code location's
     load, not just its dbt build.
     """
-    assert dbt_target_type(PROFILES_PATH, DBT_TARGET_MAP[environment]) in {
-        "trino",
-        "starrocks",
-    }
+    dbt_target_reads_vault_login(PROFILES_PATH, DBT_TARGET_MAP[environment])
 
 
-def test_ci_builds_the_main_project_on_starrocks():
-    """Ci writes ol_data_lake_ci through StarRocks, so it needs Vault credentials."""
-    assert dbt_target_type(PROFILES_PATH, DBT_TARGET_MAP["ci"]) == "starrocks"
+@pytest.mark.parametrize(
+    ("target", "reads_vault_login"),
+    [
+        # ci writes ol_data_lake_ci through StarRocks with a Vault login.
+        ("ci", True),
+        ("starrocks_qa_lake", True),
+        ("starrocks_production", True),
+        ("production", False),  # Trino
+        ("starrocks_qa", False),  # OIDC token file
+        ("starrocks_local", False),  # passwordless root
+        ("starrocks_local_b2b", False),
+    ],
+)
+def test_only_vault_login_profiles_get_one(target, reads_vault_login):
+    """Exporting a login to a profile that ignores it only overwrites its host."""
+    assert dbt_target_reads_vault_login(PROFILES_PATH, target) is reads_vault_login
 
 
 def test_an_unknown_target_raises():
     with pytest.raises(KeyError, match="no_such_target"):
-        dbt_target_type(PROFILES_PATH, "no_such_target")
+        dbt_target_reads_vault_login(PROFILES_PATH, "no_such_target")
 
 
 @pytest.mark.parametrize("environment", DEPLOYED_ENVIRONMENTS)
@@ -316,7 +326,7 @@ def test_a_starrocks_target_gets_its_own_clusters_host(environment):
     cluster only.
     """
     target = DBT_TARGET_MAP[environment]
-    if dbt_target_type(PROFILES_PATH, target) != "starrocks":
-        pytest.skip(f"{environment} builds on Trino")
+    if not dbt_target_reads_vault_login(PROFILES_PATH, target):
+        pytest.skip(f"{environment}'s target gets no exported login")
     profile = yaml.safe_load(PROFILES_PATH.read_text())["open_learning"]["outputs"]
     assert STARROCKS_HOST_MAP[environment] in profile[target]["host"]
