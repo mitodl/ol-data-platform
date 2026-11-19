@@ -21,6 +21,7 @@ from lakehouse.lib.dbt_environment import (
     STARROCKS_DBT_TARGET_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
+    dbt_target_type,
     iceberg_maintenance_engine,
     resolve_for_environment,
     starrocks_is_local,
@@ -279,3 +280,26 @@ def test_an_override_naming_no_engine_raises():
     """A typo in DAGSTER_ICEBERG_MAINTENANCE_ENGINE fails at load, not at 02:00."""
     with pytest.raises(ValueError, match="starocks"):
         iceberg_maintenance_engine("starocks")
+
+
+@pytest.mark.parametrize("environment", ENVIRONMENTS)
+def test_every_main_target_names_a_profile_output(environment):
+    """The code location reads the target's type at import to decide on credentials.
+
+    A target missing from profiles.yml would fail the whole code location's
+    load, not just its dbt build.
+    """
+    assert dbt_target_type(PROFILES_PATH, DBT_TARGET_MAP[environment]) in {
+        "trino",
+        "starrocks",
+    }
+
+
+def test_ci_builds_the_main_project_on_starrocks():
+    """Ci writes ol_data_lake_ci through StarRocks, so it needs Vault credentials."""
+    assert dbt_target_type(PROFILES_PATH, DBT_TARGET_MAP["ci"]) == "starrocks"
+
+
+def test_an_unknown_target_raises():
+    with pytest.raises(KeyError, match="no_such_target"):
+        dbt_target_type(PROFILES_PATH, "no_such_target")

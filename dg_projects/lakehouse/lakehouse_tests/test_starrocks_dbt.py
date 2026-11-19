@@ -7,6 +7,7 @@ the retry pattern is that it matches what StarRocks actually emits.
 
 import ast
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -39,6 +40,7 @@ from lakehouse.lib.starrocks_dbt import (
     seed_change_log_sql,
     stamp_change_log,
     stamp_change_log_sql,
+    starrocks_credentials,
     unreadable_base_tables,
     view_grains,
 )
@@ -1266,3 +1268,87 @@ class TestDuplicatedGrains:
         assert duplicated_grains(grains, fetch) == {
             "s.dup": {"columns": "a, b", "duplicate_keys": 4, "duplicate_rows": 11}
         }
+
+
+class _VaultLogins:
+    """Stands in for StarRocksResource: a new login on every request."""
+
+    host = "fe.example"
+
+    def __init__(self) -> None:
+        self.issued = 0
+
+    def generate_credentials(self) -> tuple[str, str]:
+        self.issued += 1
+        return f"v-user-{self.issued}", f"v-login-{self.issued}"
+
+
+_CREDENTIAL_VARS = ("DBT_STARROCKS_USERNAME", "DBT_STARROCKS_PASSWORD")
+
+
+@pytest.fixture
+def credential_env(monkeypatch):
+    """Restore the variables the helper sets, whatever they were before."""
+    for name in (*_CREDENTIAL_VARS, "DBT_STARROCKS_HOST"):
+        monkeypatch.setenv(name, "before")
+
+
+@pytest.mark.usefixtures("credential_env")
+class TestStarRocksCredentials:
+    def test_a_spawn_inside_sees_a_fresh_login(self):
+        logins = _VaultLogins()
+        with starrocks_credentials(logins):
+            first = [os.environ[name] for name in _CREDENTIAL_VARS]
+            host = os.environ["DBT_STARROCKS_HOST"]
+        with starrocks_credentials(logins):
+            second = [os.environ[name] for name in _CREDENTIAL_VARS]
+        assert first == ["v-user-1", "v-login-1"]
+        assert second == ["v-user-2", "v-login-2"]
+        assert host == "fe.example"
+
+    def test_the_login_outlives_the_spawn(self):
+        """dagster-dbt's column-metadata fetch connects after the spawn."""
+        with starrocks_credentials(_VaultLogins()):
+            pass
+        assert os.environ["DBT_STARROCKS_USERNAME"] == "v-user-1"
+
+
+def _asset_module(name: str) -> ast.Module:
+    source = Path(lakehouse.__file__).parent / "assets" / "lakehouse" / name
+    return ast.parse(source.read_text())
+
+
+def _spawns_outside(module: ast.Module, wrapper: str) -> list[str]:
+    """Every ``.cli()`` call not lexically inside ``with <wrapper>(...)``."""
+    wrapped: set[int] = set()
+    for node in ast.walk(module):
+        if isinstance(node, ast.With) and any(
+            isinstance(item.context_expr, ast.Call)
+            and getattr(item.context_expr.func, "id", "") == wrapper
+            for item in node.items
+        ):
+            wrapped.update(id(child) for child in ast.walk(node))
+    return [
+        ast.unparse(node)
+        for node in ast.walk(module)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", "") == "cli"
+        and id(node) not in wrapped
+    ]
+
+
+@pytest.mark.parametrize(
+    ("module", "wrapper"),
+    [
+        ("dbt.py", "dbt_credentials"),
+        ("dbt_starrocks.py", "starrocks_credentials"),
+    ],
+)
+def test_every_dbt_spawn_gets_credentials(module, wrapper):
+    """A spawn left out connects to a StarRocks target with no login at all.
+
+    The main project's target is StarRocks in ci now and everywhere after the
+    cutover; one missed spawn (the surrogate-key repair, docs, freshness) fails
+    only there.
+    """
+    assert _spawns_outside(_asset_module(module), wrapper) == []

@@ -44,8 +44,10 @@ materialize dbt models unattended. Deciding it should is a separate, later act.
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal, cast, get_args
 
+import yaml
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
 # Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
@@ -56,9 +58,9 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
 # `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
-# project under DAGSTER_ENVIRONMENT=ci yet. Two things come before the first run
-# there: the "dbt" resource fetches no StarRocks credentials of its own (only
-# the StarRocks project's does), and ol_warehouse_ci does not exist in Glue.
+# project under DAGSTER_ENVIRONMENT=ci yet. A target whose profile type is
+# starrocks gets Vault credentials for each dbt invocation (see
+# dbt_target_type), but ol_warehouse_ci does not exist in Glue yet.
 # `ol-dbt starrocks` creates it with a location; dbt run from here would create
 # it bare (see the profile's comment), and seeds would then fail.
 DBT_TARGET_MAP: Mapping[str, str] = {
@@ -213,6 +215,25 @@ DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_TARGET",
     what="dbt target",
 )
+
+DBT_PROFILE_NAME = "open_learning"
+
+
+def dbt_target_type(profiles_path: Path, target: str) -> str:
+    """Return the adapter type profiles.yml declares for *target*, e.g. starrocks.
+
+    Read from the profile rather than declared in another map, so the engine
+    the code location prepares credentials for cannot disagree with the one dbt
+    connects to, including under a DAGSTER_DBT_TARGET override. The credentials
+    themselves come from the ``starrocks`` resource, which follows the
+    environment: in ``dev`` that is the local cluster's root login, so a dev
+    override to a deployed StarRocks profile gets a login it cannot use.
+
+    :raises KeyError: when profiles.yml has no output named *target*.
+    """
+    profiles = yaml.safe_load(profiles_path.read_text())
+    return profiles[DBT_PROFILE_NAME]["outputs"][target]["type"]
+
 
 STARROCKS_DBT_TARGET = resolve_for_environment(
     STARROCKS_DBT_TARGET_MAP,
