@@ -1,6 +1,4 @@
--- QA (RC) MITx Online has the same course number under several orgs (MITx, MITxT,
--- REPLICA) for 7 MicroMasters courses (2026-11-18); production has none.
-{{ config(error_if='>0', severity=('warn' if raw_data_lake() == 'qa' else 'error')) }}
+{{ config(error_if='>0') }}
 
 -- bridge_program_course keys a MicroMasters course to the MITx Online course with the
 -- course number in its edx_key. A second MITx Online course with that number would add a
