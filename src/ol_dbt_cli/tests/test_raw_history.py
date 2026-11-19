@@ -159,11 +159,13 @@ class TestCommittedFiles:
         assert len(raw_tables) == 336  # noqa: PLR2004
         assert not raw_tables & LEARNER_ACTIVITY_TABLES
 
-    def test_pilot_snapshots_keep_their_names_and_alone_are_live(self) -> None:
+    def test_live_snapshots_are_the_pilots_and_mitxonline(self) -> None:
         """Renaming a pilot snapshot would orphan its production table."""
         selected = history_tables(load_units(REAL_INVENTORY))
         live = {table.snapshot_name for rows in selected.values() for table in rows if table.live}
-        assert live == {f"snapshot_raw__xpro__app__postgres__{name}" for name in PILOT_TABLES}
+        pilots = {f"snapshot_raw__xpro__app__postgres__{name}" for name in PILOT_TABLES}
+        mitxonline = {table.snapshot_name for table in selected["mitxonline/app_postgres"]}
+        assert live == pilots | mitxonline
 
 
 class TestScope:
