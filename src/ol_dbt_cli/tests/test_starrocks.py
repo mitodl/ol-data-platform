@@ -113,8 +113,9 @@ _RENDER_CASES = [
     ("ci", {"schema_suffix": ""}, "ol_warehouse_ci"),
     ("ci", {"schema_suffix": "pr_123"}, "ol_warehouse_ci_pr_123"),
     ("starrocks_dev_qa", {"schema_suffix": "alice"}, "ol_warehouse_qa_alice"),
-    ("starrocks_qa_lake", {"schema_suffix": "alice"}, "ol_warehouse_qa"),
+    ("starrocks_qa_lake", {}, "ol_warehouse_qa"),
     ("starrocks_production_lake", {}, "ol_warehouse_production"),
+    ("starrocks_dev_production", {"schema_suffix": "alice"}, "ol_warehouse_production_alice"),
 ]
 
 
@@ -152,11 +153,12 @@ def test_lake_target_refuses_another_env_s_cluster(mock_fetch, mock_port_forward
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
-def test_developer_lake_target_needs_a_suffix(
-    mock_fetch, mock_port_forward, mock_dbt_run, cli_vars: str | None
+@pytest.mark.parametrize(("env", "target"), [("qa", "starrocks_dev_qa"), ("production", "starrocks_dev_production")])
+def test_developer_lake_target_needs_a_suffix(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str, cli_vars: str | None
 ) -> None:
     with pytest.raises(SystemExit):
-        run(env="qa", target="starrocks_dev_qa", vars=cli_vars)
+        run(env=env, target=target, vars=cli_vars)
 
     mock_fetch.assert_not_called()
 
@@ -172,14 +174,148 @@ def test_lake_target_refuses_a_schema_glue_cannot_load(mock_fetch, mock_port_for
 
 
 @pytest.mark.parametrize(
+    ("env", "target", "suffix"),
+    [
+        # Seeds would land in the canonical dimensional schema.
+        ("production", "starrocks_dev_production", "dimensional"),
+        # The profile schema would be the raw schema the loaders write.
+        ("production", "starrocks_dev_production", "raw"),
+        ("qa", "starrocks_dev_qa", "staging"),
+        ("ci", "ci", "mart"),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_suffixed_lake_target_refuses_a_canonical_schema(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str, suffix: str
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        run(env=env, target=target, vars=f"{{schema_suffix: {suffix}}}")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "cli_vars", "allow_canonical_writes"),
+    [
+        ("qa", "starrocks_qa_lake", "{schema_suffix: alice}", False),
+        # YAML reads these as falsy values, and they were still passed.
+        ("qa", "starrocks_qa_lake", "{schema_suffix: 0}", False),
+        ("qa", "starrocks_qa_lake", "{schema_suffix: ''}", False),
+        # The flag allows the canonical schemas, not a suffix the profile drops.
+        ("production", "starrocks_production_lake", "{schema_suffix: alice}", True),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_lake_target_refuses_a_schema_suffix(  # noqa: PLR0913
+    mock_fetch,
+    mock_port_forward,
+    mock_dbt_run,
+    env: str,
+    target: str,
+    cli_vars: str,
+    allow_canonical_writes: bool,  # noqa: FBT001
+) -> None:
+    """The profile drops the suffix, so dbt would build the canonical schemas the caller asked to avoid."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env=env, target=target, vars=cli_vars, allow_canonical_writes=allow_canonical_writes)
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_production_lake_target_needs_the_flag(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """A laptop build of starrocks_production_lake writes the schemas the production build owns."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production", target="starrocks_production_lake")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_canonical_production_lake_target_runs_with_the_flag(
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    run(env="production", target="starrocks_production_lake", allow_canonical_writes=True)
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_production_lake"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_production_default_target_needs_the_flag_to_write(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """--env production defaults to starrocks_production, which rebuilds the b2b_analytics views."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_readonly_does_not_exempt_an_oidc_profile(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """starrocks_qa logs in with its own OIDC identity, so the readonly Vault role says nothing about it."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production", target="starrocks_qa", vault_role="readonly")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(("vault_role", "allow_canonical_writes"), [("readonly", False), (None, True)])
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_production_default_target_runs_readonly_or_with_the_flag(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, vault_role: str | None, allow_canonical_writes: bool
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    run(env="production", vault_role=vault_role, allow_canonical_writes=allow_canonical_writes)
+
+    _, run_kwargs = mock_dbt_run.call_args
+    assert run_kwargs["target"] == "starrocks_production"
+
+
+@pytest.mark.parametrize(
     ("env", "target", "cli_vars", "schema", "host"),
     [
         ("ci", "ci", None, "ol_warehouse_ci", _ENVS["ci"]["host"]),
         ("ci", "ci", "{schema_suffix: pr_123}", "ol_warehouse_ci_pr_123", _ENVS["ci"]["host"]),
         # qa reaches the FE through the port-forward.
         ("qa", "starrocks_dev_qa", "{schema_suffix: alice}", "ol_warehouse_qa_alice", "127.0.0.1"),
-        # The profile ignores schema_suffix, so the schema made must too.
-        ("qa", "starrocks_qa_lake", "{schema_suffix: alice}", "ol_warehouse_qa", "127.0.0.1"),
+        ("qa", "starrocks_qa_lake", None, "ol_warehouse_qa", "127.0.0.1"),
+        (
+            "production",
+            "starrocks_dev_production",
+            "{schema_suffix: alice}",
+            "ol_warehouse_production_alice",
+            "127.0.0.1",
+        ),
     ],
 )
 @patch("mysql.connector.connect")
@@ -507,7 +643,7 @@ def test_explicit_target_keeps_the_env_s_data_lake(mock_fetch, mock_port_forward
     answered separately, so overriding one must leave the other alone.
     """
     mock_fetch.return_value = ("user", "pass")
-    run(env="production", target="starrocks_qa_vault")
+    run(env="production", target="starrocks_qa_vault", allow_canonical_writes=True)
 
     assert os.environ["DBT_DATA_LAKE_ENV"] == "production"
     _, kwargs = mock_dbt_run.call_args

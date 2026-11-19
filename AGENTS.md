@@ -270,7 +270,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
-| `ol-dbt starrocks build` | Run dbt against StarRocks (`--env dev` is the local-dev cluster; `qa`/`production`/`ci` fetch Vault credentials) |
+| `ol-dbt starrocks build` | Run dbt against StarRocks (`--env dev` is the local-dev cluster; `qa`/`production`/`ci` fetch Vault credentials). Your own copy of a lake is `--target starrocks_dev_qa` / `starrocks_dev_production` with `--vars '{schema_suffix: <name>}'` |
 | `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` and each unit's factory package (see `docs/LOCAL_LAKE.md`) |
 | `ol-dbt fixtures generate` | Write the rows `fixtures load` would insert as JSON lines, with no StarRocks connection |
 | `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`), or for a unit with no dump draft them from its staging models' dbt tests |
