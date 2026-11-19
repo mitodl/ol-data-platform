@@ -41,10 +41,11 @@
 {% endmacro %}
 
 {% macro starrocks__format_timestamp_as_iso8601(timestamp_expr, fractional_digits=6) %}
-  {# %f is always six digits; cut the string after the digits Trino would write. #}
+  {# %f is always six digits. #}
   {%- if fractional_digits == 9 %}
   concat(date_format({{ timestamp_expr }}, '%Y-%m-%dT%H:%i:%s.%f'), '000Z')
   {%- else %}
+  {# Cut the string after the digits Trino would write. #}
   concat(
     substr(date_format({{ timestamp_expr }}, '%Y-%m-%dT%H:%i:%s.%f'), 1, {{ 20 + fractional_digits }}), 'Z'
   )
