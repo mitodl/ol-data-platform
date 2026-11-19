@@ -24,7 +24,7 @@ from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
-from ol_dbt_cli.lib.airbyte_archive import active_production_connections, archive_tables
+from ol_dbt_cli.lib.airbyte_archive import active_connections, archive_tables
 from ol_dbt_cli.lib.cursor_audit import Verdict, audit, select_units
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
@@ -420,13 +420,15 @@ def archive(
             f"{escape(unit)}'s dlt source appends to its Airbyte tables, which stay the record. Nothing to archive."
         )
         return
-    # The inventory's connections, and so its markers, describe production. A
-    # canonical qa or ci archive is neither guarded by them nor recorded.
+    # A canonical target writes the lake its environment's connections load, so
+    # those connections must be paused. Only production gets a marker: the
+    # unit's markers describe the production history.
     production = canonical and "production" in target
-    active = active_production_connections(units[unit])
-    if execute and production and active:
+    environment = "production" if production else "qa" if canonical and "qa" in target else None
+    active = active_connections(units[unit], environment) if environment else []
+    if execute and active:
         err_console.print(
-            f"[bold red]{escape(unit)} still has active production connections: {escape(', '.join(active))}. "
+            f"[bold red]{escape(unit)} still has active {environment} connections: {escape(', '.join(active))}. "
             "Pause them in Airbyte and set their `status: inactive` first, so no sync lands after the count check."
         )
         sys.exit(1)

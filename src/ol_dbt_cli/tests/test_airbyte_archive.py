@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from ol_dbt_cli.lib.airbyte_archive import ArchiveTable, active_production_connections, archive_tables
+from ol_dbt_cli.lib.airbyte_archive import ArchiveTable, active_connections, archive_tables
 from ol_dbt_cli.lib.inventory import RenderError, Unit, load_units
 
 REAL_INVENTORY = Path(__file__).resolve().parents[3] / "ingestion" / "inventory"
@@ -78,7 +78,7 @@ def test_a_dlt_source_appending_to_the_same_tables_needs_no_archive() -> None:
     assert archive_tables(unit) == []
 
 
-def test_active_production_connections_are_named() -> None:
+def test_active_connections_are_named_per_environment() -> None:
     unit = _unit(
         [
             _connection("production", ["a"]),
@@ -87,7 +87,8 @@ def test_active_production_connections_are_named() -> None:
         ],
         [_table("a"), _table("b")],
     )
-    assert active_production_connections(unit) == ["production connection"]
+    assert active_connections(unit, "production") == ["production connection"]
+    assert active_connections(unit, "qa") == ["qa connection"]
 
 
 def test_no_production_connection_fails() -> None:

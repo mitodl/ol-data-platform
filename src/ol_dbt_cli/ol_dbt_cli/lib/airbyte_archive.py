@@ -18,17 +18,22 @@ from ol_dbt_cli.lib.inventory import RenderError, Unit, _tables_by_stream
 ARCHIVE_PREFIX = "airbyte_archive__"
 
 
-def active_production_connections(unit: Unit) -> list[str]:
-    """Return the names of the unit's production connections still marked active.
+def active_connections(unit: Unit, environment: str) -> list[str]:
+    """Return the names of the unit's connections in one environment still marked active.
 
     An archive taken while one of them still syncs can miss the rows of a sync
-    that lands after its row-count check, so a production archive waits until
-    the unit's file records every production connection as paused.
+    that lands after its row-count check, so an archive waits until the unit's
+    file records every connection loading that environment's lake as paused.
+
+    :param unit: The inventory unit being archived.
+    :param environment: The connection environment, ``production`` or ``qa``.
+    :returns: The active connections' names.
+    :rtype: list[str]
     """
     return [
         str(connection["name"])
         for connection in unit.connections
-        if connection["environment"] == "production" and connection["status"] == "active"
+        if connection["environment"] == environment and connection["status"] == "active"
     ]
 
 

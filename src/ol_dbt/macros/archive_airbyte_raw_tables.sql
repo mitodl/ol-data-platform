@@ -25,7 +25,11 @@
             writes nothing.
 -#}
 {% macro archive_airbyte_raw_tables(tables, execute_archive=false) %}
-    {%- set raw_schema = target.schema.replace(var('schema_suffix', ''), '').rstrip('_') ~ '_raw' -%}
+    {#- Only a trailing `_<suffix>` is removed: suffix `qa` on dev_qa must
+        leave ol_warehouse_qa intact. -#}
+    {%- set suffix = '_' ~ var('schema_suffix', '') -%}
+    {%- set raw_base = target.schema[:-(suffix | length)] if target.schema.endswith(suffix) else target.schema -%}
+    {%- set raw_schema = raw_base ~ '_raw' -%}
     {%- set history_schema = generate_schema_name('history', none) | trim -%}
     {%- set patterns = raw_history_secret_patterns() -%}
     {%- set ns = namespace(created=0, verified=0) -%}
