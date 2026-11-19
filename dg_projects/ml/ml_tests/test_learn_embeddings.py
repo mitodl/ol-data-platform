@@ -12,6 +12,7 @@ import math
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
@@ -118,9 +119,21 @@ class Warehouse(IOManager):
         raise NotImplementedError
 
 
+# When each fake table was last built, in ms; a table not named here reads 0.
+BUILT_AT: dict[str, int] = {}
+
+
 @pytest.fixture
 def tables(monkeypatch) -> dict[str, pl.DataFrame]:
     store: dict[str, pl.DataFrame] = {}
+    BUILT_AT.clear()
+
+    def load_table(_database_name: str, table_name: str) -> Any:
+        if table_name not in store:
+            raise NoSuchTableError(table_name)
+        return SimpleNamespace(
+            metadata=SimpleNamespace(last_updated_ms=BUILT_AT.get(table_name, 0))
+        )
 
     def read(database_name: str, table_name: str) -> pl.LazyFrame:
         assert database_name.startswith("ol_warehouse_production_test_")
@@ -146,6 +159,7 @@ def tables(monkeypatch) -> dict[str, pl.DataFrame]:
     monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
     monkeypatch.setattr(warehouse, "load_matching_rows", read_matching)
     monkeypatch.setattr(warehouse, "load_rows_by_key", read_by_key)
+    monkeypatch.setattr(warehouse, "load_dbt_model_table", load_table)
     return store
 
 
@@ -1071,6 +1085,34 @@ def test_a_held_back_run_keeps_its_chunks(tables):
     assert not build_content_files(tables, dagster_instance).success
     assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].equals(chunks)
     assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].equals(vectors)
+
+
+def test_a_run_is_not_emptied_before_the_waiting_runs_are_rebuilt(tables):
+    """Dbt replaces the files table first; until then a missing run may be waiting"""
+    load_sources(tables, **{"block-v1:a": "Text."})
+    load_empty_xpro_and_ocw(tables)
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    chunks = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]]
+
+    tables["integrations__learn__content_files"] = content_files(none="").clear()
+    BUILT_AT["integrations__learn__content_file_waiting_runs"] = 1
+    BUILT_AT["integrations__learn__content_files"] = 2
+    result: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance)
+    )
+
+    assert result.asset_events == []
+    assert not build_content_files(tables, dagster_instance).success
+    assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].equals(chunks)
+
+    # Once the waiting runs are rebuilt without it, the run is gone.
+    BUILT_AT["integrations__learn__content_file_waiting_runs"] = 3
+    result = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance)
+    )
+    (observation,) = result.asset_events
+    assert observation.tags[DATA_VERSION_TAG] == EMPTY_TEXT_VERSION
 
 
 # ------------------------------------------------------------------- smokecheck

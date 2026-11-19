@@ -5,7 +5,13 @@
   Learn leaves a run it reads no rows for as it is, and the ml location's embedding
   sensor reads this so it does the same, rather than rebuilding the run's chunks
   with none.
+
+  It is built after integrations__learn__content_files, which it doesn't read:
+  the sensor trusts a run's absence from that table only once this table is the
+  newer of the two, since between their commits a held-back run can already be
+  missing there and not yet listed here.
 #}
+-- depends_on: {{ ref('integrations__learn__content_files') }}
 
 select distinct
     source_system as etl_source

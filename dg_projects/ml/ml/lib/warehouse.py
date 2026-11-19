@@ -75,6 +75,23 @@ def read_table(layer: str, table: str) -> pl.LazyFrame | None:
         return None
 
 
+def table_updated_at(layer: str, table: str) -> int:
+    """Return when a warehouse table's Iceberg metadata was last written.
+
+    dbt-trino builds a table model under a temporary name and renames it into
+    place, so for a model this is when it was last built, or later if
+    maintenance has rewritten it since.
+
+    :param layer: the warehouse layer
+    :param table: the table name
+    :returns: milliseconds since the epoch
+    :rtype: int
+    """
+    _refuse_dev_redirects()
+    table_metadata = load_dbt_model_table(warehouse_database(layer), table).metadata
+    return table_metadata.last_updated_ms
+
+
 def require_table(layer: str, table: str) -> pl.LazyFrame:
     """Scan an upstream table this asset cannot run without.
 
