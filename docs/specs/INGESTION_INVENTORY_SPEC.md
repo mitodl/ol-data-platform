@@ -1193,15 +1193,29 @@ Each unit therefore takes these steps, in this order:
    Airbyte state, deleted-at-source keys included. They read raw and do not depend on the
    dlt source, so they can go live before it is built.
 2. Every production Airbyte connection of the unit is paused.
-3. Each raw table those connections load is copied into the history schema
-   (`tk-archive-a-unit-s-airbyte-raw-tables-into-the-his-97421a`), modeled or not. Snapshots
-   cover modeled tables only, so for the rest this copy is the only record. The copy drops
-   secret columns and the inventory's per-table excludes, as the snapshots do. It keeps the
-   loader columns the snapshots drop, because `_airbyte_extracted_at` is the only order an
-   append table's versions have. It has the history layer's grants, and its row counts are
-   checked against the source table. Archive tables are never rebuilt or dropped.
-4. The unit's cutover time is recorded in its inventory unit, as a `history.markers` entry
-   of kind `loader_cutover` (§11.2). Reports use it to discount
+3. Each raw table those connections load is copied into the history schema, modeled or not,
+   with `ol-dbt inventory archive <deployment>/<layer> --target production --execute`
+   (macro `archive_airbyte_raw_tables`). Snapshots cover modeled tables only, so for the
+   rest this copy is the only record. Each table becomes
+   `ol_warehouse_production_history.airbyte_archive__<raw table>`. The copy drops secret
+   columns and the inventory's per-table excludes, as the snapshots do. It keeps the loader
+   columns the snapshots drop, because `_airbyte_extracted_at` is the only order an append
+   table's versions have. It gets no grants, so it is read like raw. The command refuses
+   a production `--execute` while the unit's file still marks a production connection
+   `status: active`, so step 2 includes that edit. Each copy's row count is checked
+   against the source table, and a difference fails the run and drops that copy, which never
+   became an archive, since with the connections paused the source cannot change. A table archived by an earlier
+   run is checked against its source's columns and row count and otherwise left alone, so
+   a run that failed part way is repeated as is. Archive tables are never rebuilt or
+   dropped. A unit whose dlt source appends (`dlt.write_disposition: append`)
+   copies nothing, because its tables stay the record. Without `--execute` the command
+   lists what it would copy. A `dev_production` target with `--schema-suffix` rehearses it
+   into `ol_warehouse_production_<suffix>_history` (done for `learn_ai/app_postgres` on
+   2026-11-19: 28 tables, `ai_chatbots_djangocheckpoint` 3,346,864 rows over 2,978,642
+   ids, in about 6 minutes).
+4. The unit's archive and cutover times are recorded in its inventory unit, as
+   `history.markers` entries of kind `airbyte_archive` (the command prints it) and
+   `loader_cutover` (§11.2). Reports use the cutover to discount
    the versions and deletes from the first snapshot run after it. A renamed column, or a type
    the snapshot compares differently, writes one new version of every row.
 5. The first production dlt load runs. The snapshot run after it records each key that
@@ -1269,10 +1283,11 @@ On the unit:
   each load wherever data_loading automates them, which can include a lake not listed yet (e.g.
   production for MITx Online). A listed lake other than `local` must have its keysets automated. `validate` fails
   it on a unit with no keyset tables.
-- `history.markers`: `{at, kind: loader_cutover | schema_change, tables?, note}`. A loader
-  cutover or a source schema change writes one extra version of every row, and a marker lets
-  reports discount the versions that start then. Markers are copied into each snapshot's
-  `meta.raw_history.markers`.
+- `history.markers`: `{at, kind: loader_cutover | schema_change | airbyte_archive, tables?,
+  note}`. A loader cutover or a source schema change writes one extra version of every row,
+  and a marker lets reports discount the versions that start then. `airbyte_archive` records
+  when the unit's Airbyte tables were copied before its cutover (§10.4 step 3) and writes no
+  version. Markers are copied into each snapshot's `meta.raw_history.markers`.
 
 On a table, under `history`: `live` (overrides the unit; the eight xPRO pilot tables use it),
 `exclude_columns` (not stored) and `ignore_columns` (stored, not compared, so a change to them

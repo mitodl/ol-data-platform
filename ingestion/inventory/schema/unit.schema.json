@@ -84,7 +84,7 @@
         },
         "markers": {
           "type": "array",
-          "description": "Times at which a loader cutover or a source schema change wrote extra versions of every row, so reports can discount versions starting then. Copied into each snapshot's meta.",
+          "description": "Times at which a loader cutover or a source schema change wrote extra versions of every row, so reports can discount versions starting then, and when `ol-dbt inventory archive` copied the unit's Airbyte tables into the history schema (`airbyte_archive`, which writes no version). Copied into each snapshot's meta.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -95,7 +95,7 @@
                 "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?Z$",
                 "description": "UTC, e.g. 2026-11-12T14:00Z."
               },
-              "kind": {"enum": ["loader_cutover", "schema_change"]},
+              "kind": {"enum": ["loader_cutover", "schema_change", "airbyte_archive"]},
               "tables": {
                 "type": "array",
                 "minItems": 1,
