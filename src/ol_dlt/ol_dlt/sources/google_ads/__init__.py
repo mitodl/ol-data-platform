@@ -28,7 +28,8 @@ Data flow, per client account:
 click_view allows one day per query and keeps 90 days, so it pulls day by day
 from 89 days back and history older than that is gone if a run is missed for
 that long. Its gclid can be joined to a HubSpot contact, so treat it as personal
-data.
+data. Its key includes segments.click_type: Google returns a few clicks once per
+click type.
 
 * Dates past an account's cursor append, in batches of ``BACKFILL_WINDOWS``
 account-windows that each save the cursors (the posthog_events pattern). Their
@@ -754,7 +755,7 @@ def google_ads_source(
         data_from=accounts,
         **_table(
             "raw__google_ads__api__click_view",
-            ("customer_id", "click_view__resource_name"),
+            ("customer_id", "click_view__resource_name", "segments__click_type"),
         ),
     )
     def click_view(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:

@@ -170,6 +170,7 @@ tables:
   primary_key:
   - - customer_id
   - - click_view__resource_name
+  - - segments__click_type
   modeled: false
   history:
     in_scope: false
