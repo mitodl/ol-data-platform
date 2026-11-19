@@ -199,11 +199,6 @@ def test_click_view_pulls_one_day_per_query_within_90_days() -> None:
         if "FROM click_view" in q
     ]
     assert days == [(TODAY - timedelta(days=d)).isoformat() for d in range(89, 0, -1)]
-    # A later run starts two days before its last loaded day.
-    assert google_ads.click_window("2026-11-08", date(2026, 11, 12)) == (
-        date(2026, 11, 6),
-        date(2026, 11, 11),
-    )
 
 
 def test_repeated_fields_load_as_json_text() -> None:

@@ -288,7 +288,8 @@ _SNAPSHOTS: dict[str, tuple[str, tuple[str, ...], str]] = {
             "conversion_action.attribution_model_settings.attribution_model",
             "conversion_action.value_settings.default_value",
         ),
-        "conversion_action.status != 'REMOVED'",
+        # Every status: the conversion reports still carry removed actions' ids.
+        "",
     ),
     "raw__google_ads__api__ad_group_snapshots": (
         "ad_group",
@@ -351,6 +352,7 @@ LANDING_PAGE_DAILY_FIELDS = (
     "metrics.impressions",
     "metrics.clicks",
     "metrics.cost_micros",
+    "metrics.conversions",
     "metrics.all_conversions",
 )
 GEOGRAPHIC_DAILY_FIELDS = (
@@ -428,7 +430,9 @@ def _plain(value: Any) -> Any:  # noqa: ANN401
     if isinstance(value, MutableSequence):
         return json.dumps(
             [
-                json.loads(_plain(item)) if isinstance(item, proto.Message) else item
+                json.loads(_plain(item))
+                if isinstance(item, proto.Message)
+                else _plain(item)
                 for item in value
             ]
         )
@@ -483,18 +487,6 @@ def report_window(
     if last_loaded:
         first = max(
             first, date.fromisoformat(last_loaded) - timedelta(days=lookback_days)
-        )
-    return (first, end) if first <= end else None
-
-
-def click_window(last_loaded: str | None, today: date) -> tuple[date, date] | None:
-    """Return the days of clicks to pull for one account, or None when current."""
-    end = today - timedelta(days=1)
-    first = today - timedelta(days=CLICK_VIEW_RETENTION_DAYS)
-    if last_loaded:
-        first = max(
-            first,
-            date.fromisoformat(last_loaded) - timedelta(days=CLICK_VIEW_LOOKBACK_DAYS),
         )
     return (first, end) if first <= end else None
 
@@ -770,6 +762,11 @@ def google_ads_source(
         )
 
     search = "campaign.advertising_channel_type = 'SEARCH' AND metrics.impressions > 0"
+    # Terms with clicks only: impression-only terms are most of the rows and the
+    # backfill and lookback were sized for keyword volume.
+    clicked_search = (
+        "campaign.advertising_channel_type = 'SEARCH' AND metrics.clicks > 0"
+    )
 
     @dlt.transformer(
         data_from=accounts,
@@ -792,7 +789,7 @@ def google_ads_source(
             listing["client_ids"],
             "search_term_view",
             SEARCH_TERM_DAILY_FIELDS,
-            search,
+            clicked_search,
         )
 
     @dlt.transformer(
@@ -855,7 +852,12 @@ def google_ads_source(
         )
         run_date, retrieved_at = _run_date(), _now()
         for customer_id in listing["client_ids"]:
-            window = click_window(last_loaded.get(customer_id), run_date)
+            window = report_window(
+                last_loaded.get(customer_id),
+                (run_date - timedelta(days=CLICK_VIEW_RETENTION_DAYS)).isoformat(),
+                CLICK_VIEW_LOOKBACK_DAYS,
+                run_date,
+            )
             if window is None:
                 continue
             for day, _ in date_chunks(*window, 1):

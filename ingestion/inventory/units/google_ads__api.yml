@@ -163,8 +163,9 @@ tables:
   modeled: false
   history:
     in_scope: false
-    reason: Each day's latest numbers, not earlier restated ones. search_term_view__search_term
-      is free text people typed and can hold personal details.
+    reason: Each day's latest numbers, not earlier restated ones. Terms with clicks
+      only. search_term_view__search_term is free text people typed and can hold personal
+      details.
 - name: raw__google_ads__api__landing_page_daily
   raw_table: raw__google_ads__api__landing_page_daily
   sync_mode: incremental_deduped_history
