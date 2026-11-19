@@ -347,6 +347,7 @@ GEOGRAPHIC_DAILY_FIELDS = (
     "metrics.impressions",
     "metrics.clicks",
     "metrics.cost_micros",
+    "metrics.conversions",
     "metrics.all_conversions",
 )
 
