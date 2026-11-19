@@ -311,6 +311,38 @@ def test_empty_text_file_marker_names_its_course() -> None:
     assert list(marker) == list(course_xml_blocks.TRANSCRIPT_TEXT_FIELDS)
 
 
+@pytest.mark.parametrize(
+    "table",
+    [
+        course_xml_blocks.OPENEDX_DOCUMENT_TEXT,
+        course_xml_blocks.OPENEDX_TRANSCRIPT_TEXT,
+    ],
+)
+def test_a_snapshot_marker_line_keeps_its_bundle_version(
+    table: course_xml_blocks.XmlBlocksTable,
+) -> None:
+    """The line a text asset writes for a bundle with nothing to extract."""
+    marker = {
+        "course_id": "course-v1:xPRO+QCFx1+R24",
+        "source_system": "xpro",
+        **dict.fromkeys(
+            [
+                "file_path",
+                "file_extension",
+                "content_type",
+                "size_bytes",
+                "content",
+                "extraction_status",
+            ]
+        ),
+        "static_assets_version": "ab12",
+        "extracted_at": "2026-11-19T00:00:00+00:00",
+    }
+    row = course_xml_blocks._row(json.dumps(marker), table)  # noqa: SLF001
+    assert row["file_path"] is None
+    assert row["static_assets_version"] == "ab12"
+
+
 @pytest.mark.integration
 def test_an_empty_text_file_loads_as_a_marker_row(
     test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

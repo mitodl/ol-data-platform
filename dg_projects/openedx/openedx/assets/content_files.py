@@ -91,6 +91,16 @@ SRT_SUFFIX = ".srt"
 SJSON_SUFFIX = ".sjson"
 VTT_SUFFIX = ".vtt"
 TRANSCRIPT_SUFFIXES = frozenset({SRT_SUFFIX, SJSON_SUFFIX, VTT_SUFFIX})
+# The fields every text row has that an empty snapshot's marker row leaves null.
+# The ol_dlt loader requires each of them on a line.
+EMPTY_SNAPSHOT_NULL_FIELDS = (
+    "file_path",
+    "file_extension",
+    "content_type",
+    "size_bytes",
+    "content",
+    "extraction_status",
+)
 
 
 def is_transcript(relative_path: str) -> bool:
@@ -296,17 +306,25 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
 
 
 def stamp_static_assets_version(
-    rows: Iterable[dict[str, Any]], bundle_location: UPath
+    rows: Iterable[dict[str, Any]],
+    bundle_location: UPath,
+    *,
+    course_id: str,
+    source_system: str,
 ) -> list[dict[str, Any]]:
     """Record on each row the version of the static asset bundle it came from.
 
     The archive asset writes the bundle as <course>/<data_version>.tar.gz and
     records the same data_version on the export's course_xml_blocks rows, so
     int__openedx__content_files can hold back a run whose text is from an older
-    export's bundle while extraction catches up.
+    export's bundle while extraction catches up. A bundle with nothing to
+    extract gets one marker row, with no file_path, so an empty snapshot names
+    its bundle too; staging drops it from the file rows.
 
     :param rows: The rows built from the bundle.
     :param bundle_location: The bundle the rows were read from.
+    :param course_id: The course run, for the marker row.
+    :param source_system: The Open edX deployment, for the marker row.
     :returns: The rows, each with static_assets_version.
     :rtype: list[dict[str, Any]]
     :raises ValueError: The bundle's name isn't <data_version>.tar.gz.
@@ -316,7 +334,15 @@ def stamp_static_assets_version(
         msg = f"Can't read a bundle version from {bundle_location}"
         raise ValueError(msg)
     version = name.removesuffix(STATIC_BUNDLE_SUFFIX)
-    return [{**row, "static_assets_version": version} for row in rows]
+    stamped = [{**row, "static_assets_version": version} for row in rows]
+    return stamped or [
+        {
+            "course_id": course_id,
+            "source_system": source_system,
+            **dict.fromkeys(EMPTY_SNAPSHOT_NULL_FIELDS),
+            "static_assets_version": version,
+        }
+    ]
 
 
 def write_text_snapshot(rows: Iterable[dict[str, Any]], output_file: Path) -> str:
@@ -565,13 +591,18 @@ def extract_course_document_text(
                 is_supported=tika.is_supported,
             )
         assert_extraction_healthy(counters, course_id)
-        rows = stamp_static_assets_version(rows, course_static_assets)
+        snapshot = stamp_static_assets_version(
+            rows,
+            course_static_assets,
+            course_id=course_id,
+            source_system=source_system,
+        )
 
         output_file = Path(
             NamedTemporaryFile(delete=False, suffix="_document_text.jsonl").name
         )
         temp_files.append(output_file)
-        data_version = write_text_snapshot(rows, output_file)
+        data_version = write_text_snapshot(snapshot, output_file)
         object_key = (
             f"{'/'.join(context.asset_key.path)}/{source_system}/"
             f"{course_id}/{data_version}.jsonl"

@@ -118,10 +118,11 @@ with blocks as (
     select * from static_files
 )
 
--- Runs whose document or transcript text was extracted from another export's
--- static asset bundle than the one written with the run's newest blocks, i.e.
--- extraction hasn't caught up with a new export yet. A version recorded on
--- only one side (text or blocks written before both did) is no evidence.
+-- Runs whose newest document or transcript snapshot, empty or not, was
+-- extracted from another export's static asset bundle than the one written with
+-- the run's newest blocks, i.e. extraction hasn't caught up with a new export
+-- yet. A version recorded on only one side (text or blocks written before both
+-- did) is no evidence.
 , lagging_runs as (
     select distinct snapshots.courserun_readable_id, snapshots.source_system
     from (
@@ -129,13 +130,7 @@ with blocks as (
             courserun_readable_id
             , content_file_source_system as source_system
             , content_file_static_assets_version as static_assets_version
-        from documents
-        union all
-        select
-            courserun_readable_id
-            , content_file_source_system as source_system
-            , content_file_static_assets_version as static_assets_version
-        from transcripts
+        from {{ ref('stg__openedx__s3__course_text_snapshots') }}
     ) as snapshots
     inner join (
         select distinct

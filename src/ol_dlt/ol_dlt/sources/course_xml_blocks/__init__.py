@@ -224,9 +224,10 @@ class XmlBlocksTable:
     :param integer_fields: Fields loaded as bigint instead of text.
     :param pipeline_name: dlt pipeline name, which keys the cursor.
     :param marks_empty_files: Load a marker row for a file with no lines. The
-        text assets write an empty file when a course has nothing left to
-        extract, and without a row that file never becomes the course's newest
-        in staging, so its last non-empty version would stay current forever.
+        text assets wrote an empty file when a course had nothing left to
+        extract (they now write a marker line naming the bundle instead), and
+        without a row that file never becomes the course's newest in staging,
+        so its last non-empty version would stay current forever.
     """
 
     raw_table: str

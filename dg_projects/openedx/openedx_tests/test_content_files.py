@@ -15,6 +15,7 @@ import pytest
 from ol_orchestrate.lib.openedx import STATIC_BUNDLE_SUFFIX
 from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES
 from openedx.assets.content_files import (
+    EMPTY_SNAPSHOT_NULL_FIELDS,
     MIN_DOCUMENTS_FOR_RATE_CHECK,
     TikaUnavailableError,
     _content_type,
@@ -730,11 +731,30 @@ def test_rows_carry_the_version_of_the_bundle_they_came_from():
         f"ab12{STATIC_BUNDLE_SUFFIX}"
     )
 
-    rows = stamp_static_assets_version([{"file_path": "static/a.pdf"}], bundle)
+    rows = stamp_static_assets_version(
+        [{"file_path": "static/a.pdf"}], bundle, course_id="c", source_system="xpro"
+    )
 
     assert rows == [{"file_path": "static/a.pdf", "static_assets_version": "ab12"}]
 
 
+def test_an_empty_snapshot_is_a_marker_naming_its_bundle():
+    """Else staging can't tell an empty snapshot of a new bundle from one of the old"""
+    bundle = UPath(f"s3://bucket/c/ab12{STATIC_BUNDLE_SUFFIX}")
+
+    (marker,) = stamp_static_assets_version(
+        [], bundle, course_id="c", source_system="xpro"
+    )
+
+    assert marker["course_id"] == "c"
+    assert marker["source_system"] == "xpro"
+    assert marker["static_assets_version"] == "ab12"
+    assert marker["file_path"] is None
+    assert not any(marker[field] for field in EMPTY_SNAPSHOT_NULL_FIELDS)
+
+
 def test_a_bundle_named_otherwise_has_no_version():
     with pytest.raises(ValueError, match="bundle version"):
-        stamp_static_assets_version([], UPath("s3://bucket/c/bundle.zip"))
+        stamp_static_assets_version(
+            [], UPath("s3://bucket/c/bundle.zip"), course_id="c", source_system="xpro"
+        )

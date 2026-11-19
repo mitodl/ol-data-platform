@@ -157,6 +157,35 @@ models:
       arguments:
         column_list: [content_file_source_system, courserun_readable_id, content_file_path]
 
+- name: stg__openedx__s3__course_text_snapshots
+  description: One row per Open edX course run and text kind (document, transcript)
+    with the static asset bundle its newest landed snapshot was extracted from. An
+    empty snapshot counts too, through the marker row the two text staging models
+    drop.
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: content_file_source_system
+    description: str, Open edX deployment (mitxonline, xpro, mitx)
+    tests:
+    - not_null
+  - name: content_file_text_kind
+    description: str, document or transcript, the raw table the snapshot is from
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [document, transcript]
+  - name: content_file_static_assets_version
+    description: str, data_version of the static asset bundle the snapshot was extracted
+      from; null for a snapshot written before the assets recorded it
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [content_file_source_system, courserun_readable_id, content_file_text_kind]
+
 - name: stg__openedx__s3__course_file_exclusions
   description: Every file in each Open edX course run's export, from the course's
     newest landed file only, flagged with whether MIT Learn excludes it from its ContentFiles.
