@@ -325,6 +325,30 @@ The cold column is the first query in a fresh process, after loading the Parquet
 
 Recommendation: no graph engine for AskTIM's k-hop context. The `course_knowledge` tenant serves ranked 1- and 2-hop neighbourhoods as per-hop SQL views in StarRocks, and paths from the closure table. LadybugDB is the candidate if learn-ai needs paths the closure doesn't hold, or graph and vector search in one in-process file. Unmeasured: the per-hop SQL on StarRocks (planner and network overhead included), Neptune Analytics, the real corpus's degree distribution and clustering, concurrent load, and pruned expansion.
 
+#### Fluree (2026-11-18)
+
+Fluree DB (https://github.com/fluree/db, 4.2.7 released 2026-11-15) was rewritten in Rust; 4.0.0 came out on 2026-04-22. It is an RDF store that answers SPARQL 1.1, JSON-LD queries and openCypher from one engine. It also has queries as of any commit, git-like branches, SHACL, datalog and OWL reasoning, HNSW vector and BM25 search, data-level access policies, and R2RML graph sources over Iceberg tables found through Glue. It runs as a server (`fluree/server` image, raft clusters, S3 storage with a DynamoDB nameservice) or in process from the `fluree` Python wheel.
+
+- License: BUSL-1.1. Each version converts to Apache-2.0 four years after its release. The additional use grant forbids only offering Fluree as a hosted database service. It explicitly permits running it inside our own service, and giving third parties read-only access to data we curate through predefined APIs, agent tools or a SPARQL endpoint. That is narrower than the BSL terms Memgraph and ArangoDB were ruled out for above, but it is not open source, and the grant needs a legal read before production use.
+- Activity: about 3,660 commits to `fluree/db` since 2026-08-18. Three authors hold most of the repository's commits. There have been 23 stable 4.x releases since April and a 5.0 alpha. The compatibility reference lists 81 behavior changes within the v1 API. One was a bulk-import bug: every release from 4.0.0 until its fix stored `rdf:JSON` and `xsd:duration` values under the wrong dictionary entry. It moves fast and is young as a Rust engine.
+- Iceberg in place does not serve traversal. Quantified property paths (`+`, `*`) and `shortestPath` are refused over graph sources, and only fixed-length paths run. Serving would load a native ledger per release.
+
+Measured on a rebuilt synthetic graph, since the spike's generator and pilot extract were not kept. It has 58,600 concepts and 773,911 edges: Chung-Lu edges per relation with a heavy-tailed weight, undirected relations stored both ways, and a 109,911-edge, 16-level `builds_on` DAG. Query shapes, edge weights, seed rules (50 seeds) and the 3 warm passes are as above, on the same laptop. In RDF each edge is a node with `src`, `dst` and `w`, plus a direct `buildsOn` triple for the path queries. Fluree 4.2.7 ran in docker (4 GB limit) and was queried over HTTP on localhost. DuckDB 1.5.6 ran in process and was re-run as the baseline. Every Fluree result matched DuckDB's rows for every seed it was checked on (all 50 for k-hop and reachability, 8 for the Cypher path). The graph differs from October's, so compare rows within this table only.
+
+| engine | 2-hop | 3-hop | path, 8 hops with depth | reachability, no depth |
+|---|---|---|---|---|
+| DuckDB, per-hop SQL (path: recursive CTE) | 6 / 10 | 12 / 16 | 9 / 18 | |
+| Fluree, SPARQL per-hop subselects | 8 / 26 | 117 / 489 | | 3 / 6 (`buildsOn+`) |
+| Fluree, Cypher `-[:buildsOn*1..8]->` with `min(length(p))` | | | 2,207 / 2,883 | |
+
+Bulk import took 11.4 s for 2.4M triples into a 70 MB store. The server answered health checks 0.4 s after start, and the first query took 29 to 198 ms. Resident memory was 148 MB idle and 782 MB after the runs.
+
+- 2-hop is on par with SQL. 3-hop is about 10 times slower at p50 and 30 times at p95, because the per-hop pruning written as nested SPARQL subselects plans worse than the same SQL.
+- Transitive reachability is fast (3 ms p50), but a property path carries no depth and no hop cap. The Cypher form that returns depth enumerates paths and took 2.2 s. The closure table already serves depth as a lookup.
+- Fluree offers what the SQL tenant does not: standards-native publication (the JSON-LD, schema.org and SKOS terms in `courseware_knowledge_ontology.md`), a SPARQL endpoint, SHACL validation of the shapes LinkML would generate, queries pinned to a release's commit, policy enforcement, and vector plus BM25 search for alias lookup in one store.
+
+Recommendation: Fluree is not the request-time engine for the tenant or AskTIM. It buys no latency, regresses 3-hop, adds a stateful service, and is BUSL. Per-hop SQL in StarRocks and the closure table stay. Fluree is the strongest candidate for the RDF publication role the engine list above gave to Oxigraph or Jena Fuseki: a SPARQL and JSON-LD endpoint over a published release, with SHACL. Revisit it if that consumer appears, after 5.0 and a legal read of the grant. Unmeasured: the in-process Python wheel, concurrent load, query latency over Iceberg graph sources, and vector and BM25 quality.
+
 Not done yet: see the fast-follow list in section 11.
 
 ## 10. Concept identity, relationships and graph topology
