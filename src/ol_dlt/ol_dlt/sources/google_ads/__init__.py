@@ -4,15 +4,14 @@ Loads the Search campaign data the Google Ads budget optimizer (mitodl/ad_opt_v2
 reads, for every client account under the MIT Open Learning manager account. The
 GAQL follows ad_opt_v2's queries (``utils/gaql_queries.py``,
 ``scripts/pull_change_events.py``) with ids added and its campaign-name filters
-left to staging. Search terms, landing pages, locations, clicks, conversion
-actions, ad groups and ads are for reporting and attribution, not the optimizer.
+left to staging. Landing pages, locations, clicks, conversion actions, ad groups
+and ads are for reporting and attribution, not the optimizer.
 
 Data flow, per client account:
     customer_client     -> raw__google_ads__api__customer_clients    (replace)
     keyword_view        -> raw__google_ads__api__keyword_daily       (merge*)
     keyword_view        -> raw__google_ads__api__keyword_conversions_daily (merge*)
     campaign            -> raw__google_ads__api__campaign_daily      (merge*)
-    search_term_view    -> raw__google_ads__api__search_term_daily   (merge*)
     landing_page_view   -> raw__google_ads__api__landing_page_daily  (merge*)
     geographic_view     -> raw__google_ads__api__geographic_daily    (merge*)
     change_event        -> raw__google_ads__api__change_events       (merge)
@@ -30,7 +29,7 @@ Data flow, per client account:
 click_view allows one day per query and keeps 90 days, so it pulls day by day
 from 89 days back and history older than that is gone if a run is missed for
 that long. Its gclid can be joined to a HubSpot contact, so treat it as personal
-data, as the search_term_daily search terms.
+data.
 
 * Dates past an account's cursor append, in batches of ``BACKFILL_WINDOWS``
 account-windows that each save the cursors (the posthog_events pattern). Their
@@ -323,25 +322,6 @@ _SNAPSHOTS: dict[str, tuple[str, tuple[str, ...], str]] = {
     ),
 }
 
-# What people typed. Free text that can hold personal details.
-SEARCH_TERM_DAILY_FIELDS = (
-    "segments.date",
-    "segments.ad_network_type",
-    *_CAMPAIGN_FIELDS,
-    "ad_group.id",
-    "ad_group.name",
-    "search_term_view.resource_name",
-    "search_term_view.search_term",
-    "search_term_view.status",
-    "segments.keyword.info.text",
-    "segments.keyword.info.match_type",
-    "segments.search_term_match_type",
-    "metrics.impressions",
-    "metrics.clicks",
-    "metrics.cost_micros",
-    "metrics.conversions",
-    "metrics.all_conversions",
-)
 LANDING_PAGE_DAILY_FIELDS = (
     "segments.date",
     "segments.ad_network_type",
@@ -762,35 +742,6 @@ def google_ads_source(
         )
 
     search = "campaign.advertising_channel_type = 'SEARCH' AND metrics.impressions > 0"
-    # Terms with clicks only: impression-only terms are most of the rows and the
-    # backfill and lookback were sized for keyword volume.
-    clicked_search = (
-        "campaign.advertising_channel_type = 'SEARCH' AND metrics.clicks > 0"
-    )
-
-    @dlt.transformer(
-        data_from=accounts,
-        **_table(
-            "raw__google_ads__api__search_term_daily",
-            (
-                "customer_id",
-                "segments__date",
-                "segments__ad_network_type",
-                "search_term_view__resource_name",
-                "segments__keyword__info__text",
-                "segments__keyword__info__match_type",
-                "segments__search_term_match_type",
-            ),
-        ),
-    )
-    def search_term_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
-        yield from _daily_report(
-            "raw__google_ads__api__search_term_daily",
-            listing["client_ids"],
-            "search_term_view",
-            SEARCH_TERM_DAILY_FIELDS,
-            clicked_search,
-        )
 
     @dlt.transformer(
         data_from=accounts,
@@ -972,7 +923,6 @@ def google_ads_source(
         keyword_daily,
         keyword_conversions_daily,
         campaign_daily,
-        search_term_daily,
         landing_page_daily,
         geographic_daily,
     )

@@ -135,7 +135,6 @@ _GOOGLE_ADS_DAILY_TABLES = (
     "raw__google_ads__api__keyword_daily",
     "raw__google_ads__api__keyword_conversions_daily",
     "raw__google_ads__api__campaign_daily",
-    "raw__google_ads__api__search_term_daily",
     "raw__google_ads__api__landing_page_daily",
     "raw__google_ads__api__geographic_daily",
 )

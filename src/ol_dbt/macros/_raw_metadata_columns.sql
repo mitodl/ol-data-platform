@@ -54,7 +54,6 @@
         'raw__google_ads__api__keyword_daily': '_dlt_load_id',
         'raw__google_ads__api__keyword_snapshots': '_dlt_load_id',
         'raw__google_ads__api__landing_page_daily': '_dlt_load_id',
-        'raw__google_ads__api__search_term_daily': '_dlt_load_id',
         'raw__google_ads__api__shared_criterion_snapshots': '_dlt_load_id',
         'raw__google_ads__s3__change_history_api': '_dlt_load_id',
         'raw__google_ads__s3__change_history_report': '_dlt_load_id',
