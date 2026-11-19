@@ -13,9 +13,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ol_dbt_cli.lib.inventory import RenderError, Unit
+from ol_dbt_cli.lib.inventory import RenderError, Unit, _tables_by_stream
 
 ARCHIVE_PREFIX = "airbyte_archive__"
+
+
+def active_production_connections(unit: Unit) -> list[str]:
+    """Return the names of the unit's production connections still marked active.
+
+    An archive taken while one of them still syncs can miss the rows of a sync
+    that lands after its row-count check, so a production archive waits until
+    the unit's file records every production connection as paused.
+    """
+    return [
+        str(connection["name"])
+        for connection in unit.connections
+        if connection["environment"] == "production" and connection["status"] == "active"
+    ]
 
 
 @dataclass(frozen=True)
@@ -60,7 +74,7 @@ def archive_tables(unit: Unit) -> list[ArchiveTable]:
     if not streams:
         msg = f"{unit.key} has no production Airbyte connection, so there is nothing to archive"
         raise RenderError(msg)
-    tables = {str(table["name"]): table for table in unit.tables}
+    tables = _tables_by_stream(unit)
     missing = sorted(streams - tables.keys())
     if missing:
         msg = f"{unit.key}: production streams with no table entry: {', '.join(missing)}"

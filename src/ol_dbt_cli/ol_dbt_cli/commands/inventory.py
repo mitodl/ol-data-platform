@@ -24,7 +24,7 @@ from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
-from ol_dbt_cli.lib.airbyte_archive import archive_tables
+from ol_dbt_cli.lib.airbyte_archive import active_production_connections, archive_tables
 from ol_dbt_cli.lib.cursor_audit import Verdict, audit, select_units
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
@@ -401,6 +401,15 @@ def archive(
     if unit not in units:
         err_console.print(f"[bold red]No unit {escape(unit)} under {escape(str(inventory_dir))}.")
         sys.exit(1)
+    canonical = "dev" not in target
+    if canonical and schema_suffix:
+        err_console.print(f"[bold red]--schema-suffix is ignored by target {escape(target)}; use a dev_ target.")
+        sys.exit(1)
+    if not canonical and not schema_suffix:
+        err_console.print(
+            f"[bold red]{escape(target)} needs --schema-suffix, or it writes the shared `dev` history schema."
+        )
+        sys.exit(1)
     try:
         tables = archive_tables(units[unit])
     except RenderError as error:
@@ -411,6 +420,13 @@ def archive(
             f"{escape(unit)}'s dlt source appends to its Airbyte tables, which stay the record. Nothing to archive."
         )
         return
+    active = active_production_connections(units[unit])
+    if execute and canonical and active:
+        err_console.print(
+            f"[bold red]{escape(unit)} still has active production connections: {escape(', '.join(active))}. "
+            "Pause them in Airbyte and set their `status: inactive` first, so no sync lands after the count check."
+        )
+        sys.exit(1)
 
     dbt_dir = get_repo_root(inventory_dir if inventory_dir.exists() else Path.cwd()) / "src" / "ol_dbt"
     args = {"tables": [table.as_arg() for table in tables], "execute_archive": execute}
@@ -432,7 +448,7 @@ def archive(
     result = subprocess.run(command, cwd=dbt_dir, check=False)  # noqa: S603
     if result.returncode:
         sys.exit(result.returncode)
-    if execute and target == "production":
+    if execute and canonical:
         archived_at = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%MZ")
         console.print(
             "Record the archive in the unit's history.markers:\n"

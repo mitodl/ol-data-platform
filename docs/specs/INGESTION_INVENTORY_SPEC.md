@@ -1200,11 +1200,14 @@ Each unit therefore takes these steps, in this order:
    `ol_warehouse_production_history.airbyte_archive__<raw table>`. The copy drops secret
    columns and the inventory's per-table excludes, as the snapshots do. It keeps the loader
    columns the snapshots drop, because `_airbyte_extracted_at` is the only order an append
-   table's versions have. It gets no grants, so it is read like raw. Its row count is
-   checked against the source table, and a difference fails the run, since with the
-   connections paused the source cannot change. A table already archived is only
-   checked, so a run that failed part way is repeated as is. Archive tables are never
-   rebuilt or dropped. A unit whose dlt source appends (`dlt.write_disposition: append`)
+   table's versions have. It gets no grants, so it is read like raw. The command refuses
+   a production `--execute` while the unit's file still marks a production connection
+   `status: active`, so step 2 includes that edit. Each copy's row count is checked
+   against the source table, and a difference fails the run and drops that copy, since
+   with the connections paused the source cannot change. A table archived by an earlier
+   run is checked against its source's columns and row count and otherwise left alone, so
+   a run that failed part way is repeated as is. Archive tables are never rebuilt or
+   dropped. A unit whose dlt source appends (`dlt.write_disposition: append`)
    copies nothing, because its tables stay the record. Without `--execute` the command
    lists what it would copy. A `dev_production` target with `--schema-suffix` rehearses it
    into `ol_warehouse_production_<suffix>_history` (done for `learn_ai/app_postgres` on
