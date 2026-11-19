@@ -20,6 +20,8 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     AutomationCondition,
+    Config,
+    DagsterInstance,
     MaterializeResult,
     MetadataValue,
     RetryPolicy,
@@ -27,6 +29,7 @@ from dagster import (
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from pydantic import Field
 
 from delivery.lib.learn_webhook import webhook_failure
 
@@ -46,27 +49,51 @@ LEARN_WAREHOUSE_VIEWS = (
 VIEW_KEYS = {AssetKey(["integrations", view]): view for view in LEARN_WAREHOUSE_VIEWS}
 
 
+SENT_THROUGH = "sent_through"
+
+
+class WarehouseViewsConfig(Config):
+    """Run config for a hand materialization; a sensor run passes none."""
+
+    all_views: bool = Field(
+        default=False,
+        description=(
+            "Name every view, rebuilt or not, so Learn reruns every warehouse sync."
+        ),
+    )
+
+
 def on_view_rebuilt() -> AutomationCondition:
     """Request one run after any view is rebuilt, once nothing it reads is building.
 
-    The latch holds a rebuild until the run is requested, so a rebuild that lands
+    The latch holds a rebuild until a run is requested, so a rebuild that lands
     while a run is in progress is sent by the next one. Waiting out
     ``any_deps_in_progress`` batches views built by the same dbt run into one
-    POST. ``initial_evaluation`` resets the latch on the first tick, so enabling
-    the sensor doesn't send every view at once. There is no code-version trigger:
-    a deploy rebuilds nothing Learn reads.
+    POST. There is no code-version trigger: a deploy rebuilds nothing Learn reads.
+
+    The trigger is ``any_deps_match(newly_updated())`` and not
+    ``any_deps_updated()``, and the reset is ``newly_requested()`` alone. When a
+    rebuild and the reset land on the same tick, ``since`` breaks the tie with the
+    operands' timing metadata, which an ``Or`` doesn't carry, so with
+    ``any_deps_updated()`` (an ``Or`` inside) the reset won and a rebuild landing
+    just after a request was dropped. ``newly_updated`` is empty on a first
+    evaluation, so enabling the sensor sends nothing on its own.
 
     :returns: the condition for the asset's sensor
     :rtype: AutomationCondition
     """
     return (
-        AutomationCondition.any_deps_updated().since(
+        AutomationCondition.any_deps_match(AutomationCondition.newly_updated()).since(
             AutomationCondition.newly_requested()
-            | AutomationCondition.initial_evaluation()
         )
         & ~AutomationCondition.in_progress()
         & ~AutomationCondition.any_deps_in_progress()
     )
+
+
+def _latest_storage_id(instance: DagsterInstance, key: AssetKey) -> int:
+    records = instance.fetch_materializations(key, limit=1).records
+    return records[0].storage_id if records else 0
 
 
 @asset(
@@ -82,22 +109,42 @@ def on_view_rebuilt() -> AutomationCondition:
     retry_policy=RetryPolicy(max_retries=2, delay=30.0),
 )
 def warehouse_views_rebuilt(
-    context: AssetExecutionContext, learn_api: ApiClientFactory
+    context: AssetExecutionContext,
+    config: WarehouseViewsConfig,
+    learn_api: ApiClientFactory,
 ) -> MaterializeResult:
-    """Send the views rebuilt since this asset last materialized.
+    """Send the views rebuilt since the last successful run read them.
 
-    A run with nothing rebuilt since then, which only a hand materialization
-    makes, sends every view, so it works as "resync now".
+    Each run records, as ``sent_through``, the highest event-log storage id among
+    the view materializations it read, and the next run sends the views
+    materialized after it. Storage ids and not timestamps, so a rebuild landing
+    while this run POSTs is after the mark and goes in the next run, and clocks
+    on different pods don't matter. A failed run records nothing, so its views
+    go again in the next one. A run with nothing new sends nothing.
     """
     instance = context.instance
-    previous = instance.get_latest_materialization_event(context.asset_key)
-    since = previous.timestamp if previous else 0.0
-    rebuilt = []
-    for key, view in VIEW_KEYS.items():
-        event = instance.get_latest_materialization_event(key)
-        if event is not None and event.timestamp > since:
-            rebuilt.append(view)
-    views = rebuilt or list(LEARN_WAREHOUSE_VIEWS)
+    previous = instance.fetch_materializations(context.asset_key, limit=1).records
+    sent_through = (
+        cast(int, previous[0].asset_materialization.metadata[SENT_THROUGH].value)
+        if previous and previous[0].asset_materialization
+        else 0
+    )
+    latest = {
+        view: _latest_storage_id(instance, key) for key, view in VIEW_KEYS.items()
+    }
+    if config.all_views:
+        views = list(LEARN_WAREHOUSE_VIEWS)
+    else:
+        views = [
+            view for view, storage_id in latest.items() if storage_id > sent_through
+        ]
+    read_through = max(sent_through, *latest.values())
+
+    if not views:
+        context.log.info("No view rebuilt since storage id %s", sent_through)
+        return MaterializeResult(
+            metadata={"views": MetadataValue.json([]), SENT_THROUGH: read_through}
+        )
 
     context.log.info("Telling MIT Learn these views were rebuilt: %s", views)
     try:
@@ -113,5 +160,6 @@ def warehouse_views_rebuilt(
         metadata={
             "views": MetadataValue.json(views),
             "learn_message": response["message"],
+            SENT_THROUGH: read_through,
         }
     )

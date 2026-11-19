@@ -17,6 +17,7 @@ from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 OCW = "integrations__learn__ocw_courses"
 XPRO = "integrations__learn__xpro_courses"
+OP = "mit_learn_delivery__warehouse_views_rebuilt"
 QUEUED = {"status": "success", "message": "Queued 1 sync(s): SyncOCWCoursesTask"}
 
 
@@ -42,12 +43,15 @@ def _rebuild(instance: dg.DagsterInstance, *views: str) -> None:
 
 
 def _materialize(
-    instance: dg.DagsterInstance, client: MITLearnApiClient
+    instance: dg.DagsterInstance,
+    client: MITLearnApiClient,
+    run_config: dict[str, Any] | None = None,
 ) -> dg.ExecuteInProcessResult:
     return dg.materialize(
         [warehouse_views_rebuilt],
         instance=instance,
         resources={"learn_api": SimpleNamespace(client=client)},
+        run_config=run_config or {},
         raise_on_error=False,
     )
 
@@ -63,19 +67,57 @@ def test_a_run_sends_only_the_views_rebuilt_since_the_last_one() -> None:
 
     assert result.success
     assert sent == [{"views": [OCW, XPRO]}, {"views": [OCW]}]
-    (materialization,) = result.asset_materializations_for_node(
-        "mit_learn_delivery__warehouse_views_rebuilt"
-    )
+    (materialization,) = result.asset_materializations_for_node(OP)
     assert materialization.metadata["learn_message"].value == QUEUED["message"]
 
 
-def test_a_run_with_nothing_rebuilt_sends_every_view() -> None:
-    """Only a hand run gets here, and it asks Learn to resync everything."""
+def test_a_run_with_nothing_rebuilt_sends_nothing() -> None:
     instance = dg.DagsterInstance.ephemeral()
     client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    _rebuild(instance, OCW)
+    assert _materialize(instance, client).success
 
     assert _materialize(instance, client).success
+    assert sent == [{"views": [OCW]}]
+
+
+def test_a_hand_run_can_name_every_view() -> None:
+    instance = dg.DagsterInstance.ephemeral()
+    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    config = {"ops": {OP: {"config": {"all_views": True}}}}
+
+    assert _materialize(instance, client, config).success
     assert sent == [{"views": list(LEARN_WAREHOUSE_VIEWS)}]
+
+
+def test_a_view_rebuilt_while_a_run_posts_goes_in_the_next_run() -> None:
+    instance = dg.DagsterInstance.ephemeral()
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        if len(sent) == 1:
+            _rebuild(instance, XPRO)
+        return httpx.Response(200, json=QUEUED)
+
+    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
+    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    _rebuild(instance, OCW)
+
+    assert _materialize(instance, client).success
+    assert _materialize(instance, client).success
+    assert sent == [{"views": [OCW]}, {"views": [XPRO]}]
+
+
+def test_a_failed_run_leaves_its_views_for_the_next() -> None:
+    instance = dg.DagsterInstance.ephemeral()
+    _rebuild(instance, OCW)
+    refusing, _ = _learn_client(httpx.Response(400, json={"views": ["bad"]}))
+    assert not _materialize(instance, refusing).success
+
+    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    assert _materialize(instance, client).success
+    assert sent == [{"views": [OCW]}]
 
 
 def test_a_rejected_notice_fails_once_with_learns_reason() -> None:
@@ -126,3 +168,20 @@ def test_enabling_the_sensor_sends_nothing_until_a_view_is_rebuilt() -> None:
     assert requested == 1
     requested, _ = _requests(instance, cursor)
     assert requested == 0
+
+
+def test_a_view_rebuilt_just_after_a_request_is_requested_again() -> None:
+    """The reset and a rebuild on the same tick must not drop the rebuild."""
+    instance = dg.DagsterInstance.ephemeral()
+    counts = []
+    requested, cursor = _requests(instance)
+    counts.append(requested)
+    _rebuild(instance, OCW)
+    requested, cursor = _requests(instance, cursor)
+    counts.append(requested)
+    _rebuild(instance, XPRO)
+    for _ in range(3):
+        requested, cursor = _requests(instance, cursor)
+        counts.append(requested)
+
+    assert counts == [0, 1, 1, 0, 0]
