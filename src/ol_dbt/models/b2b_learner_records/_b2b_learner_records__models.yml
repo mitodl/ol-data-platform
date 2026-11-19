@@ -484,6 +484,15 @@ models:
       Course run end, ISO-8601 in UTC with no offset, as courserun_start_on. Null
       for
       self-paced runs.
+  - name: course_readable_id
+    description: >
+      The run's course identifier, for example course-v1:MITxT+14.310x, from
+      dim_course. The runs of one course share it.
+  - name: course_title
+    description: >
+      The course's display title from dim_course, which the learner dashboard
+      shows. It can differ from courserun_title. Mutable; key on
+      course_readable_id.
   - name: program_sort_order
     description: >
       The position of the run's program in the contract's program list, from
@@ -561,6 +570,14 @@ models:
     description: >
       Course run end, ISO-8601 in UTC with no offset. Null for self-paced runs
       and on a member's row with no enrollment.
+  - name: course_readable_id
+    description: >
+      The run's course identifier, as in mv_b2b_contract_courserun. A learner's
+      runs of one course share it. Null on a member's row with no enrollment.
+  - name: course_title
+    description: >
+      The course's display title, as in mv_b2b_contract_courserun. Null on a
+      member's row with no enrollment.
   - name: user_pk
     description: >
       The dim_user surrogate key. It is an internal join key only, and the API

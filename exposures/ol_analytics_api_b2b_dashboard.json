@@ -262,6 +262,8 @@
         {"name": "courserun_title"},
         {"name": "courserun_start_on"},
         {"name": "courserun_end_on"},
+        {"name": "course_readable_id"},
+        {"name": "course_title"},
         {"name": "program_sort_order"},
         {"name": "course_order_in_program"}
       ]
@@ -277,6 +279,8 @@
         {"name": "courserun_title"},
         {"name": "courserun_start_on"},
         {"name": "courserun_end_on"},
+        {"name": "course_readable_id"},
+        {"name": "course_title"},
         {"name": "user_pk"},
         {"name": "user_global_id"},
         {"name": "email"},
