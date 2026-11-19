@@ -11,7 +11,7 @@ from delivery.assets import mit_climate, mitpe, open_learning_library
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mitpe import mitpe_webhook
 from delivery.assets.open_learning_library import oll_webhook
-from delivery.lib.learn_webhook import webhook_failure
+from delivery.lib.learn_webhook import WEBHOOK_RETRY_POLICY, webhook_failure
 from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 from ol_orchestrate.lib.http_errors import PermanentHTTPFailure, TransientHTTPFailure
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
@@ -167,6 +167,7 @@ def test_a_failed_delivery_is_not_rerun_by_run_retries(
     assert not result.success
     assert len(sent) == 1
     assert result.dagster_run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    assert webhook.op.retry_policy == WEBHOOK_RETRY_POLICY
 
 
 def _status_error(status_code: int, body: str) -> httpx.HTTPStatusError:

@@ -251,9 +251,10 @@ The real asset picks the Glue database per environment, handles a refused batch
 `open_learning_library.py`.
 
 The step's `WEBHOOK_RETRY_POLICY` is the only retry a delivery gets.
-`skip_run_retries` stops the `run_retries` daemon rerunning a failed run, which
-would POST the full batch up to four times per run after a persistent 5xx. A
-delivery that still fails is sent by the next day's run, a full sync.
+`skip_run_retries` stops the `run_retries` daemon rerunning a failed run. Each
+rerun would repeat the step's four POSTs of the full batch after a persistent
+5xx. A delivery that still fails is sent by the next run, after the model is
+next rebuilt, and that run is a full sync.
 
 ### 2. Register the asset in `definitions.py`
 
