@@ -1445,3 +1445,22 @@ unit_tests:
       coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
     - {courserun_readable_id: MITx/6.002x/1T2026, coursestructure_block_id: b2, coursestructure_content_hash: B,
       coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+- name: test_stg__edxorg__s3__user_writes_nine_fractional_digits
+  description: >
+    Trino's to_iso8601 writes nine fractional digits for from_iso8601_timestamp_nanos,
+    so the StarRocks and DuckDB bodies pad microseconds with three zeros. A key that
+    ends in six digits on one engine and nine on the other doesn't match across them.
+    The inputs carry an explicit offset because DuckDB reads a zone-less one in the
+    session time zone.
+  model: stg__edxorg__s3__user
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__edxorg__s3__tables__auth_user')
+    rows:
+    - {id: '1', username: a, email: a@example.com, is_active: '1', is_staff: '0',
+      is_superuser: '0', date_joined: '2013-05-01 12:00:00.123456+00:00', last_login: '2026-10-01T08:09:10+00:00'}
+    - {id: '2', username: b, email: b@example.com, is_active: '1', is_staff: '0',
+      is_superuser: '0', date_joined: '2014-01-02T03:04:05+00:00', last_login: 'NULL'}
+  expect:
+    rows:
+    - {user_id: 1, user_joined_on: '2013-05-01T12:00:00.123456000Z', user_last_login: '2026-10-01T08:09:10.000000000Z'}
+    - {user_id: 2, user_joined_on: '2014-01-02T03:04:05.000000000Z', user_last_login: null}

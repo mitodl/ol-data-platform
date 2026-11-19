@@ -895,6 +895,9 @@ sources:
         a discussion forum package that is no longer part of the system. Only users
         who were part of the prototype 6.002x course run in Spring 2012 may have any
         information in these columns.
+    - name: _file_modified_at
+      description: timestamp, last-modified time of the export file the row was loaded
+        from. stg__edxorg__s3__user keeps the row from the newest file per id.
 
   - name: raw__edxorg__s3__tables__auth_userprofile
     description: edx.org user profile data

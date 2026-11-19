@@ -14,12 +14,12 @@ with source as (
         , cast(is_superuser as boolean) as user_is_superuser
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('date_joined', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
-        )) }} as user_joined_on
+        ), fractional_digits=9) }} as user_joined_on
         , case
             when lower(last_login) = 'null' or lower(last_login) = 'none' then null
             else {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
                 regexp_replace_with_backreferences('last_login', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
-            )) }}
+            ), fractional_digits=9) }}
         end as user_last_login
     from most_recent_source
 )

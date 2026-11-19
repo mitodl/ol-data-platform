@@ -48,7 +48,7 @@ with source as (
         --- due to log collector changes, values of time field come with different formats
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('time', "'(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
-        )) }} as useractivity_timestamp -- noqa
+        ), fractional_digits=9) }} as useractivity_timestamp -- noqa
         , _dlt_load_id as useractivity_load_id
     from most_recent_source
 )

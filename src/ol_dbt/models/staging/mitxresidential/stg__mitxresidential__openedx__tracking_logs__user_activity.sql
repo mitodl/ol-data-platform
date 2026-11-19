@@ -42,7 +42,7 @@ with source as (
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences(adapter.quote('time'), "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
-        )) }} as useractivity_timestamp
+        ), fractional_digits=9) }} as useractivity_timestamp
         , _dlt_load_id as useractivity_load_id
     from most_recent_source
 )
