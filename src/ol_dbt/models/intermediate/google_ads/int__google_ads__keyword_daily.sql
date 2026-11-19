@@ -1,5 +1,4 @@
--- ad_opt_v2's keyword-day pull (reports/kw-day-panel.csv), before clean_kw_day_panel,
--- which ads-optimizer runs.
+-- ad_opt_v2's keyword-day panel: the pull (reports/kw-day-panel.csv) after clean_kw_day_panel.
 with courses as (
     select
         google_ads_courses.course
@@ -9,6 +8,13 @@ with courses as (
     from {{ ref('google_ads_courses') }} as google_ads_courses
     left join {{ ref('google_ads_course_settings') }} as networks
         on google_ads_courses.course = networks.course and networks.setting = 'ad_network'
+)
+
+-- Every row under its campaign's latest name, as ad_opt_v2's pulls see it.
+, current_names as (
+    select account_id, campaign_id, latest_name
+    from {{ ref('int__google_ads__campaign_names') }}
+    where name = latest_name
 )
 
 , conversion_actions as (
@@ -22,10 +28,10 @@ with courses as (
     select
         courses.course
         , keyword_daily.report_date
-        , keyword_daily.campaign_name
+        , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name)) as campaign_name
         , keyword_daily.ad_group_id
         , keyword_daily.keyword_criterion_id
-        , keyword_daily.keyword_text
+        , {{ google_ads_clean_keyword('keyword_daily.keyword_text') }} as keyword_text
         , keyword_daily.keyword_match_type
         , sum(keyword_daily.clicks) as clicks
         , sum(keyword_daily.cost) as cost
@@ -36,6 +42,8 @@ with courses as (
         on
             keyword_daily.account_id = courses.account_id
             and keyword_daily.report_date >= courses.min_date
+    left join current_names
+        on keyword_daily.account_id = current_names.account_id and keyword_daily.campaign_id = current_names.campaign_id
     where
         {{ google_ads_is_search_campaign('keyword_daily.campaign_name', 'keyword_daily.campaign_channel_type') }}
         and keyword_daily.keyword_match_type in ('EXACT', 'PHRASE', 'BROAD')
@@ -43,10 +51,10 @@ with courses as (
     group by
         courses.course
         , keyword_daily.report_date
-        , keyword_daily.campaign_name
+        , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name))
         , keyword_daily.ad_group_id
         , keyword_daily.keyword_criterion_id
-        , keyword_daily.keyword_text
+        , {{ google_ads_clean_keyword('keyword_daily.keyword_text') }}
         , keyword_daily.keyword_match_type
     having sum(keyword_daily.clicks) > 0
 )
@@ -72,8 +80,8 @@ with courses as (
     select
         courses.course
         , conversions.report_date
-        , conversions.campaign_name
-        , conversions.keyword_text
+        , coalesce(current_names.latest_name, trim(conversions.campaign_name)) as campaign_name
+        , {{ google_ads_clean_keyword('conversions.keyword_text') }} as keyword_text
         , conversions.keyword_match_type
         , sum(conversions.all_conversions) as all_conversions
     from {{ ref('stg__google_ads__api__keyword_conversions_daily') }} as conversions
@@ -81,6 +89,8 @@ with courses as (
         on
             conversions.account_id = courses.account_id
             and conversions.report_date >= courses.min_date
+    left join current_names
+        on conversions.account_id = current_names.account_id and conversions.campaign_id = current_names.campaign_id
     inner join conversion_actions
         on
             courses.course = conversion_actions.course
@@ -93,8 +103,8 @@ with courses as (
     group by
         courses.course
         , conversions.report_date
-        , conversions.campaign_name
-        , conversions.keyword_text
+        , coalesce(current_names.latest_name, trim(conversions.campaign_name))
+        , {{ google_ads_clean_keyword('conversions.keyword_text') }}
         , conversions.keyword_match_type
 )
 
@@ -102,6 +112,8 @@ select
     coalesce(keyword_totals.course, conversion_totals.course) as course
     , coalesce(keyword_totals.report_date, conversion_totals.report_date) as report_date
     , coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name) as campaign_name
+    , {{ google_ads_campaign_region('coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name)') }}
+    as campaign_region
     , coalesce(keyword_totals.keyword_text, conversion_totals.keyword_text) as keyword_text
     -- The pull writes Google's enum in title case, e.g. EXACT as Exact.
     , concat(

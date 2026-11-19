@@ -1199,6 +1199,27 @@
 
 
 {#
+    timestamptz_to_local_date: the calendar date of an instant in the zone that
+    `zone_expr` evaluates to.
+#}
+{% macro timestamptz_to_local_date(timestamp_expr, zone_expr) -%}
+    {{ adapter.dispatch('timestamptz_to_local_date', 'open_learning')(timestamp_expr, zone_expr) }}
+{%- endmacro %}
+
+{% macro default__timestamptz_to_local_date(timestamp_expr, zone_expr) -%}
+    cast(at_timezone({{ timestamp_expr }}, {{ zone_expr }}) as date)
+{%- endmacro %}
+
+{% macro duckdb__timestamptz_to_local_date(timestamp_expr, zone_expr) -%}
+    cast(timezone({{ zone_expr }}, {{ timestamp_expr }}) as date)
+{%- endmacro %}
+
+{% macro starrocks__timestamptz_to_local_date(timestamp_expr, zone_expr) -%}
+    cast(convert_tz({{ timestamp_expr }}, 'UTC', {{ zone_expr }}) as date)
+{%- endmacro %}
+
+
+{#
     local_timestamp_to_timestamptz: a wall-clock timestamp read in the zone that
     `zone_expr` evaluates to, as a zone-aware timestamp. Unlike
     local_date_to_timestamptz the zone is a SQL expression, so it can vary by row.

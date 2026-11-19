@@ -75,9 +75,37 @@
 {%- endmacro %}
 
 
+{% macro google_ads_clean_keyword(keyword_expr) -%}
+    {#- ad_opt_v2's clean_keyword_text: no quotes, brackets or +, one space between words, lowercase. -#}
+    lower(trim({{ regexp_replace_all(regexp_replace_all(keyword_expr, "'[''\"+\\[\\]]'", "''"), "'\\s+'", "' '") }}))
+{%- endmacro %}
+
+
+{% macro google_ads_campaign_region(campaign_expr) -%}
+    {#- ad_opt_v2's region rule: the first "-"-separated part naming USA/US, or A, B or C (optionally "Region A"). -#}
+    {%- set pattern = "'(?:^|-)(?:[^-]*\\b(USA?)\\b|\\s*(?:Region )?([ABC])(?:[ /(]|\\s*(?:-|$)))'" -%}
+    case
+        when nullif(regexp_extract({{ campaign_expr }}, {{ pattern }}, 1), '') is not null then 'USA'
+        else nullif(regexp_extract({{ campaign_expr }}, {{ pattern }}, 2), '')
+    end
+{%- endmacro %}
+
+
 {% macro google_ads_is_search_campaign(campaign_name_expr, channel_type_expr) -%}
     {#- ad_opt_v2's shared campaign filter on every pull. -#}
     {{ channel_type_expr }} = 'SEARCH'
     and {{ campaign_name_expr }} not like 'EXCLUDE%'
     and {{ campaign_name_expr }} not like '%Experiment%'
+{%- endmacro %}
+
+
+{% macro google_ads_excluded_campaigns(source_relation) -%}
+    {#- Campaigns whose name holds one of the course's excluded_campaign_patterns, ignoring case. -#}
+    select distinct named.course, named.campaign_name
+    from {{ source_relation }} as named
+    inner join {{ ref('google_ads_course_settings') }} as excluded
+        on
+            named.course = excluded.course
+            and excluded.setting = 'excluded_campaign_pattern'
+            and lower(named.campaign_name) like concat('%', lower(excluded.setting_value), '%')
 {%- endmacro %}

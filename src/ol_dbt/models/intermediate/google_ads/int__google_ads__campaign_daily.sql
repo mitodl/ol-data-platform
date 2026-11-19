@@ -3,11 +3,18 @@ with courses as (
     select course, account_id, min_date from {{ ref('google_ads_courses') }}
 )
 
+-- Every row under its campaign's latest name, as ad_opt_v2's pulls see it.
+, current_names as (
+    select account_id, campaign_id, latest_name
+    from {{ ref('int__google_ads__campaign_names') }}
+    where name = latest_name
+)
+
 select
     courses.course
     , campaign_daily.report_date
     , campaign_daily.campaign_id
-    , campaign_daily.campaign_name
+    , coalesce(current_names.latest_name, trim(campaign_daily.campaign_name)) as campaign_name
     , campaign_daily.impressions
     , campaign_daily.search_impression_share
     , campaign_daily.search_budget_lost_impression_share
@@ -17,6 +24,8 @@ inner join courses
     on
         campaign_daily.account_id = courses.account_id
         and campaign_daily.report_date >= courses.min_date
+left join current_names
+    on campaign_daily.account_id = current_names.account_id and campaign_daily.campaign_id = current_names.campaign_id
 where
     {{ google_ads_is_search_campaign('campaign_daily.campaign_name', 'campaign_daily.campaign_channel_type') }}
     and campaign_daily.impressions > 0
