@@ -1247,3 +1247,22 @@ retired:
     modeled them. They stay in place, read-only.
   frozen: true
   modeled: false
+- deployment: mitx
+  layer: mysql
+  raw_tables:
+  - raw__mitx__openedx__mysql__assessment_aiclassifier
+  - raw__mitx__openedx__mysql__assessment_aiclassifierset
+  - raw__mitx__openedx__mysql__assessment_aigradingworkflow
+  - raw__mitx__openedx__mysql__assessment_aitrainingworkflow
+  - raw__mitx__openedx__mysql__assessment_aitrainingworkflow_training_examples
+  retired_on: '2026-11-19'
+  reason: >-
+    ORA2's retired AI-grading tables. The five streams were deselected on
+    "MITx Residential Open edX DB → S3 Data Lake" on 2026-11-19.
+    Production raw held 0 rows in each (measured 2026-11-13 and again on
+    2026-11-19), QA's database has none of them, and the IRx export never
+    delivered them. No dbt model has read them since #3367. On 2026-11-19 the
+    five raw tables and their five irx__ relations in
+    ol_warehouse_production_external were dropped (empty tables are dropped,
+    per the 2026-10-27 decision on the bootcamps graveyard); their Glue entries
+    were saved before the drop.
