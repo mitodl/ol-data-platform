@@ -1266,3 +1266,13 @@ retired:
     ol_warehouse_production_external were dropped (empty tables are dropped,
     per the 2026-10-27 decision on the bootcamps graveyard); their Glue entries
     were saved before the drop.
+- deployment: google_ads
+  layer: api
+  raw_tables:
+  - raw__google_ads__api__geographic_daily
+  retired_on: '2026-11-19'
+  reason: >-
+    Added in #3428 and removed before it ever loaded: its first production
+    backfill stalled on about 10 million city-level rows (37 months of
+    geographic_view), and nothing uses it. Google keeps 37 months, so it can be
+    added back later without losing history. The table was never created.
