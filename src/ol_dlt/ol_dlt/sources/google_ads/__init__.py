@@ -13,7 +13,6 @@ Data flow, per client account:
     keyword_view        -> raw__google_ads__api__keyword_conversions_daily (merge*)
     campaign            -> raw__google_ads__api__campaign_daily      (merge*)
     landing_page_view   -> raw__google_ads__api__landing_page_daily  (merge*)
-    geographic_view     -> raw__google_ads__api__geographic_daily    (merge*)
     change_event        -> raw__google_ads__api__change_events       (merge)
     click_view          -> raw__google_ads__api__click_view          (merge)
     campaign            -> raw__google_ads__api__campaign_snapshots  (append)
@@ -329,21 +328,6 @@ LANDING_PAGE_DAILY_FIELDS = (
     "ad_group.id",
     "landing_page_view.resource_name",
     "landing_page_view.unexpanded_final_url",
-    "metrics.impressions",
-    "metrics.clicks",
-    "metrics.cost_micros",
-    "metrics.conversions",
-    "metrics.all_conversions",
-)
-GEOGRAPHIC_DAILY_FIELDS = (
-    "segments.date",
-    "segments.ad_network_type",
-    *_CAMPAIGN_FIELDS,
-    "geographic_view.resource_name",
-    "geographic_view.country_criterion_id",
-    "geographic_view.location_type",
-    "segments.geo_target_region",
-    "segments.geo_target_city",
     "metrics.impressions",
     "metrics.clicks",
     "metrics.cost_micros",
@@ -769,30 +753,6 @@ def google_ads_source(
     @dlt.transformer(
         data_from=accounts,
         **_table(
-            "raw__google_ads__api__geographic_daily",
-            (
-                "customer_id",
-                "segments__date",
-                "segments__ad_network_type",
-                "campaign__id",
-                "geographic_view__resource_name",
-                "segments__geo_target_region",
-                "segments__geo_target_city",
-            ),
-        ),
-    )
-    def geographic_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
-        yield from _daily_report(
-            "raw__google_ads__api__geographic_daily",
-            listing["client_ids"],
-            "geographic_view",
-            GEOGRAPHIC_DAILY_FIELDS,
-            search,
-        )
-
-    @dlt.transformer(
-        data_from=accounts,
-        **_table(
             "raw__google_ads__api__click_view",
             ("customer_id", "click_view__resource_name"),
         ),
@@ -812,6 +772,7 @@ def google_ads_source(
             )
             if window is None:
                 continue
+            rows = 0
             for day, _ in date_chunks(*window, 1):
                 query = build_query(
                     "click_view",
@@ -820,6 +781,7 @@ def google_ads_source(
                     "AND campaign.advertising_channel_type = 'SEARCH'",
                 )
                 for record in _search(customer_id, query, CLICK_VIEW_FIELDS):
+                    rows += 1
                     yield {
                         "customer_id": customer_id,
                         **record,
@@ -830,6 +792,9 @@ def google_ads_source(
                 )
                 if day.isoformat() > last_loaded.get(customer_id, ""):
                     last_loaded[customer_id] = day.isoformat()
+            logger.info(
+                "%s: account %s, %s to %s, %d rows", table, customer_id, *window, rows
+            )
 
     types = ", ".join(f"'{t}'" for t in CHANGE_EVENT_RESOURCE_TYPES)
 
@@ -906,7 +871,9 @@ def google_ads_source(
             for customer_id in listing["client_ids"]:
                 if taken.get(customer_id) == snapshot_date:
                     continue
+                rows = 0
                 for record in _search(customer_id, query, fields):
+                    rows += 1
                     yield {
                         "customer_id": customer_id,
                         "snapshot_date": snapshot_date,
@@ -917,6 +884,13 @@ def google_ads_source(
                     name, customer_id, snapshot_date, snapshot_date, retrieved_at
                 )
                 taken[customer_id] = snapshot_date
+                logger.info(
+                    "%s: account %s, %s, %d rows",
+                    name,
+                    customer_id,
+                    snapshot_date,
+                    rows,
+                )
 
         return snapshot
 
@@ -925,7 +899,6 @@ def google_ads_source(
         keyword_conversions_daily,
         campaign_daily,
         landing_page_daily,
-        geographic_daily,
     )
     yield accounts
     if backfill_windows:

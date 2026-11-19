@@ -162,23 +162,6 @@ tables:
   history:
     in_scope: false
     reason: Each day's latest numbers, not earlier restated ones.
-- name: raw__google_ads__api__geographic_daily
-  raw_table: raw__google_ads__api__geographic_daily
-  sync_mode: incremental_deduped_history
-  cursor_field:
-  - segments__date
-  primary_key:
-  - - customer_id
-  - - segments__date
-  - - segments__ad_network_type
-  - - campaign__id
-  - - geographic_view__resource_name
-  - - segments__geo_target_region
-  - - segments__geo_target_city
-  modeled: false
-  history:
-    in_scope: false
-    reason: Each day's latest numbers, not earlier restated ones.
 - name: raw__google_ads__api__click_view
   raw_table: raw__google_ads__api__click_view
   sync_mode: incremental_deduped_history
