@@ -4,20 +4,32 @@ Loads the Search campaign data the Google Ads budget optimizer (mitodl/ad_opt_v2
 reads, for every client account under the MIT Open Learning manager account. The
 GAQL follows ad_opt_v2's queries (``utils/gaql_queries.py``,
 ``scripts/pull_change_events.py``) with ids added and its campaign-name filters
-left to staging.
+left to staging. Landing pages, locations, clicks, conversion actions, ad groups
+and ads are for reporting and attribution, not the optimizer.
 
 Data flow, per client account:
     customer_client     -> raw__google_ads__api__customer_clients    (replace)
     keyword_view        -> raw__google_ads__api__keyword_daily       (merge*)
     keyword_view        -> raw__google_ads__api__keyword_conversions_daily (merge*)
     campaign            -> raw__google_ads__api__campaign_daily      (merge*)
+    landing_page_view   -> raw__google_ads__api__landing_page_daily  (merge*)
+    geographic_view     -> raw__google_ads__api__geographic_daily    (merge*)
     change_event        -> raw__google_ads__api__change_events       (merge)
+    click_view          -> raw__google_ads__api__click_view          (merge)
     campaign            -> raw__google_ads__api__campaign_snapshots  (append)
     ad_group_criterion  -> raw__google_ads__api__keyword_snapshots   (append)
     campaign_criterion  -> raw__google_ads__api__campaign_criterion_snapshots (append)
     campaign_shared_set -> raw__google_ads__api__campaign_shared_set_snapshots (append)
     shared_criterion    -> raw__google_ads__api__shared_criterion_snapshots (append)
+    conversion_action   -> raw__google_ads__api__conversion_action_snapshots (append)
+    ad_group            -> raw__google_ads__api__ad_group_snapshots  (append)
+    ad_group_ad         -> raw__google_ads__api__ad_snapshots        (append)
     (every report and snapshot fetch) -> raw__google_ads__api__fetch_log (merge)
+
+click_view allows one day per query and keeps 90 days, so it pulls day by day
+from 89 days back and history older than that is gone if a run is missed for
+that long. Its gclid can be joined to a HubSpot contact, so treat it as personal
+data.
 
 * Dates past an account's cursor append, in batches of ``BACKFILL_WINDOWS``
 account-windows that each save the cursors (the posthog_events pattern). Their
@@ -55,7 +67,7 @@ import functools
 import json
 import logging
 import tempfile
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator, Iterator, MutableSequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -257,7 +269,113 @@ _SNAPSHOTS: dict[str, tuple[str, tuple[str, ...], str]] = {
         ),
         "shared_set.status = 'ENABLED' AND shared_criterion.type = 'KEYWORD'",
     ),
+    "raw__google_ads__api__conversion_action_snapshots": (
+        "conversion_action",
+        (
+            "conversion_action.resource_name",
+            "conversion_action.id",
+            "conversion_action.name",
+            "conversion_action.status",
+            "conversion_action.type",
+            "conversion_action.category",
+            "conversion_action.origin",
+            "conversion_action.primary_for_goal",
+            "conversion_action.include_in_conversions_metric",
+            "conversion_action.counting_type",
+            "conversion_action.click_through_lookback_window_days",
+            "conversion_action.view_through_lookback_window_days",
+            "conversion_action.attribution_model_settings.attribution_model",
+            "conversion_action.value_settings.default_value",
+        ),
+        # Every status: the conversion reports still carry removed actions' ids.
+        "",
+    ),
+    "raw__google_ads__api__ad_group_snapshots": (
+        "ad_group",
+        (
+            "ad_group.resource_name",
+            "campaign.id",
+            "ad_group.id",
+            "ad_group.name",
+            "ad_group.status",
+            "ad_group.type",
+            "ad_group.cpc_bid_micros",
+        ),
+        "ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'",
+    ),
+    "raw__google_ads__api__ad_snapshots": (
+        "ad_group_ad",
+        (
+            "ad_group_ad.resource_name",
+            "campaign.id",
+            "ad_group.id",
+            "ad_group_ad.ad.id",
+            "ad_group_ad.ad.type",
+            "ad_group_ad.status",
+            "ad_group_ad.policy_summary.approval_status",
+            "ad_group_ad.ad.final_urls",
+            "ad_group_ad.ad.responsive_search_ad.headlines",
+            "ad_group_ad.ad.responsive_search_ad.descriptions",
+        ),
+        "ad_group_ad.status != 'REMOVED' AND ad_group.status != 'REMOVED' "
+        "AND campaign.status != 'REMOVED'",
+    ),
 }
+
+LANDING_PAGE_DAILY_FIELDS = (
+    "segments.date",
+    "segments.ad_network_type",
+    *_CAMPAIGN_FIELDS,
+    "ad_group.id",
+    "landing_page_view.resource_name",
+    "landing_page_view.unexpanded_final_url",
+    "metrics.impressions",
+    "metrics.clicks",
+    "metrics.cost_micros",
+    "metrics.conversions",
+    "metrics.all_conversions",
+)
+GEOGRAPHIC_DAILY_FIELDS = (
+    "segments.date",
+    "segments.ad_network_type",
+    *_CAMPAIGN_FIELDS,
+    "geographic_view.resource_name",
+    "geographic_view.country_criterion_id",
+    "geographic_view.location_type",
+    "segments.geo_target_region",
+    "segments.geo_target_city",
+    "metrics.impressions",
+    "metrics.clicks",
+    "metrics.cost_micros",
+    "metrics.conversions",
+    "metrics.all_conversions",
+)
+
+# One row per click. The gclid is the key HubSpot stores on a contact, so it can
+# link a click to a person. The API allows one day per query, 90 days back.
+CLICK_VIEW_FIELDS = (
+    "segments.date",
+    "segments.ad_network_type",
+    "segments.device",
+    "segments.click_type",
+    "segments.slot",
+    *_CAMPAIGN_FIELDS,
+    "ad_group.id",
+    "ad_group.name",
+    "click_view.resource_name",
+    "click_view.gclid",
+    "click_view.ad_group_ad",
+    "click_view.keyword",
+    "click_view.keyword_info.text",
+    "click_view.keyword_info.match_type",
+    "click_view.page_number",
+    "click_view.area_of_interest.most_specific",
+    "click_view.location_of_presence.most_specific",
+    "metrics.clicks",
+)
+# One day inside the API's 90, so a run late in the day stays inside it.
+CLICK_VIEW_RETENTION_DAYS = 89
+CLICK_VIEW_LOOKBACK_DAYS = 2
 
 
 def column_name(field: str) -> str:
@@ -288,6 +406,17 @@ def _plain(value: Any) -> Any:  # noqa: ANN401
         )
     if hasattr(value, "paths"):
         return ",".join(value.paths)
+    # Repeated fields (final URLs, ad headlines) as JSON text: dlt would otherwise
+    # load a list as a child table.
+    if isinstance(value, MutableSequence):
+        return json.dumps(
+            [
+                json.loads(_plain(item))
+                if isinstance(item, proto.Message)
+                else _plain(item)
+                for item in value
+            ]
+        )
     return value
 
 
@@ -613,6 +742,95 @@ def google_ads_source(
             "metrics.impressions > 0",
         )
 
+    search = "campaign.advertising_channel_type = 'SEARCH' AND metrics.impressions > 0"
+
+    @dlt.transformer(
+        data_from=accounts,
+        **_table(
+            "raw__google_ads__api__landing_page_daily",
+            (
+                "customer_id",
+                "segments__date",
+                "segments__ad_network_type",
+                "ad_group__id",
+                "landing_page_view__resource_name",
+            ),
+        ),
+    )
+    def landing_page_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        yield from _daily_report(
+            "raw__google_ads__api__landing_page_daily",
+            listing["client_ids"],
+            "landing_page_view",
+            LANDING_PAGE_DAILY_FIELDS,
+            search,
+        )
+
+    @dlt.transformer(
+        data_from=accounts,
+        **_table(
+            "raw__google_ads__api__geographic_daily",
+            (
+                "customer_id",
+                "segments__date",
+                "segments__ad_network_type",
+                "campaign__id",
+                "geographic_view__resource_name",
+                "segments__geo_target_region",
+                "segments__geo_target_city",
+            ),
+        ),
+    )
+    def geographic_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        yield from _daily_report(
+            "raw__google_ads__api__geographic_daily",
+            listing["client_ids"],
+            "geographic_view",
+            GEOGRAPHIC_DAILY_FIELDS,
+            search,
+        )
+
+    @dlt.transformer(
+        data_from=accounts,
+        **_table(
+            "raw__google_ads__api__click_view",
+            ("customer_id", "click_view__resource_name"),
+        ),
+    )
+    def click_view(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        table = "raw__google_ads__api__click_view"
+        last_loaded: dict[str, str] = dlt.current.resource_state().setdefault(
+            "last_loaded_date", {}
+        )
+        run_date, retrieved_at = _run_date(), _now()
+        for customer_id in listing["client_ids"]:
+            window = report_window(
+                last_loaded.get(customer_id),
+                (run_date - timedelta(days=CLICK_VIEW_RETENTION_DAYS)).isoformat(),
+                CLICK_VIEW_LOOKBACK_DAYS,
+                run_date,
+            )
+            if window is None:
+                continue
+            for day, _ in date_chunks(*window, 1):
+                query = build_query(
+                    "click_view",
+                    CLICK_VIEW_FIELDS,
+                    f"segments.date = '{day}' "
+                    "AND campaign.advertising_channel_type = 'SEARCH'",
+                )
+                for record in _search(customer_id, query, CLICK_VIEW_FIELDS):
+                    yield {
+                        "customer_id": customer_id,
+                        **record,
+                        "retrieved_at": retrieved_at,
+                    }
+                yield _fetch_log(
+                    table, customer_id, day.isoformat(), day.isoformat(), retrieved_at
+                )
+                if day.isoformat() > last_loaded.get(customer_id, ""):
+                    last_loaded[customer_id] = day.isoformat()
+
     types = ", ".join(f"'{t}'" for t in CHANGE_EVENT_RESOURCE_TYPES)
 
     def _change_events_between(
@@ -702,17 +920,21 @@ def google_ads_source(
 
         return snapshot
 
+    daily_reports = (
+        keyword_daily,
+        keyword_conversions_daily,
+        campaign_daily,
+        landing_page_daily,
+        geographic_daily,
+    )
     yield accounts
     if backfill_windows:
-        yield keyword_daily
-        yield keyword_conversions_daily
-        yield campaign_daily
+        yield from daily_reports
         return
     yield customer_clients
-    yield keyword_daily
-    yield keyword_conversions_daily
-    yield campaign_daily
+    yield from daily_reports
     yield change_events
+    yield click_view
     for name in _SNAPSHOTS:
         yield _snapshot(name)
 
