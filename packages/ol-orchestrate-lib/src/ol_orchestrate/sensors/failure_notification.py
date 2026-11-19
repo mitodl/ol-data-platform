@@ -79,9 +79,10 @@ RUN_STEP_KEY = "run"
 # not export RunFailureReason.
 STEP_FAILURE_REASON = "STEP_FAILURE"
 
-# FreshnessState.FAIL's value, compared as the value because dagster does not
-# export FreshnessState (it is a str enum, so the comparison holds).
+# FreshnessState values, compared as values because dagster does not export
+# FreshnessState (it is a str enum, so the comparison holds).
 FRESHNESS_FAIL_STATE = "FAIL"
+FRESHNESS_NOT_APPLICABLE_STATE = "NOT_APPLICABLE"
 
 # How far back a freshness sensor with no cursor yet starts reading. Covers the
 # gap between the lakehouse and delivery rollouts; see first_freshness_cursor.
@@ -1303,7 +1304,8 @@ def collect_new_freshness_failures(
     daemon records a change only when an asset's state differs from its last
     one, so an asset that stays stale is reported once, not on every
     evaluation. Capped at MAX_FAILURES_PER_MESSAGE as collect_new_check_failures
-    is, for the same reason.
+    is, for the same reason. A FAIL that only returns from a policy reload (see
+    is_back_from_a_policy_gap) is skipped.
     """
     records = event_records_after(
         instance, DagsterEventType.FRESHNESS_STATE_CHANGE, cursor
@@ -1325,8 +1327,38 @@ def collect_new_freshness_failures(
             ).new_state
             == FRESHNESS_FAIL_STATE
             and latest[change.key] == record.storage_id
+            and not is_back_from_a_policy_gap(instance, record)
             else None
         ),
+    )
+
+
+def is_back_from_a_policy_gap(instance: Any, record: Any) -> bool:
+    """Whether this change to FAIL only ends a gap in the asset's policy.
+
+    While the code location that gives an asset its policy reloads, the asset's
+    only definition is another location's reference to it, which has none. The
+    daemon records FAIL -> NOT_APPLICABLE and then, once the location is back,
+    NOT_APPLICABLE -> FAIL; in production dimensional/dim_concept, which the ml
+    location reads, did this on every lakehouse reload. The FAIL before the gap
+    was already announced. A policy that is new and failing has no FAIL before
+    its NOT_APPLICABLE, so it is still announced.
+    """
+    change = record.event_log_entry.dagster_event.event_specific_data
+    if change.previous_state != FRESHNESS_NOT_APPLICABLE_STATE:
+        return False
+    before = instance.get_event_records(
+        EventRecordsFilter(
+            event_type=DagsterEventType.FRESHNESS_STATE_CHANGE,
+            asset_key=change.key,
+            before_cursor=record.storage_id,
+        ),
+        limit=1,
+        ascending=False,
+    )
+    return bool(before) and (
+        before[0].event_log_entry.dagster_event.event_specific_data.previous_state
+        == FRESHNESS_FAIL_STATE
     )
 
 

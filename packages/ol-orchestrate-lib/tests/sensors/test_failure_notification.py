@@ -11,6 +11,7 @@ import sentry_sdk
 from dagster import (
     AssetCheckSeverity,
     AssetKey,
+    DagsterEventType,
     DagsterInstance,
     MetadataValue,
     RetryPolicy,
@@ -51,6 +52,7 @@ from ol_orchestrate.sensors.failure_notification import (
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
     latest_check_evaluation_cursor,
+    latest_event_cursor,
     record_announcement,
     repeats_to_announce,
     sentry_failure_detail,
@@ -2046,6 +2048,52 @@ def test_a_failure_that_recovered_in_the_same_batch_is_not_announced() -> None:
 
     assert [f.storage_id for f in failures] == [2]
     assert next_cursor == "3"
+
+
+@pytest.mark.parametrize("split_across_ticks", [False, True])
+def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
+    split_across_ticks: bool,  # noqa: FBT001
+) -> None:
+    """Production sequence on every lakehouse reload for dim_concept, which the
+    ml location also references: FAIL -> NOT_APPLICABLE, then 30 seconds later
+    NOT_APPLICABLE -> FAIL. The two can land in one tick's batch or in two.
+    """
+    with DagsterInstance.ephemeral() as instance:
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "FAIL", "PASS"),
+            _freshness_change(["dimensional", "was_passing"], "PASS", "UNKNOWN"),
+        ]:
+            instance.report_runless_asset_event(change)
+        cursor = latest_event_cursor(instance, DagsterEventType.FRESHNESS_STATE_CHANGE)
+
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "NOT_APPLICABLE", "FAIL"),
+            _freshness_change(["dimensional", "was_passing"], "NOT_APPLICABLE", "PASS"),
+        ]:
+            instance.report_runless_asset_event(change)
+        announced = []
+        if split_across_ticks:
+            failures, next_cursor = collect_new_freshness_failures(
+                instance, int(cursor)
+            )
+            announced += failures
+            assert next_cursor is not None
+            cursor = next_cursor
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "FAIL", "NOT_APPLICABLE"),
+            # Passing before the reload, failing after it: news.
+            _freshness_change(["dimensional", "was_passing"], "FAIL", "NOT_APPLICABLE"),
+            # A policy new in this reload that starts out failing: news.
+            _freshness_change(["dimensional", "new_policy"], "FAIL", "NOT_APPLICABLE"),
+        ]:
+            instance.report_runless_asset_event(change)
+        failures, _ = collect_new_freshness_failures(instance, int(cursor))
+        announced += failures
+
+    assert [
+        r.event_log_entry.dagster_event.event_specific_data.key.path[-1]
+        for r in announced
+    ] == ["was_passing", "new_policy"]
 
 
 def test_freshness_failure_message_links_each_asset() -> None:
