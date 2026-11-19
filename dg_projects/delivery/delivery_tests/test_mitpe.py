@@ -127,6 +127,8 @@ def _deliver(
         "_read_table",
         lambda _context, table: pl.DataFrame(tables[table], infer_schema_length=None),
     )
+    # A directly invoked asset has no run to tag.
+    monkeypatch.setattr(mitpe, "skip_run_retries", lambda _context: None)
     client = _FakeLearnClient()
     mitpe_webhook(
         context=build_asset_context(), learn_api=SimpleNamespace(client=client)

@@ -1,17 +1,18 @@
 """Tests for the mass-unpublish override and for what a refused batch reports."""
 
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import dagster as dg
 import httpx2 as httpx
 import polars as pl
 import pytest
-from delivery.assets import mitpe
+from delivery.assets import mit_climate, mitpe, open_learning_library
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mitpe import mitpe_webhook
 from delivery.assets.open_learning_library import oll_webhook
 from delivery.lib.learn_webhook import webhook_failure
+from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 from ol_orchestrate.lib.http_errors import PermanentHTTPFailure, TransientHTTPFailure
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
@@ -129,6 +130,43 @@ def test_a_refused_batch_fails_once_with_learns_message(
     message = failure.step_failure_data.error.message
     assert REFUSAL in message
     assert "HTTP 422" in message
+
+
+@pytest.mark.parametrize(
+    ("module", "webhook"),
+    [
+        (mit_climate, mit_climate_webhook),
+        (mitpe, mitpe_webhook),
+        (open_learning_library, oll_webhook),
+    ],
+)
+def test_a_failed_delivery_is_not_rerun_by_run_retries(
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+    webhook: dg.AssetsDefinition,
+) -> None:
+    """Step retries already cover a 5xx, so run retries would only multiply them.
+
+    The tag goes on before the POST whatever it returns; a 400 keeps the test
+    from sleeping through the step retries a 5xx gets.
+    """
+    monkeypatch.setattr(
+        module,
+        "get_dbt_model_as_dataframe",
+        lambda database_name, table_name: pl.DataFrame({"id": [1]}).lazy(),  # noqa: ARG005
+    )
+    monkeypatch.setattr(module, "build_resources", lambda *_: [])
+    client, sent = learn_client(httpx.Response(400, json={"resources": ["bad"]}))
+
+    result = dg.materialize(
+        [webhook],
+        resources={"learn_api": SimpleNamespace(client=client)},
+        raise_on_error=False,
+    )
+
+    assert not result.success
+    assert len(sent) == 1
+    assert result.dagster_run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
 
 
 def _status_error(status_code: int, body: str) -> httpx.HTTPStatusError:

@@ -1,13 +1,40 @@
 """What the learning_resources webhook assets share."""
 
 import httpx2 as httpx
-from dagster import Config, Failure
+from dagster import AssetExecutionContext, Backoff, Config, Failure, RetryPolicy
+from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 from ol_orchestrate.lib.http_errors import (
     http_failure,
     is_retryable,
     response_body_excerpt,
 )
 from pydantic import Field
+
+# The only retries a learning_resources webhook asset gets (see skip_run_retries).
+# Waits of 20s, 60s and 140s span a Learn deploy or pod restart, which the
+# run_retries daemon's reruns used to cover. Each attempt POSTs the full batch.
+WEBHOOK_RETRY_POLICY = RetryPolicy(
+    max_retries=3, delay=20.0, backoff=Backoff.EXPONENTIAL
+)
+
+
+def skip_run_retries(context: AssetExecutionContext) -> None:
+    """Stop the run_retries daemon rerunning this run when it fails.
+
+    A 5xx from Learn is a ``TransientHTTPFailure``, which the ``stop_run_retries``
+    hook leaves alone, so after the step's own retries the daemon would rerun the
+    run three more times, each with its step retries: up to 16 POSTs of the full
+    batch for one persistent 5xx. The hook can't take this over, because the OVS
+    assets raise the same failure and rely on run retries after step retries that
+    span seconds.
+
+    The tag is per run, so call it only in an asset its sensor runs alone. The
+    next run sends what a failed one would have: a webhook delivery is a full
+    sync, and the views-rebuilt notice resends what no run has recorded as sent.
+    """
+    context.instance.add_run_tags(
+        context.run_id, {RETRY_ON_ASSET_OR_OP_FAILURE_TAG: "false"}
+    )
 
 
 class LearnDeliveryConfig(Config):

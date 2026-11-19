@@ -217,19 +217,25 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
-from delivery.lib.learn_webhook import LearnDeliveryConfig
+from delivery.lib.learn_webhook import (
+    WEBHOOK_RETRY_POLICY,
+    LearnDeliveryConfig,
+    skip_run_retries,
+)
 
 
 @asset(
     key=AssetKey(["mit_learn_delivery", "my_source_webhook"]),
     group_name="mit_learn_delivery",
     deps=[AssetKey(["integrations", "integrations__learn__my_source_courses"])],
+    retry_policy=WEBHOOK_RETRY_POLICY,
 )
 def my_source_webhook(
     context: AssetExecutionContext,
     config: LearnDeliveryConfig,
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
+    skip_run_retries(context)
     df = get_dbt_model_as_dataframe(
         database_name="ol_warehouse_production_integrations",
         table_name="integrations__learn__my_source_courses",
@@ -243,6 +249,11 @@ def my_source_webhook(
 The real asset picks the Glue database per environment, handles a refused batch
 (see step 4) and records delivery metadata; copy those parts from
 `open_learning_library.py`.
+
+The step's `WEBHOOK_RETRY_POLICY` is the only retry a delivery gets.
+`skip_run_retries` stops the `run_retries` daemon rerunning a failed run, which
+would POST the full batch up to four times per run after a persistent 5xx. A
+delivery that still fails is sent by the next day's run, a full sync.
 
 ### 2. Register the asset in `definitions.py`
 
