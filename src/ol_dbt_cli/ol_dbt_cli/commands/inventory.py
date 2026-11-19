@@ -420,8 +420,11 @@ def archive(
             f"{escape(unit)}'s dlt source appends to its Airbyte tables, which stay the record. Nothing to archive."
         )
         return
+    # The inventory's connections, and so its markers, describe production. A
+    # canonical qa or ci archive is neither guarded by them nor recorded.
+    production = canonical and "production" in target
     active = active_production_connections(units[unit])
-    if execute and canonical and active:
+    if execute and production and active:
         err_console.print(
             f"[bold red]{escape(unit)} still has active production connections: {escape(', '.join(active))}. "
             "Pause them in Airbyte and set their `status: inactive` first, so no sync lands after the count check."
@@ -448,7 +451,7 @@ def archive(
     result = subprocess.run(command, cwd=dbt_dir, check=False)  # noqa: S603
     if result.returncode:
         sys.exit(result.returncode)
-    if execute and canonical:
+    if execute and production:
         archived_at = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%MZ")
         console.print(
             "Record the archive in the unit's history.markers:\n"

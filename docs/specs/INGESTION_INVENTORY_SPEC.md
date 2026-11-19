@@ -1203,8 +1203,8 @@ Each unit therefore takes these steps, in this order:
    table's versions have. It gets no grants, so it is read like raw. The command refuses
    a production `--execute` while the unit's file still marks a production connection
    `status: active`, so step 2 includes that edit. Each copy's row count is checked
-   against the source table, and a difference fails the run and drops that copy, since
-   with the connections paused the source cannot change. A table archived by an earlier
+   against the source table, and a difference fails the run and drops that copy, which never
+   became an archive, since with the connections paused the source cannot change. A table archived by an earlier
    run is checked against its source's columns and row count and otherwise left alone, so
    a run that failed part way is repeated as is. Archive tables are never rebuilt or
    dropped. A unit whose dlt source appends (`dlt.write_disposition: append`)
