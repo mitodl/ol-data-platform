@@ -508,6 +508,8 @@ with mitxonline_enrollments as (
 -- is also derived from orders, which do not bump the enrollment's updated_on.
 -- One row per key: a key a past run wrote twice would otherwise match each source row twice
 -- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
+-- max, not bool_or, on the booleans: StarRocks' bool_or returns false over all-NULL input
+-- where Trino's returns NULL, which hid the stored rows append_new_columns left NULL.
 , stored_row_lookup as (
     select
         enrollment_key
@@ -516,10 +518,10 @@ with mitxonline_enrollments as (
         , max(
             {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %}
         ) as stored_contract_fk
-        , bool_or(enrollment_is_active) as stored_is_active
+        , max(enrollment_is_active) as stored_is_active
         , max(enrollment_mode) as stored_mode
         , max(enrollment_status) as stored_status
-        , {% if target_has_is_verified %}bool_or(is_verified){% else %}cast(null as boolean){% endif %}
+        , {% if target_has_is_verified %}max(is_verified){% else %}cast(null as boolean){% endif %}
             as stored_is_verified
         , count(*) > 1 as stored_has_copies
     from {{ this }}

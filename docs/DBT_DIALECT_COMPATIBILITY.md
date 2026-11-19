@@ -57,6 +57,15 @@ LIMIT follows it, and then its ascending keys need `nulls last` too. `ol-dbt val
 (the `null_ordering` check, run in dbt PR CI) fails on an ascending key with no NULLS
 clause in any of these places.
 
+## `bool_or` over all-NULL input
+
+`bool_or` returns NULL over a group whose inputs are all NULL on Trino and DuckDB, and
+false on StarRocks. Where a NULL result is read as anything other than false (compared
+with `is_distinct_from`, coalesced, or written to a column), aggregate with `max`, which
+is NULL over all-NULL input on all three and otherwise matches `bool_or` (true sorts
+after false). `tfact_enrollment` compares its stored booleans this way. Inside a
+`case when` or a `where`, NULL and false behave the same, so `bool_or` is safe there.
+
 ## Examples
 
 These were the first macros written, and each is applied across the models:
