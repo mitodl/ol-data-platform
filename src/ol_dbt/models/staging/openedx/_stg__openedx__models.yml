@@ -158,10 +158,11 @@ models:
         column_list: [content_file_source_system, courserun_readable_id, content_file_path]
 
 - name: stg__openedx__s3__course_text_snapshots
-  description: One row per Open edX course run and text kind (document, transcript)
-    with the static asset bundle its newest landed snapshot was extracted from. An
-    empty snapshot counts too, through the marker row the two text staging models
-    drop.
+  description: The rows of each Open edX course run's newest landed document and transcript
+    snapshots, read once so the two text staging models and the bundle version int__openedx__content_files
+    checks them by agree on which file is newest. An empty snapshot is one marker
+    row with a null content_file_path, kept because it is the only row naming its
+    bundle.
   columns:
   - name: courserun_readable_id
     description: str, course run ID formatted as course-v1:{org}+{course}+{run}
@@ -178,13 +179,39 @@ models:
     - accepted_values:
         arguments:
           values: [document, transcript]
+  - name: content_file_path
+    description: str, path of the file within the course export; null on an empty
+      snapshot's marker row
+  - name: content_file_extension
+    description: str, lower-cased file extension with its dot, taken from the path
+      when the extraction row has none
+  - name: content_file_mime_type
+    description: str, the MIME type the file was sent to Tika as, or of the subtitle
+      format
+  - name: content_file_size_bytes
+    description: bigint, the file's size in bytes
+  - name: content_file_text
+    description: str, the extracted text; null when extraction was empty or failed
+  - name: content_file_extraction_status
+    description: str, extracted, empty or failed; null on a marker row
+    tests:
+    - accepted_values:
+        arguments:
+          values: [extracted, empty, failed]
+  - name: content_file_extracted_at
+    description: timestamp, S3 modification time of the file the row came from
+    data_type: timestamp
+  - name: content_file_static_references
+    description: str, for a document's html file, a JSON array of the static/ paths
+      its body links to; null otherwise
   - name: content_file_static_assets_version
     description: str, data_version of the static asset bundle the snapshot was extracted
       from; null for a snapshot written before the assets recorded it
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: [content_file_source_system, courserun_readable_id, content_file_text_kind]
+        column_list: [content_file_source_system, courserun_readable_id, content_file_text_kind,
+          content_file_path]
 
 - name: stg__openedx__s3__course_file_exclusions
   description: Every file in each Open edX course run's export, from the course's

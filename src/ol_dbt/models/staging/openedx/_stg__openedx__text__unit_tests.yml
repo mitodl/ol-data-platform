@@ -1,0 +1,39 @@
+---
+unit_tests:
+- name: test_stg__openedx__s3__course_document_text_keeps_the_snapshots_documents
+  description: >
+    The document staging model takes its rows from the one read of the newest
+    snapshots that also gives the bundle versions: the document files, without
+    the transcripts or an empty snapshot's marker row.
+  model: stg__openedx__s3__course_document_text
+  given:
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_path: static/a.pdf, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_text_kind: transcript, content_file_path: static/a.srt, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R2", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_path: null, content_file_static_assets_version: b2}
+  expect:
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_path: static/a.pdf,
+      content_file_static_assets_version: b1}
+- name: test_stg__openedx__s3__course_transcript_text_keeps_the_snapshots_transcripts
+  description: >
+    The transcript staging model takes the transcript files of the same read,
+    without the documents or an empty snapshot's marker row.
+  model: stg__openedx__s3__course_transcript_text
+  given:
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_path: static/a.pdf, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_text_kind: transcript, content_file_path: static/a.srt, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R2", content_file_source_system: xpro,
+      content_file_text_kind: transcript, content_file_path: null, content_file_static_assets_version: b2}
+  expect:
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_path: static/a.srt,
+      content_file_static_assets_version: b1}

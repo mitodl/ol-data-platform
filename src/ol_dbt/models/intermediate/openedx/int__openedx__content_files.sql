@@ -126,7 +126,7 @@ with blocks as (
 , lagging_runs as (
     select distinct snapshots.courserun_readable_id, snapshots.source_system
     from (
-        select
+        select distinct
             courserun_readable_id
             , content_file_source_system as source_system
             , content_file_static_assets_version as static_assets_version
