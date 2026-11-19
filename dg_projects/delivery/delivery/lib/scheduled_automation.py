@@ -90,6 +90,11 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "mit_climate_delivery_sensor": frozenset({"production"}),
     "mitpe_delivery_sensor": frozenset({"production"}),
     "oll_delivery_sensor": frozenset({"production"}),
+    # Tells MIT Learn which integrations__learn__* views it pulls were rebuilt,
+    # so its warehouse Sync tasks run then and not at their daily beat. Learn's
+    # receiver is production only in practice (RC has no StarRocks, so the Sync
+    # tasks don't register there). STOPPED until enabled from the UI.
+    "learn_warehouse_views_rebuilt_sensor": frozenset({"production"}),
     # Commits the instructor user list to the access forge GitHub repository's
     # default branch. There is one of those, not one per environment, so a tick
     # outside production would write the real repo. Moved from lakehouse, where

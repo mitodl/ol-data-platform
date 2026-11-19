@@ -1,6 +1,5 @@
 """Tests for the mass-unpublish override and for what a refused batch reports."""
 
-import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,6 +14,8 @@ from delivery.assets.open_learning_library import oll_webhook
 from delivery.lib.learn_webhook import webhook_failure
 from ol_orchestrate.lib.http_errors import PermanentHTTPFailure, TransientHTTPFailure
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
+
+from delivery_tests.learn_client import learn_client
 
 REFUSAL = "Refusing to sync: 44 of 58 published oll course resources would unpublish"
 MITPE_OP = "mit_learn_delivery__mitpe_webhook"
@@ -43,21 +44,6 @@ _EMPTY_RUNS: dict[str, list[Any]] = {
     "run_id": [],
     "run_position": [],
 }
-
-
-def _learn_client(
-    response: httpx.Response,
-) -> tuple[MITLearnApiClient, list[dict[str, Any]]]:
-    """Build a real client whose requests get ``response``, recording each body."""
-    sent: list[dict[str, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content))
-        return response
-
-    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
-    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
-    return client, sent
 
 
 def _mitpe_tables(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +87,7 @@ def test_a_run_with_no_config_does_not_send_the_override(
 ) -> None:
     """The run a delivery sensor launches, which carries no run config."""
     _mitpe_tables(monkeypatch)
-    client, sent = _learn_client(httpx.Response(200, json={"status": "success"}))
+    client, sent = learn_client(httpx.Response(200, json={"status": "success"}))
 
     assert _materialize_mitpe(client).success
     assert "allow_mass_unpublish" not in sent[0]
@@ -112,7 +98,7 @@ def test_a_hand_materialization_can_send_the_override(
 ) -> None:
     """The run config in CONTRIBUTING.md reaches the request body."""
     _mitpe_tables(monkeypatch)
-    client, sent = _learn_client(httpx.Response(200, json={"status": "success"}))
+    client, sent = learn_client(httpx.Response(200, json={"status": "success"}))
 
     result = _materialize_mitpe(
         client, {"ops": {MITPE_OP: {"config": {"allow_mass_unpublish": True}}}}
@@ -127,7 +113,7 @@ def test_a_refused_batch_fails_once_with_learns_message(
 ) -> None:
     """Materialized with the asset's RetryPolicy: one POST, and the reason is shown."""
     _mitpe_tables(monkeypatch)
-    client, sent = _learn_client(
+    client, sent = learn_client(
         httpx.Response(422, json={"status": "error", "message": REFUSAL})
     )
 

@@ -1,6 +1,8 @@
 """Tests for the MIT Learn API client."""
 
 import copy
+import hashlib
+import hmac
 import json
 from typing import Any, cast
 
@@ -60,6 +62,29 @@ def test_notify_learning_resources_sends_allow_mass_unpublish_when_set() -> None
         "resources": [resource],
         "allow_mass_unpublish": True,
     }
+
+
+def test_notify_warehouse_views_rebuilt_posts_the_view_names() -> None:
+    """The views go to Learn's warehouse_views_rebuilt route, signed over the body."""
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"status": "success", "message": "Queued"})
+
+    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
+    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client.notify_warehouse_views_rebuilt(["integrations__learn__ocw_courses"])
+
+    (request,) = sent
+    assert request.url.path == "/api/v1/webhooks/warehouse_views_rebuilt/"
+    assert json.loads(request.content) == {
+        "views": ["integrations__learn__ocw_courses"]
+    }
+    assert (
+        request.headers["X-MITLearn-Signature"]
+        == hmac.new(b"t", request.content, hashlib.sha256).hexdigest()
+    )
 
 
 LOCAL_LEARN = "https://api.learn.mit.dev"

@@ -292,6 +292,7 @@ WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
         "mit_climate_delivery_sensor",
         "mitpe_delivery_sensor",
         "oll_delivery_sensor",
+        "learn_warehouse_views_rebuilt_sensor",
     }
 )
 
