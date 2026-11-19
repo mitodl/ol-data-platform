@@ -2056,7 +2056,8 @@ def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
 ) -> None:
     """Production sequence on every lakehouse reload for dim_concept, which the
     ml location also references: FAIL -> NOT_APPLICABLE, then 30 seconds later
-    NOT_APPLICABLE -> FAIL. The two can land in one tick's batch or in two.
+    NOT_APPLICABLE -> FAIL. The two can land in one tick's batch or in two, and
+    so can the change that put the asset into FAIL in the first place.
     """
     with DagsterInstance.ephemeral() as instance:
         for change in [
@@ -2069,6 +2070,11 @@ def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
         for change in [
             _freshness_change(["dimensional", "flapped"], "NOT_APPLICABLE", "FAIL"),
             _freshness_change(["dimensional", "was_passing"], "NOT_APPLICABLE", "PASS"),
+            # Started failing within the tick before the reload: news once.
+            _freshness_change(["dimensional", "failed_just_before"], "FAIL", "PASS"),
+            _freshness_change(
+                ["dimensional", "failed_just_before"], "NOT_APPLICABLE", "FAIL"
+            ),
         ]:
             instance.report_runless_asset_event(change)
         announced = []
@@ -2085,6 +2091,9 @@ def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
             _freshness_change(["dimensional", "was_passing"], "FAIL", "NOT_APPLICABLE"),
             # A policy new in this reload that starts out failing: news.
             _freshness_change(["dimensional", "new_policy"], "FAIL", "NOT_APPLICABLE"),
+            _freshness_change(
+                ["dimensional", "failed_just_before"], "FAIL", "NOT_APPLICABLE"
+            ),
         ]:
             instance.report_runless_asset_event(change)
         failures, _ = collect_new_freshness_failures(instance, int(cursor))
@@ -2093,7 +2102,7 @@ def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
     assert [
         r.event_log_entry.dagster_event.event_specific_data.key.path[-1]
         for r in announced
-    ] == ["was_passing", "new_policy"]
+    ] == ["failed_just_before", "was_passing", "new_policy"]
 
 
 def test_freshness_failure_message_links_each_asset() -> None:

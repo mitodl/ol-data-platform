@@ -1312,11 +1312,17 @@ def collect_new_freshness_failures(
     )
     if not records:
         return [], None
-    # A FAIL that a later change in the same batch superseded (it recovered) is
-    # not news. Matters most on a first tick, which re-reads a day of changes.
-    latest = {
-        record.event_log_entry.dagster_event.event_specific_data.key: record.storage_id
+    # A FAIL that a later change in the same batch recovered is not news. Matters
+    # most on a first tick, which re-reads a day of changes. A later change to
+    # NOT_APPLICABLE is not a recovery: the FAIL is announced, and the return
+    # from the policy gap is the one skipped.
+    last_recovery = {
+        change.key: record.storage_id
         for record in records
+        if (
+            change := record.event_log_entry.dagster_event.event_specific_data
+        ).new_state
+        not in {FRESHNESS_FAIL_STATE, FRESHNESS_NOT_APPLICABLE_STATE}
     }
     return _one_message_of(
         records,
@@ -1326,7 +1332,7 @@ def collect_new_freshness_failures(
                 change := record.event_log_entry.dagster_event.event_specific_data
             ).new_state
             == FRESHNESS_FAIL_STATE
-            and latest[change.key] == record.storage_id
+            and last_recovery.get(change.key, -1) < record.storage_id
             and not is_back_from_a_policy_gap(instance, record)
             else None
         ),
@@ -1341,8 +1347,10 @@ def is_back_from_a_policy_gap(instance: Any, record: Any) -> bool:
     daemon records FAIL -> NOT_APPLICABLE and then, once the location is back,
     NOT_APPLICABLE -> FAIL; in production dimensional/dim_concept, which the ml
     location reads, did this on every lakehouse reload. The FAIL before the gap
-    was already announced. A policy that is new and failing has no FAIL before
-    its NOT_APPLICABLE, so it is still announced.
+    was announced by this tick or an earlier one, since a later change to
+    NOT_APPLICABLE does not supersede it (see collect_new_freshness_failures). A
+    policy that is new and failing has no FAIL before its NOT_APPLICABLE, so it
+    is still announced.
     """
     change = record.event_log_entry.dagster_event.event_specific_data
     if change.previous_state != FRESHNESS_NOT_APPLICABLE_STATE:
