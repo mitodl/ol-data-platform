@@ -19,6 +19,7 @@ from lakehouse.lib.dbt_environment import (
     DBT_TARGET_MAP,
     ICEBERG_MAINTENANCE_ENGINE_MAP,
     STARROCKS_DBT_TARGET_MAP,
+    STARROCKS_HOST_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
     dbt_target_type,
@@ -41,6 +42,7 @@ ALL_MAPS = pytest.mark.parametrize(
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
         ("ICEBERG_MAINTENANCE_ENGINE_MAP", ICEBERG_MAINTENANCE_ENGINE_MAP),
+        ("STARROCKS_HOST_MAP", STARROCKS_HOST_MAP),
     ],
 )
 
@@ -303,3 +305,18 @@ def test_ci_builds_the_main_project_on_starrocks():
 def test_an_unknown_target_raises():
     with pytest.raises(KeyError, match="no_such_target"):
         dbt_target_type(PROFILES_PATH, "no_such_target")
+
+
+@pytest.mark.parametrize("environment", DEPLOYED_ENVIRONMENTS)
+def test_a_starrocks_target_gets_its_own_clusters_host(environment):
+    """The exported host overrides the profile's, so it must be the profile's FE.
+
+    ci pointed at QA's FE while its `ci` target writes ol_data_lake_ci, which
+    only the CI cluster registers, and its Vault issues logins for the CI
+    cluster only.
+    """
+    target = DBT_TARGET_MAP[environment]
+    if dbt_target_type(PROFILES_PATH, target) != "starrocks":
+        pytest.skip(f"{environment} builds on Trino")
+    profile = yaml.safe_load(PROFILES_PATH.read_text())["open_learning"]["outputs"]
+    assert STARROCKS_HOST_MAP[environment] in profile[target]["host"]

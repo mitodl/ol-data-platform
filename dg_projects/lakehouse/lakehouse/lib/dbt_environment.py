@@ -87,6 +87,25 @@ STARROCKS_LOCAL_TARGETS: frozenset[str] = frozenset(
     {"starrocks_local", STARROCKS_LOCAL_TARGET}
 )
 
+# The FE each environment's `starrocks` resource connects to, and so the host
+# exported to every StarRocks dbt invocation. Dagster runs in the same EKS
+# cluster as that environment's StarRocks (data-ci, data-qa, data-production),
+# so each reaches its FE through the in-cluster service; from a QA pod the
+# external name lakehouse.qa.starrocks.ol.mit.edu times out. ci's own cluster
+# registers ol_data_lake_ci read/write and ol_data_lake_qa read-only
+# (ol-infrastructure Pulumi.lakehouse.CI.yaml), so it serves both the `ci` lake
+# target and the b2b views that read QA, and its Vault (vault-ci) issues logins
+# for it and not for QA's FE. dev is the local-dev cluster, which Tilt forwards
+# to this port on the host.
+STARROCKS_IN_CLUSTER_FE = "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local"
+
+STARROCKS_HOST_MAP: Mapping[str, str] = {
+    "dev": "127.0.0.1",
+    "ci": STARROCKS_IN_CLUSTER_FE,
+    "qa": STARROCKS_IN_CLUSTER_FE,
+    "production": STARROCKS_IN_CLUSTER_FE,
+}
+
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": STARROCKS_LOCAL_TARGET,
     # ci connects directly to its own FE service (no port-forward), same
