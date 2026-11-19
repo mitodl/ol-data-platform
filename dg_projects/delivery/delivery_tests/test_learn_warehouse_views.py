@@ -1,6 +1,5 @@
 """Tests for the notice that tells MIT Learn its warehouse views were rebuilt."""
 
-import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,28 +13,17 @@ from delivery.assets.learn_warehouse_views import (
     on_view_rebuilt,
     warehouse_views_rebuilt,
 )
+from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 from ol_orchestrate.lib.http_errors import PermanentHTTPFailure
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
+
+from delivery_tests.learn_client import learn_client
 
 OCW = "integrations__learn__ocw_courses"
 XPRO = "integrations__learn__xpro_courses"
 LAST = LEARN_WAREHOUSE_VIEWS[-1]
 OP = "mit_learn_delivery__warehouse_views_rebuilt"
 QUEUED = {"status": "success", "message": "Queued 1 sync(s): SyncOCWCoursesTask"}
-
-
-def _learn_client(
-    response: httpx.Response,
-) -> tuple[MITLearnApiClient, list[dict[str, Any]]]:
-    sent: list[dict[str, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content))
-        return response
-
-    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
-    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
-    return client, sent
 
 
 def _rebuild(instance: dg.DagsterInstance, *views: str) -> None:
@@ -61,7 +49,7 @@ def _materialize(
 
 def test_a_run_sends_only_the_views_rebuilt_since_the_last_one() -> None:
     instance = dg.DagsterInstance.ephemeral()
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
     _rebuild(instance, OCW, XPRO)
     assert _materialize(instance, client).success
     _rebuild(instance, OCW)
@@ -76,7 +64,7 @@ def test_a_run_sends_only_the_views_rebuilt_since_the_last_one() -> None:
 
 def test_a_run_with_nothing_rebuilt_sends_nothing() -> None:
     instance = dg.DagsterInstance.ephemeral()
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
     _rebuild(instance, OCW)
     assert _materialize(instance, client).success
 
@@ -86,7 +74,7 @@ def test_a_run_with_nothing_rebuilt_sends_nothing() -> None:
 
 def test_a_hand_run_can_name_every_view() -> None:
     instance = dg.DagsterInstance.ephemeral()
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
     config = {"ops": {OP: {"config": {"all_views": True}}}}
 
     assert _materialize(instance, client, config).success
@@ -95,16 +83,14 @@ def test_a_hand_run_can_name_every_view() -> None:
 
 def test_a_view_rebuilt_while_a_run_posts_goes_in_the_next_run() -> None:
     instance = dg.DagsterInstance.ephemeral()
-    sent: list[dict[str, Any]] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content))
-        if len(sent) == 1:
+    def rebuild_during_first_post(posts: int) -> None:
+        if posts == 1:
             _rebuild(instance, XPRO)
-        return httpx.Response(200, json=QUEUED)
 
-    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
-    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client, sent = learn_client(
+        httpx.Response(200, json=QUEUED), on_post=rebuild_during_first_post
+    )
     _rebuild(instance, OCW)
 
     assert _materialize(instance, client).success
@@ -115,17 +101,17 @@ def test_a_view_rebuilt_while_a_run_posts_goes_in_the_next_run() -> None:
 def test_a_failed_run_leaves_its_views_for_the_next() -> None:
     instance = dg.DagsterInstance.ephemeral()
     _rebuild(instance, OCW)
-    refusing, _ = _learn_client(httpx.Response(400, json={"views": ["bad"]}))
+    refusing, _ = learn_client(httpx.Response(400, json={"views": ["bad"]}))
     assert not _materialize(instance, refusing).success
 
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
     assert _materialize(instance, client).success
     assert sent == [{"views": [OCW]}]
 
 
 def test_a_rejected_notice_fails_once_with_learns_reason() -> None:
     instance = dg.DagsterInstance.ephemeral()
-    client, sent = _learn_client(
+    client, sent = learn_client(
         httpx.Response(400, json={"views": ["This list may not be empty."]})
     )
     _rebuild(instance, OCW)
@@ -206,7 +192,7 @@ def test_a_view_rebuilt_between_two_reads_goes_in_the_next_run(
         return storage_id
 
     monkeypatch.setattr(learn_warehouse_views, "_latest_storage_id", read_then_rebuild)
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
 
     assert _materialize(instance, client).success
     assert _materialize(instance, client).success
@@ -223,7 +209,25 @@ def test_a_hand_reported_materialization_does_not_stop_the_asset() -> None:
     instance.report_runless_asset_event(
         dg.AssetMaterialization(warehouse_views_rebuilt.key)
     )
-    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+    client, sent = learn_client(httpx.Response(200, json=QUEUED))
 
     assert _materialize(instance, client).success
     assert sent == [{"views": [OCW]}]
+
+
+def test_a_failed_run_is_not_rerun_by_run_retries() -> None:
+    """Step retries already cover a 5xx, so run retries would only multiply them.
+
+    The tag goes on before the POST whatever it returns; a 400 keeps the test
+    from sleeping through the step retries a 5xx gets.
+    """
+    instance = dg.DagsterInstance.ephemeral()
+    _rebuild(instance, OCW)
+    client, _ = learn_client(httpx.Response(400, json={"views": ["bad"]}))
+
+    result = _materialize(instance, client)
+
+    assert not result.success
+    run = instance.get_run_by_id(result.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
