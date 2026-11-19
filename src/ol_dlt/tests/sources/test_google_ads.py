@@ -199,6 +199,12 @@ def test_click_view_pulls_one_day_per_query_within_90_days() -> None:
         if "FROM click_view" in q
     ]
     assert days == [(TODAY - timedelta(days=d)).isoformat() for d in range(89, 0, -1)]
+    resource = source.resources["raw__google_ads__api__click_view"]
+    assert [
+        name
+        for name, column in resource.compute_table_schema()["columns"].items()
+        if column.get("primary_key")
+    ] == ["customer_id", "click_view__resource_name", "segments__click_type"]
 
 
 def test_repeated_fields_load_as_json_text() -> None:
