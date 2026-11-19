@@ -7,6 +7,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT Professional Education courses and programs
 - Open Learning Library courses
 
+It also tells MIT Learn when a warehouse view one of its Sync tasks pulls has
+been rebuilt.
+
 It also pushes the instructor onboarding user list, read from the warehouse, to
 the access-forge GitHub repository, each B2B organization's administration
 report to the B2B partners bucket, and a notice of each Canvas course export
@@ -51,6 +54,10 @@ from delivery.assets.canvas import canvas_course_exports, course_content_metadat
 from delivery.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
+)
+from delivery.assets.learn_warehouse_views import (
+    on_view_rebuilt,
+    warehouse_views_rebuilt,
 )
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mitpe import mitpe_webhook
@@ -118,6 +125,17 @@ oll_webhook, oll_delivery_sensor = deliver_after_upstream(
     oll_webhook,
     "oll_delivery_sensor",
     staging_cron=NON_AIRBYTE_STAGING_CRON,
+)
+
+# Tells Learn which of the views its warehouse Sync tasks read were rebuilt, so
+# it pulls them without waiting for the tasks' daily beat runs.
+warehouse_views_rebuilt, learn_warehouse_views_rebuilt_sensor = (
+    automate_where_registered(
+        warehouse_views_rebuilt,
+        "learn_warehouse_views_rebuilt_sensor",
+        condition=on_view_rebuilt(),
+        default_status=DefaultSensorStatus.STOPPED,
+    )
 )
 
 # Tells Learn about each Canvas course export as data_loading lands it. In the
@@ -231,6 +249,8 @@ defs = Definitions(
             mit_climate_webhook,
             mitpe_webhook,
             oll_webhook,
+            # Warehouse-pull notice to MIT Learn
+            warehouse_views_rebuilt,
             # Warehouse data pushed to the access-forge repository
             generate_instructor_onboarding_user_list,
             update_access_forge_repo,
@@ -258,6 +278,7 @@ defs = Definitions(
             mit_climate_delivery_sensor,
             mitpe_delivery_sensor,
             oll_delivery_sensor,
+            learn_warehouse_views_rebuilt_sensor,
             b2b_organization_list_sensor,
             canvas_course_export_webhook_sensor,
             *FAILURE_NOTIFICATION_SENSORS,

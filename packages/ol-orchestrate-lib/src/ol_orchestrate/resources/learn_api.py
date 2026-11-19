@@ -91,6 +91,23 @@ class MITLearnApiClient(BaseApiClient):
         """Send webhook notification for an OVS include_in_learn video."""
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
 
+    def notify_warehouse_views_rebuilt(self, views: list[str]) -> dict[str, Any]:
+        """Tell MIT Learn which of the warehouse views it pulls were rebuilt.
+
+        Learn queues a full run of each warehouse sync that reads one of the
+        views, so a change reaches it without waiting for the sync's daily beat
+        run. Each sync checks ETLSourceOwnership when it runs and does nothing
+        until the warehouse owns its source. A view no sync reads is skipped and
+        named in the response message, not rejected.
+
+        :param views: bare model names, e.g. ``integrations__learn__ocw_courses``
+        :returns: the decoded response
+        :rtype: dict[str, Any]
+        """
+        return self._post_signed_webhook(
+            "/api/v1/webhooks/warehouse_views_rebuilt/", {"views": views}
+        )
+
     def notify_learning_resources(
         self,
         resources: list[dict[str, Any]],
