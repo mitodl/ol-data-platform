@@ -6,6 +6,8 @@ from typing import Any
 
 import dagster as dg
 import httpx2 as httpx
+import pytest
+from delivery.assets import learn_warehouse_views
 from delivery.assets.learn_warehouse_views import (
     LEARN_WAREHOUSE_VIEWS,
     VIEW_KEYS,
@@ -17,6 +19,7 @@ from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 OCW = "integrations__learn__ocw_courses"
 XPRO = "integrations__learn__xpro_courses"
+LAST = LEARN_WAREHOUSE_VIEWS[-1]
 OP = "mit_learn_delivery__warehouse_views_rebuilt"
 QUEUED = {"status": "success", "message": "Queued 1 sync(s): SyncOCWCoursesTask"}
 
@@ -185,3 +188,42 @@ def test_a_view_rebuilt_just_after_a_request_is_requested_again() -> None:
         counts.append(requested)
 
     assert counts == [0, 1, 1, 0, 0]
+
+
+def test_a_view_rebuilt_between_two_reads_goes_in_the_next_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later view's newer id must not cover an earlier view read before it."""
+    instance = dg.DagsterInstance.ephemeral()
+    read = learn_warehouse_views._latest_storage_id
+    reads: list[dg.AssetKey] = []
+
+    def read_then_rebuild(instance: dg.DagsterInstance, key: dg.AssetKey) -> int:
+        storage_id = read(instance, key)
+        reads.append(key)
+        if len(reads) == 1:
+            _rebuild(instance, OCW, LAST)
+        return storage_id
+
+    monkeypatch.setattr(learn_warehouse_views, "_latest_storage_id", read_then_rebuild)
+    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+
+    assert _materialize(instance, client).success
+    assert _materialize(instance, client).success
+    # The first read was OCW's, before its rebuild, so the first run sends the
+    # later view only, and the second run has to send OCW.
+    assert next(iter(learn_warehouse_views.VIEW_KEYS.values())) == OCW
+    assert sent[0] == {"views": [LAST]}
+    assert OCW in sent[1]["views"]
+
+
+def test_a_hand_reported_materialization_does_not_stop_the_asset() -> None:
+    instance = dg.DagsterInstance.ephemeral()
+    _rebuild(instance, OCW)
+    instance.report_runless_asset_event(
+        dg.AssetMaterialization(warehouse_views_rebuilt.key)
+    )
+    client, sent = _learn_client(httpx.Response(200, json=QUEUED))
+
+    assert _materialize(instance, client).success
+    assert sent == [{"views": [OCW]}]

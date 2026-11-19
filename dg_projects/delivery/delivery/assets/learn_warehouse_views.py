@@ -115,19 +115,28 @@ def warehouse_views_rebuilt(
 ) -> MaterializeResult:
     """Send the views rebuilt since the last successful run read them.
 
-    Each run records, as ``sent_through``, the highest event-log storage id among
-    the view materializations it read, and the next run sends the views
-    materialized after it. Storage ids and not timestamps, so a rebuild landing
-    while this run POSTs is after the mark and goes in the next run, and clocks
-    on different pods don't matter. A failed run records nothing, so its views
-    go again in the next one. A run with nothing new sends nothing.
+    Each run records, as ``sent_through``, the event log's highest storage id from
+    just before it read the views, and the next run sends the views materialized
+    after it. Taken before the reads, so a view rebuilt between the reads of two
+    others is past the mark and goes in the next run (a view this run already
+    sent can go again, which only reruns a sync). Storage ids and not timestamps,
+    so clocks on different pods don't matter. A failed run records nothing, so
+    its views go again in the next one. A run with nothing new sends nothing.
+
+    A materialization with no ``sent_through`` (one reported by hand from the UI)
+    counts as 0, so the next run resends every view that has been built rather
+    than failing every run after it.
     """
     instance = context.instance
+    read_through = instance.event_log_storage.get_maximum_record_id() or 0
     previous = instance.fetch_materializations(context.asset_key, limit=1).records
-    sent_through = (
-        cast(int, previous[0].asset_materialization.metadata[SENT_THROUGH].value)
+    metadata = (
+        previous[0].asset_materialization.metadata
         if previous and previous[0].asset_materialization
-        else 0
+        else {}
+    )
+    sent_through = (
+        cast(int, metadata[SENT_THROUGH].value) if SENT_THROUGH in metadata else 0
     )
     latest = {
         view: _latest_storage_id(instance, key) for key, view in VIEW_KEYS.items()
@@ -138,7 +147,7 @@ def warehouse_views_rebuilt(
         views = [
             view for view, storage_id in latest.items() if storage_id > sent_through
         ]
-    read_through = max(sent_through, *latest.values())
+    read_through = max(read_through, sent_through)
 
     if not views:
         context.log.info("No view rebuilt since storage id %s", sent_through)
