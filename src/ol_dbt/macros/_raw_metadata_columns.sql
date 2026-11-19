@@ -49,7 +49,6 @@
         'raw__google_ads__api__conversion_action_snapshots': '_dlt_load_id',
         'raw__google_ads__api__customer_clients': '_dlt_load_id',
         'raw__google_ads__api__fetch_log': '_dlt_load_id',
-        'raw__google_ads__api__geographic_daily': '_dlt_load_id',
         'raw__google_ads__api__keyword_conversions_daily': '_dlt_load_id',
         'raw__google_ads__api__keyword_daily': '_dlt_load_id',
         'raw__google_ads__api__keyword_snapshots': '_dlt_load_id',

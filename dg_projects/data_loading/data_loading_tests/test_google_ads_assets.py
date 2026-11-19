@@ -15,6 +15,7 @@ class _FakeDlt:
         self.pipeline = pipeline
         self.windows = windows
         self.loads: list[str] = []
+        self.backfill_tables: list[set[str]] = []
 
     def run(self, *, dlt_source: Any, **_: Any) -> Any:
         tables = set(dlt_source.selected_resources)
@@ -25,6 +26,8 @@ class _FakeDlt:
             == "append"
         )
         fetched = (self.windows.pop(0) if self.windows else 0) if backfill else 0
+        if backfill:
+            self.backfill_tables.append(tables)
         self.loads.append("backfill" if backfill else ",".join(sorted(tables)))
         self.pipeline.last_trace = SimpleNamespace(
             last_normalize_info=SimpleNamespace(
@@ -37,23 +40,27 @@ class _FakeDlt:
         )
 
 
-def _run(monkeypatch: pytest.MonkeyPatch, windows: list[int]) -> list[str]:
+def _run(
+    monkeypatch: pytest.MonkeyPatch,
+    windows: list[int],
+    selected: tuple[str, ...] = (),
+) -> _FakeDlt:
     pipeline = SimpleNamespace(last_trace=None)
     monkeypatch.setattr(google_ads, "google_ads_pipeline", pipeline)
     dlt = _FakeDlt(pipeline, windows)
     context = SimpleNamespace(
-        is_subset=False,
-        selected_asset_keys=set(),
+        is_subset=bool(selected),
+        selected_asset_keys={assets._GOOGLE_ADS_KEYS[name] for name in selected},
         log=logging.getLogger("test_google_ads_assets"),
     )
     list(assets.google_ads_assets.op.compute_fn.decorated_fn(context, dlt))
-    return dlt.loads
+    return dlt
 
 
 def test_other_tables_then_backfill_then_lookback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    loads = _run(monkeypatch, [150, 150, 0])
+    loads = _run(monkeypatch, [150, 150, 0]).loads
 
     assert loads[0] == ",".join(sorted(assets._GOOGLE_ADS_OTHER_TABLES))
     assert loads[1:4] == ["backfill"] * 3
@@ -65,6 +72,17 @@ def test_an_undrained_backfill_skips_the_lookback(
 ) -> None:
     monkeypatch.setattr(assets, "_MAX_BATCHES_PER_RUN", 2)
 
-    loads = _run(monkeypatch, [150, 150, 150])
+    loads = _run(monkeypatch, [150, 150, 150]).loads
 
     assert loads[1:] == ["backfill", "backfill"]
+
+
+def test_a_subset_backfills_only_its_daily_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    landing = "raw__google_ads__api__landing_page_daily"
+
+    dlt = _run(monkeypatch, [150, 0], selected=(landing,))
+
+    assert dlt.backfill_tables == [{landing}, {landing}]
+    assert dlt.loads == ["backfill", "backfill", landing]

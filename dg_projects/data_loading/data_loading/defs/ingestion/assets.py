@@ -136,7 +136,6 @@ _GOOGLE_ADS_DAILY_TABLES = (
     "raw__google_ads__api__keyword_conversions_daily",
     "raw__google_ads__api__campaign_daily",
     "raw__google_ads__api__landing_page_daily",
-    "raw__google_ads__api__geographic_daily",
 )
 _GOOGLE_ADS_SOURCE = google_ads.build_source()
 _GOOGLE_ADS_TRANSLATOR = RawDataDltTranslator()
@@ -199,9 +198,9 @@ def google_ads_assets(
         backfill, batches, fetches = load_in_batches(
             context=context,
             dlt=dlt,
-            build_source=partial(
-                google_ads.build_source, backfill_windows=google_ads.BACKFILL_WINDOWS
-            ),
+            build_source=lambda: google_ads.build_source(
+                backfill_windows=google_ads.BACKFILL_WINDOWS
+            ).with_resources(*daily),
             pipeline=pipeline,
             resource_name=google_ads.FETCH_LOG_TABLE,
         )
@@ -447,8 +446,9 @@ def load_in_batches(
 ) -> tuple[list[Any], int, int]:
     """Run one dlt load per byte budget until the table's backlog is drained.
 
-    ``build_source`` returns a budgeted source for the one table. Returns the
-    last batch's materializations, how many batches ran, and the rows they
+    ``build_source`` returns a budgeted source, for one table or several whose
+    progress ``resource_name`` counts (Google Ads counts its fetch log). Returns
+    the last batch's materializations, how many batches ran, and the rows they
     loaded between them.
 
     A batch that normalizes zero rows means the cursor already covers every
