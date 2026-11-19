@@ -73,6 +73,7 @@ from ml.lib.warehouse import (
     read_table,
     require_rows,
     require_table,
+    table_updated_at,
     warehouse_database,
 )
 from ml.resources.learn_vectors import LearnVectorsResource, PointFetch
@@ -140,7 +141,12 @@ CONTENT_FILE_SOURCE_KEYS = sorted(
     {
         AssetKey([LAYER, relation])
         for source in CONTENT_FILE_SOURCES.values()
-        for relation in (source.files_relation, source.runs_relation)
+        for relation in (
+            source.files_relation,
+            source.runs_relation,
+            source.waiting_runs_relation,
+        )
+        if relation is not None
     },
     key=lambda key: key.to_user_string(),
 )
@@ -160,6 +166,43 @@ def partition_run(key: MultiPartitionKey) -> tuple[str, str]:
     return dimensions["etl_source"], dimensions["run"]
 
 
+def waiting_runs(etl_source: str) -> pl.LazyFrame:
+    """Return the runs of the source whose files its files model holds back.
+
+    :param etl_source: the source
+    :returns: ``run_readable_id`` rows
+    :rtype: pl.LazyFrame
+    """
+    relation = CONTENT_FILE_SOURCES[etl_source].waiting_runs_relation
+    if relation is None:
+        return pl.LazyFrame(schema={"run_readable_id": pl.String})
+    return (
+        require_table(LAYER, relation)
+        .filter(pl.col("etl_source") == etl_source)
+        .select("run_readable_id")
+    )
+
+
+def waiting_runs_are_current(etl_source: str) -> bool:
+    """Return whether the source's waiting-runs table is as new as its files table.
+
+    The two are separate tables, each replaced whole, and dbt builds the waiting
+    model after the files model. Between the two commits the files table can
+    already leave out a run the waiting table doesn't list yet, so a run missing
+    from the files table is only known to be gone once the waiting table is the
+    newer of the two.
+
+    :param etl_source: the source
+    :rtype: bool
+    """
+    source = CONTENT_FILE_SOURCES[etl_source]
+    if source.waiting_runs_relation is None:
+        return True
+    return table_updated_at(LAYER, source.waiting_runs_relation) >= table_updated_at(
+        LAYER, source.files_relation
+    )
+
+
 def content_file_text_versions(
     etl_source: str,
     run_readable_id: str | None = None,
@@ -174,7 +217,10 @@ def content_file_text_versions(
     run that is still in the runs model but has no files left, or no platform
     code, gets ``EMPTY_TEXT_VERSION``, so its partition is rebuilt with no rows
     rather than keeping the chunks of files that are gone or that Learn has no
-    resource for.
+    resource for. A run the files model holds back while it waits gets no
+    version at all: it is not observed, and keeps its chunks as Learn keeps its
+    content files. No run gets ``EMPTY_TEXT_VERSION`` while the waiting-runs
+    table is older than the files table (``waiting_runs_are_current``).
 
     :param etl_source: the source
     :param run_readable_id: one run, or every run of the source when omitted
@@ -241,8 +287,11 @@ def content_file_text_versions(
         .unique()
         .collect()
         .join(versions, on="run_readable_id", how="anti")
+        .join(waiting_runs(etl_source).collect(), on="run_readable_id", how="anti")
         .with_columns(pl.lit(EMPTY_TEXT_VERSION).alias("text_version"))
     )
+    if not waiting_runs_are_current(etl_source):
+        emptied = emptied.clear()
     return (
         pl.concat([versions, emptied])
         .select(
@@ -279,7 +328,10 @@ def learn_content_file_text(context: AssetExecutionContext) -> ObserveResult:
     versions = content_file_text_versions(etl_source, run, registered=[run])
     if versions.is_empty():
         runs_relation = CONTENT_FILE_SOURCES[etl_source].runs_relation
-        msg = f"{etl_source} {run} is not in {runs_relation}"
+        msg = (
+            f"{etl_source} {run} has no text version: it is not in {runs_relation}, "
+            "or its files are held back until they are ready"
+        )
         raise Failure(msg)
     return ObserveResult(
         asset_key=CONTENT_FILE_TEXT_KEY,
@@ -322,6 +374,17 @@ def content_file_embedding_chunks(
         etl_source=etl_source,
         run_readable_id=run,
     )
+    # Rebuilding a held-back run (after a chunker change, say) would empty it.
+    if files.is_empty() and (
+        run in waiting_runs(etl_source).collect()["run_readable_id"]
+        or not waiting_runs_are_current(etl_source)
+    ):
+        msg = (
+            f"{etl_source} {run} has no files in {source.files_relation} and may "
+            f"only be held back ({source.waiting_runs_relation}), so its chunks "
+            "are kept as they are"
+        )
+        raise Failure(msg)
     runs = (
         source.run_resources(require_table(LAYER, source.runs_relation))
         .filter(pl.col("run_id") == run)

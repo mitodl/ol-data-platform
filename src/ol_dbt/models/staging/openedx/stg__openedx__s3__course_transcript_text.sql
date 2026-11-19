@@ -1,23 +1,19 @@
-with source as (
-    {{ newest_course_file_rows(
-        source('ol_warehouse_raw_data', 'raw__openedx__s3__course_transcript_text'), extracted_at_column='extracted_at'
-    ) }}
-)
-
+{# The transcript rows of stg__openedx__s3__course_text_snapshots, which picks each
+   course's newest file. #}
 select
-    course_id                               as courserun_readable_id
-    , source_system                         as content_file_source_system
-    , file_path                             as content_file_path
-    -- Older failed rows have no file_extension; Path.suffix of the path.
-    , coalesce(
-        file_extension, lower({{ regexp_extract_or_null('file_path', "'\\.[^./]*$'") }})
-    )                                       as content_file_extension
-    , content_type                          as content_file_mime_type
-    , cast(size_bytes as bigint)            as content_file_size_bytes
-    , content                               as content_file_text
-    , extraction_status                     as content_file_extraction_status
-    , _file_modified_at                     as content_file_extracted_at
-from source
--- An empty snapshot loads as one marker row so it can become the newest file;
--- the marker itself is not a file.
-where file_path is not null
+    courserun_readable_id
+    , content_file_source_system
+    , content_file_path
+    , content_file_extension
+    , content_file_mime_type
+    , content_file_size_bytes
+    , content_file_text
+    , content_file_extraction_status
+    , content_file_extracted_at
+    , content_file_static_assets_version
+from {{ ref('stg__openedx__s3__course_text_snapshots') }}
+where
+    content_file_text_kind = 'transcript'
+    -- An empty snapshot loads as one marker row so it can become the newest file;
+    -- the marker itself is not a file.
+    and content_file_path is not null

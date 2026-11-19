@@ -99,6 +99,12 @@ models:
       path to it, or a self-paced run). Learn shows a file only while release_date
       is null or past, so a future-dated row stays here but is hidden in Learn until
       then.
+  - name: course_xml_version
+    description: str, the version of the export the run's files came from, the same
+      for every row of a run. integrations__learn__content_file_units carries it too,
+      so Learn can load a run's units only from the build its files came from (the
+      two tables are replaced in separate commits).
+    tests: [not_null]
 
 - name: integrations__learn__content_file_units
   description: >
@@ -156,7 +162,36 @@ models:
       keys; a key with no published ContentFile in Learn (e.g. a file with no text)
       is dropped by load_course_units.
     tests: [not_null]
+  - name: course_xml_version
+    description: str, the version of the export the run's units were built from, the
+      same for every row of a run. Learn loads the units only when it matches the
+      course_xml_version of the run's integrations__learn__content_files rows.
+    tests: [not_null]
 
+- name: integrations__learn__content_file_waiting_runs
+  description: >
+    One row per MITx Online or xPRO course run that has files but is left out of
+    integrations__learn__content_files until it is ready: its newest blocks haven't
+    been through the exclusions check, or its document or transcript text is from
+    another export than its blocks. The ml location's embedding sensor keeps such
+    a
+    run's chunks as they are, as Learn keeps a run it reads no rows for, instead of
+    rebuilding them empty.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id]
+  columns:
+  - name: etl_source
+    description: str, mitxonline or xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, xpro]
+  - name: run_readable_id
+    description: str, course run id, as in integrations__learn__content_files
+    tests: [not_null]
 - name: integrations__learn__ocw_content_files
   description: >
     One row per ContentFile of an OCW course run, for MIT Learn's

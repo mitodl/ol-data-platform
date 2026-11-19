@@ -1,3 +1,8 @@
+{# static_assets_version is newer than the raw table: dlt adds the column on the first load
+   of a file the archive asset wrote after it began recording the bundle version. #}
+{% set static_assets_version_exists = relation_has_column(
+    source("ol_warehouse_raw_data", "raw__openedx__s3__course_xml_blocks"), "static_assets_version"
+) %}
 with
     raw_source as (select * from {{ source("ol_warehouse_raw_data", "raw__openedx__s3__course_xml_blocks") }}),
     -- Raw appends one file per course version, so a block removed from a course
@@ -77,7 +82,11 @@ with
                 {{ element_at_array("split(_source_file, '/')", array_length("split(_source_file, '/')")) }},
                 '.json',
                 ''
-            ) as coursestructure_xml_archive_version
+            ) as coursestructure_xml_archive_version,
+            -- The data_version of the static asset bundle written from the same
+            -- export, which the document and transcript text record too.
+            {{ "static_assets_version" if static_assets_version_exists else "cast(null as varchar)" }}
+            as coursestructure_xml_static_assets_version
         from most_recent_source
     )
 

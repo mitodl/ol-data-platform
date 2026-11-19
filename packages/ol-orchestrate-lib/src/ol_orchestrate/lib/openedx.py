@@ -495,6 +495,11 @@ def _archive_root_name(tf: tarfile.TarFile) -> str:
     return archive_root.name
 
 
+# The static bundle lands as <course>/<data_version><STATIC_BUNDLE_SUFFIX>, and
+# the text assets read its version back from that name.
+STATIC_BUNDLE_SUFFIX = ".tar.gz"
+
+
 class CourseStaticAssetsBundle(BaseModel):
     """Bundle of non-XML static assets extracted from a course archive.
 

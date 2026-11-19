@@ -40,6 +40,7 @@ from ol_orchestrate.lib.failures import (
 )
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
+    STATIC_BUNDLE_SUFFIX,
     CourseExportOutcome,
     classify_course_export_state,
     course_export_task_id,
@@ -839,12 +840,40 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
         xml_blocks, static_bundle = process_course_xml_blocks(
             course_xml_path, source_system
         )
+        # Materialize non-XML static assets to S3. process_course_xml_blocks has
+        # already streamed them into a single tar archive per course; the
+        # data_version is a content hash of the static files themselves, so it
+        # only changes when the assets actually change. It goes before the
+        # blocks, which name it: blocks that land without their bundle would
+        # name a version no text asset can read.
+        static_assets_file = static_bundle.archive_path
+        temp_files.append(static_assets_file)
+        course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{source_system}/{context.partition_key}/{static_bundle.data_version}{STATIC_BUNDLE_SUFFIX}"  # noqa: E501
+        yield Output(
+            (static_assets_file, course_static_assets_object_key),
+            output_name="course_static_assets",
+            data_version=DataVersion(static_bundle.data_version),
+            metadata={
+                "course_id": context.partition_key,
+                "object_key": course_static_assets_object_key,
+                "asset_count": static_bundle.manifest["file_count"],
+            },
+        )
+
         course_xml_blocks_file = Path(
             NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
         )
         temp_files.append(course_xml_blocks_file)
         with jsonlines.open(course_xml_blocks_file, "w") as writer:
-            writer.write_all(block.model_dump() for block in xml_blocks)
+            # The text assets stamp the bundle version they read, so staging can
+            # tell their snapshots from an older export's.
+            writer.write_all(
+                {
+                    **block.model_dump(),
+                    "static_assets_version": static_bundle.data_version,
+                }
+                for block in xml_blocks
+            )
         course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{source_system}/{context.partition_key}/{data_version}.json"  # noqa: E501
         yield Output(
             (course_xml_blocks_file, course_xml_blocks_object_key),
@@ -854,24 +883,6 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
                 "course_id": context.partition_key,
                 "object_key": course_xml_blocks_object_key,
                 "block_count": len(xml_blocks),
-            },
-        )
-
-        # Materialize non-XML static assets to S3. process_course_xml_blocks has
-        # already streamed them into a single tar archive per course; the
-        # data_version is a content hash of the static files themselves, so it
-        # only changes when the assets actually change.
-        static_assets_file = static_bundle.archive_path
-        temp_files.append(static_assets_file)
-        course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{source_system}/{context.partition_key}/{static_bundle.data_version}.tar.gz"  # noqa: E501
-        yield Output(
-            (static_assets_file, course_static_assets_object_key),
-            output_name="course_static_assets",
-            data_version=DataVersion(static_bundle.data_version),
-            metadata={
-                "course_id": context.partition_key,
-                "object_key": course_static_assets_object_key,
-                "asset_count": static_bundle.manifest["file_count"],
             },
         )
 

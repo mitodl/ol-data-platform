@@ -48,6 +48,7 @@ select
     end as url
     , units.unit_order
     , units.unit_content_files as content_files
+    , block_versions.course_xml_version
 from units
 inner join block_versions
     on units.courserun_readable_id = block_versions.courserun_readable_id

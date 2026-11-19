@@ -70,6 +70,9 @@ with olx_documents as (
     where
         source_system in ('mitxonline', 'xpro')
         and is_exclusion_checked
+        -- a run waits until its text is from its blocks' export, whole, so
+        -- Learn doesn't prune the files of a snapshot still being extracted
+        and is_text_current
         and not is_excluded
         and file_extension in ('{{ valid_text_file_types | join("', '") }}')
         and source_path not in ('{{ non_content_olx_files | join("', '") }}')
@@ -141,5 +144,6 @@ select
     , true as published
     , extracted_at as last_modified
     , key_release_date as release_date
+    , course_xml_version
 from content_files
 where key_rank = 1

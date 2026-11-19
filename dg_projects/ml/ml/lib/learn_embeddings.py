@@ -67,12 +67,16 @@ class ContentFileSource:
         ``readable_id`` give each run's resource
     :param source_path_column: the files model's column with each file's path
         in the source, which keys its document
+    :param waiting_runs_relation: the integrations model listing the runs with
+        files that ``files_relation`` holds back until they are ready, or
+        ``None`` when it holds back none
     """
 
     platform_code: str | None
     files_relation: str
     runs_relation: str
     source_path_column: str
+    waiting_runs_relation: str | None = None
 
     @property
     def file_columns(self) -> tuple[str, ...]:
@@ -118,6 +122,7 @@ CONTENT_FILE_SOURCES = {
         files_relation="integrations__learn__content_files",
         runs_relation="integrations__learn__mitxonline_runs",
         source_path_column="source_path",
+        waiting_runs_relation="integrations__learn__content_file_waiting_runs",
     ),
     "ocw": ContentFileSource(
         platform_code="ocw",
@@ -130,6 +135,7 @@ CONTENT_FILE_SOURCES = {
         files_relation="integrations__learn__content_files",
         runs_relation="integrations__learn__xpro_runs",
         source_path_column="source_path",
+        waiting_runs_relation="integrations__learn__content_file_waiting_runs",
     ),
 }
 
