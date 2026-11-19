@@ -14,7 +14,9 @@ sources need it.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, cast
 
@@ -22,7 +24,9 @@ from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
+from ol_dbt_cli.lib.airbyte_archive import archive_tables
 from ol_dbt_cli.lib.cursor_audit import Verdict, audit, select_units
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, columns_by_table
 from ol_dbt_cli.lib.inventory import (
@@ -360,6 +364,82 @@ def history(
         err_console.print(f"[red]stale: {escape(str(path))}")
     err_console.print("[bold red]Regenerate with `ol-dbt inventory history --write`.")
     sys.exit(1)
+
+
+@inventory_app.command
+def archive(
+    unit: Annotated[str, Parameter(help="The unit to archive, as deployment/layer, e.g. mitxonline/app_postgres.")],
+    *,
+    target: Annotated[
+        str,
+        Parameter(help="dbt target: `production` for a cutover, `dev_production` or `dev_qa` to rehearse."),
+    ],
+    schema_suffix: Annotated[
+        str | None,
+        Parameter(help="schema_suffix var for a dev target, which then writes <schema>_<suffix>_history."),
+    ] = None,
+    execute: Annotated[
+        bool,
+        Parameter(help="Copy the tables. Without it, list what would be copied and write nothing."),
+    ] = False,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+) -> None:
+    """Copy a unit's Airbyte raw tables into the history schema before its dlt cutover.
+
+    Step 3 of a production cutover (INGESTION_INVENTORY_SPEC.md §10.4): run it
+    after every production Airbyte connection of the unit is paused and before
+    the change adding `production` to its dlt environments merges. Each table a
+    production connection loads is copied to
+    `<history schema>.airbyte_archive__<raw table>` and its row count checked
+    against the source. A table already archived is only checked, so a failed
+    run can be repeated.
+    """
+    units = {loaded.key: loaded for loaded in load_units(inventory_dir)}
+    if unit not in units:
+        err_console.print(f"[bold red]No unit {escape(unit)} under {escape(str(inventory_dir))}.")
+        sys.exit(1)
+    try:
+        tables = archive_tables(units[unit])
+    except RenderError as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
+    if not tables:
+        console.print(
+            f"{escape(unit)}'s dlt source appends to its Airbyte tables, which stay the record. Nothing to archive."
+        )
+        return
+
+    dbt_dir = get_repo_root(inventory_dir if inventory_dir.exists() else Path.cwd()) / "src" / "ol_dbt"
+    args = {"tables": [table.as_arg() for table in tables], "execute_archive": execute}
+    command = [
+        dbt_executable(),
+        "run-operation",
+        "archive_airbyte_raw_tables",
+        "--args",
+        json.dumps(args),
+        "--target",
+        target,
+        "--project-dir",
+        str(dbt_dir),
+        "--profiles-dir",
+        str(dbt_dir),
+    ]
+    if schema_suffix:
+        command.extend(["--vars", json.dumps({"schema_suffix": schema_suffix})])
+    result = subprocess.run(command, cwd=dbt_dir, check=False)  # noqa: S603
+    if result.returncode:
+        sys.exit(result.returncode)
+    if execute and target == "production":
+        archived_at = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%MZ")
+        console.print(
+            "Record the archive in the unit's history.markers:\n"
+            f"  - at: {archived_at}\n"
+            "    kind: airbyte_archive\n"
+            f"    note: {len(tables)} Airbyte raw tables copied to airbyte_archive__* before the dlt cutover."
+        )
 
 
 RAW_SOURCE_NAME = "ol_warehouse_raw_data"
