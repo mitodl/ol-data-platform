@@ -88,6 +88,21 @@ tables:
       courserun_start_on: '2026-08-17T00:00:00.000000Z'
       courserun_end_on: '2026-11-30T00:00:00.000000Z'
       is_current: true
+  dim_course:
+    columns:
+      course_pk: string
+      course_readable_id: string
+      course_title: string
+      is_current: boolean
+    rows:
+    - course_pk: fixture-course-1
+      course_readable_id: course-v1:MITxT+FIX.101x
+      course_title: Fixture Foundations
+      is_current: true
+    - course_pk: fixture-course-2
+      course_readable_id: course-v1:MITxT+FIX.102x
+      course_title: Fixture Applications
+      is_current: true
   dim_program:
     columns:
       program_pk: string

@@ -31,6 +31,10 @@ Workflow::
     # Your own copy of the QA warehouse in ol_data_lake_qa
     ol-dbt starrocks run --target starrocks_dev_qa --vars '{schema_suffix: alice}' --select +my_model
 
+    # The same in ol_data_lake_production
+    ol-dbt starrocks run --env production --target starrocks_dev_production \
+        --vars '{schema_suffix: alice}' --select +my_model
+
     # A PR build in the CI lake: no deferral, so select the parents too
     ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select +my_model
 
@@ -174,6 +178,11 @@ _ENVS: dict[str, dict[str, Any]] = {
 }
 
 
+# The default_catalog profiles that log in with the credential fetched from Vault,
+# so --vault-role decides what they can do. starrocks_qa logs in with OIDC.
+_VAULT_DEFAULT_CATALOG_TARGETS = frozenset({"starrocks_production", "starrocks_qa_vault"})
+
+
 # Glue's database name rule as Iceberg's GlueCatalog enforces it. The same check
 # generate_schema_name.sql makes on every layer schema.
 _GLUE_DATABASE_NAME = re.compile(r"[a-z0-9_]{1,252}")
@@ -213,6 +222,9 @@ _LAKE_TARGETS: dict[str, _LakeTarget] = {
     "starrocks_production_lake": _LakeTarget(
         "production", "ol_data_lake_production", "ol_warehouse_production", "none"
     ),
+    "starrocks_dev_production": _LakeTarget(
+        "production", "ol_data_lake_production", "ol_warehouse_production", "required"
+    ),
     # CI builds the parents of what it builds from the fixtures in its own raw
     # schema rather than reading QA's tables through ol_data_lake_ci.
     "ci": _LakeTarget("ci", "ol_data_lake_ci", "ol_warehouse_ci", "optional", can_defer=False),
@@ -223,13 +235,30 @@ def _profile_schema(target: str, lake: _LakeTarget, cli_vars: dict[str, Any]) ->
     """Return the schema the *target* profile renders for these ``--vars``.
 
     :raises SystemExit: when the profile needs a ``schema_suffix`` and none was
-        passed, or the result is not a name Iceberg can load from Glue.
+        passed, ignores one that was, or the result is not a name Iceberg can
+        load from Glue.
     """
     suffix = cli_vars.get("schema_suffix")
-    if lake.suffix == "required" and not suffix:
+    if lake.suffix == "required" and suffix in (None, ""):
         err_console.print(f"[red]--target {target} needs a schema suffix:[/] pass --vars '{{schema_suffix: <name>}}'.")
         sys.exit(1)
-    schema = f"{lake.schema}_{suffix}" if suffix and lake.suffix != "none" else lake.schema
+    # dbt would accept the var and build the canonical schemas anyway, which is
+    # the opposite of what passing one asks for. YAML can read the value as a
+    # falsy one (`0`), so what counts is that it was passed.
+    if lake.suffix == "none" and "schema_suffix" in cli_vars:
+        suffixed = [
+            name for name, other in _LAKE_TARGETS.items() if other.catalog == lake.catalog and other.suffix != "none"
+        ]
+        err_console.print(
+            f"[red]--target {target} ignores schema_suffix:[/] it builds the canonical "
+            f"{lake.catalog}.{lake.schema}_<layer> schemas. For your own copy use --target "
+            f"{' or '.join(suffixed)}."
+        )
+        sys.exit(1)
+    # The required profiles format any value into the name. The ci profile
+    # appends it only when Jinja reads it as true, which matches Python here.
+    appends = lake.suffix == "required" or (lake.suffix == "optional" and bool(suffix))
+    schema = f"{lake.schema}_{suffix}" if appends else lake.schema
     if not _GLUE_DATABASE_NAME.fullmatch(schema):
         err_console.print(
             f"[red]Schema {schema!r} is not one Iceberg can load from Glue:[/] "
@@ -237,6 +266,44 @@ def _profile_schema(target: str, lake: _LakeTarget, cli_vars: dict[str, Any]) ->
         )
         sys.exit(1)
     return schema
+
+
+def _layer_schemas(dbt_dir: Path) -> set[str]:
+    """Return the custom schemas dbt_project.yml gives its resources, the ``<layer>`` of ``<schema>_<layer>``."""
+    found: set[str] = set()
+
+    def walk(config: dict[str, Any]) -> None:
+        for key, value in config.items():
+            if key == "+schema":
+                found.add(value)
+            elif isinstance(value, dict):
+                walk(value)
+
+    project = yaml.safe_load((dbt_dir / "dbt_project.yml").read_text())
+    for resource_type in ("models", "seeds", "snapshots"):
+        walk(project.get(resource_type, {}))
+    return found
+
+
+def _refuse_canonical_schemas(target: str, lake: _LakeTarget, schema: str, dbt_dir: Path) -> None:
+    """Exit when a suffixed *schema* would write one of the catalog's canonical schemas.
+
+    A suffix named after a layer collides: ``dimensional`` makes the profile
+    schema, where seeds land, ``ol_warehouse_production_dimensional``, and
+    ``raw`` makes it the schema the loaders write.
+
+    :raises SystemExit: when the profile schema or one of its layer schemas is a
+        canonical layer schema or the raw schema.
+    """
+    layers = _layer_schemas(dbt_dir)
+    canonical = {f"{lake.schema}_{layer}" for layer in layers | {"raw"}}
+    written = {schema} | {f"{schema}_{layer}" for layer in layers}
+    if clashes := sorted(written & canonical):
+        err_console.print(
+            f"[red]--target {target} would write the canonical {', '.join(clashes)} in {lake.catalog}:[/] "
+            "pick a schema_suffix that is not a layer name, e.g. your username."
+        )
+        sys.exit(1)
 
 
 def _ensure_profile_schema(lake: _LakeTarget, schema: str, host: str, dbt_dir: Path, cli_vars: dict[str, Any]) -> None:
@@ -495,6 +562,16 @@ def run(  # noqa: PLR0913
             show_default=False,
         ),
     ] = None,
+    allow_canonical_writes: Annotated[
+        bool,
+        Parameter(
+            name="--allow-canonical-writes",
+            help="Let --env production write its canonical schemas: the lake layer schemas "
+            "(starrocks_production_lake) or the default_catalog b2b_analytics views. Without it "
+            "those builds are refused. For the lake, build your own copy with "
+            "starrocks_dev_production. For the views, --vault-role readonly only reads.",
+        ),
+    ] = False,
 ) -> None:
     """Run dbt against StarRocks with Vault-issued credentials.
 
@@ -554,7 +631,33 @@ def run(  # noqa: PLR0913
         sys.exit(1)
     # dbt reads --vars as YAML too.
     cli_vars: dict[str, Any] = (yaml.safe_load(vars) or {}) if vars else {}
-    lake_schema = _profile_schema(effective_target, lake, cli_vars) if lake is not None else None
+    lake_schema = None
+    if lake is not None:
+        lake_schema = _profile_schema(effective_target, lake, cli_vars)
+        if lake_schema != lake.schema:
+            _refuse_canonical_schemas(effective_target, lake, lake_schema, _find_dbt_dir(project_dir))
+    # The canonical production layer schemas are the ones the production Trino
+    # build writes until the cutover (see profiles.yml).
+    if lake is not None and lake.env == "production" and lake.suffix == "none" and not allow_canonical_writes:
+        err_console.print(
+            f"[red]--target {effective_target} writes the canonical {lake.catalog}.{lake_schema}_<layer> "
+            "schemas.[/] Build your own copy with --target starrocks_dev_production "
+            "--vars '{schema_suffix: <name>}', or pass --allow-canonical-writes."
+        )
+        sys.exit(1)
+    # The default_catalog targets write the b2b_analytics materialized views that
+    # ol-analytics-api serves, and a build recreates each one empty until its next
+    # refresh. Only a readonly role can't write them, and only the profiles that
+    # log in with the Vault credential run as that role (starrocks_qa uses its own
+    # OIDC identity). CI's views serve no production consumer, so --env ci
+    # isn't guarded.
+    reads_only = vault_role == "readonly" and effective_target in _VAULT_DEFAULT_CATALOG_TARGETS
+    if env == "production" and lake is None and not reads_only and not allow_canonical_writes:
+        err_console.print(
+            f"[red]--target {effective_target} writes the production default_catalog schemas "
+            "(b2b_analytics).[/] Pass --vault-role readonly to only read, or --allow-canonical-writes."
+        )
+        sys.exit(1)
     # substructure/starrocks grants `app` only USAGE on a lake catalog and DML on
     # its tables. Building one takes CREATE DATABASE and CREATE TABLE.
     if vault_role is None:

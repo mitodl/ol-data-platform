@@ -50,7 +50,7 @@ The `entity` binding says which asset the contract is for:
 | `schema` types, all bindings | `ol-dbt contracts sync` / `validate` only | same as above |
 | `semantics` | OpenMetadata | same as above |
 | `sla` shape | `ol-dbt validate --only data_contract` (dbt PR CI) | every PR, before merge |
-| `sla`, `dbt_model` bindings | the asset's Dagster freshness check (lakehouse code location) | hourly, by `dbt_layer_freshness_sensor` |
+| `sla`, `dbt_model` bindings | the asset's Dagster freshness policy (lakehouse code location) | every 30 seconds, by the Dagster freshness daemon |
 
 OpenMetadata 2.0.5 reports a retyped column in `typeMismatchFields` but doesn't
 count it as a failure, so the contract still shows Success in OpenMetadata
@@ -58,11 +58,17 @@ count it as a failure, so the contract still shows Success in OpenMetadata
 contracts` commands fail on it; OpenMetadata's own status and alerts won't.
 
 OpenMetadata 2.0.5 stores `sla` but never evaluates it, so for a `dbt_model`
-contract the lakehouse code location builds the model's Dagster freshness check
-from it: the check fails once the table's last update is older than
+contract the lakehouse code location builds the model's Dagster freshness policy
+from it: the policy fails once the table's last update is older than
 `refreshFrequency` plus `maxLatency` (a month counts as 31 days, a year as 366).
-That check replaces the 26-hour default the dimensional, mart and reporting
+That policy replaces the 26-hour default the dimensional, mart and reporting
 groups otherwise get, and a contracted model in any other group gets one too.
+`freshness_failure_sensor` posts each model that turns FAIL to Slack, and
+`freshness_openmetadata_sensor` writes each state change to the table's
+`dagster_freshness_check` test case in OpenMetadata. A change on a table
+OpenMetadata hasn't ingested yet is skipped, so `freshness_openmetadata_reconcile_daily`
+creates the test case, with the current state, for each covered table still
+missing one.
 A `dbt_model` contract that sets `maxLatency` must also set `refreshFrequency`,
 since the latency is grace on it. `sla` on `dbt_source` and `fqn` contracts is
 recorded in OpenMetadata only, so either field may stand alone there.

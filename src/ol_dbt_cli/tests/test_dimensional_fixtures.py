@@ -234,6 +234,23 @@ def test_contract_member_enrollment_lists_current_members_and_hides_unshared_one
     assert {user for user, _, _ in rows()} == {f"fixture-user-{n}" for n in (2, 3, 4, 5)}
 
 
+def test_contract_runs_and_member_enrollments_name_their_course() -> None:
+    """Each run row carries its course, which the Learners page groups runs by (mitodl/hq#14464)."""
+    db = _duckdb_with(resolve_parameters(parse_dimensional_fixture(B2B_FIXTURE), B2B_VALUES))
+    views = _rendered_b2b_views()
+    expected = {
+        ("fixture-run-1", "course-v1:MITxT+FIX.101x", "Fixture Foundations"),
+        ("fixture-run-2", "course-v1:MITxT+FIX.102x", "Fixture Applications"),
+    }
+
+    for view in ("mv_b2b_contract_courserun", "mv_b2b_contract_member_enrollment"):
+        courses = db.execute(
+            f"select distinct courserun_pk, course_readable_id, course_title from ({views[view]})"  # noqa: S608
+            " where courserun_pk is not null"
+        ).fetchall()
+        assert set(courses) == expected, view
+
+
 class _Cursor:
     def __init__(self, statements: list[tuple[str, Any]]) -> None:
         self.statements = statements

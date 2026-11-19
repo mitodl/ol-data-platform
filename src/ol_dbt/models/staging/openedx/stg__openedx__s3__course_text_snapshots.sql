@@ -22,7 +22,7 @@
         , source_system                         as content_file_source_system
         , '{{ text_kind }}'                     as content_file_text_kind
         , file_path                             as content_file_path
-        -- A failed extraction row has no file_extension; Path.suffix of the path.
+        -- Older failed rows have no file_extension; Path.suffix of the path.
         , coalesce(
             file_extension, lower({{ regexp_extract_or_null('file_path', "'\\.[^./]*$'") }})
         )                                       as content_file_extension

@@ -8,7 +8,14 @@ from typing import Any
 
 import pytest
 import sentry_sdk
-from dagster import AssetCheckSeverity, DagsterInstance, MetadataValue, RetryPolicy
+from dagster import (
+    AssetCheckSeverity,
+    AssetKey,
+    DagsterEventType,
+    DagsterInstance,
+    MetadataValue,
+    RetryPolicy,
+)
 from dagster._core.events import JobFailureData, RunFailureReason
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failed_partitions import (
@@ -31,16 +38,21 @@ from ol_orchestrate.sensors.failure_notification import (
     asset_check_failure_sensor,
     capture_run_failure_to_sentry,
     collect_new_check_failures,
+    collect_new_freshness_failures,
     dagster_url,
     error_message,
     failed_on_its_steps,
     failure_to_report,
+    first_freshness_cursor,
     format_check_metadata,
+    freshness_failure_message,
+    freshness_failure_sensor,
     get_exception,
     is_an_interrupted_worker,
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
     latest_check_evaluation_cursor,
+    latest_event_cursor,
     record_announcement,
     repeats_to_announce,
     sentry_failure_detail,
@@ -1381,6 +1393,7 @@ def test_sensors_are_defined_without_vault_or_sentry() -> None:
     """Regression: the sensor used to vanish if Vault was unreachable at import."""
     assert sorted(sensor.name for sensor in FAILURE_NOTIFICATION_SENSORS) == [
         "asset_check_failure_sensor",
+        "freshness_failure_sensor",
         "run_failure_notification_sensor",
     ]
 
@@ -1925,3 +1938,205 @@ def test_asset_check_failure_message_caps_the_composed_detail_text() -> None:
 
     detail_block = next(b for b in blocks if b["type"] == "section")
     assert len(detail_block["text"]["text"]) <= MAX_SLACK_TEXT_LENGTH
+
+
+# ── Freshness failures ────────────────────────────────────────────────────────
+
+
+def _freshness_change(path: list[str], new: str, previous: str) -> Any:
+    from dagster._core.definitions.freshness import (  # noqa: PLC0415
+        FreshnessState,
+        FreshnessStateChange,
+    )
+
+    return FreshnessStateChange(
+        key=AssetKey(path),
+        new_state=FreshnessState(new),
+        previous_state=FreshnessState(previous),
+        state_change_timestamp=1_760_000_000.0,
+    )
+
+
+def test_freshness_failure_sensor_posts_each_asset_that_turns_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read from a real event log, so the runless FRESHNESS_STATE_CHANGE events
+    the freshness daemon writes are what the sensor queries.
+    """
+    from dagster import build_sensor_context  # noqa: PLC0415
+    from ol_orchestrate.sensors import failure_notification  # noqa: PLC0415
+
+    posted: list[dict[str, Any]] = []
+
+    class _Slack:
+        def __init__(self, **_: Any) -> None: ...
+
+        def chat_postMessage(self, **kwargs: Any) -> None:  # noqa: N802
+            posted.append(kwargs)
+
+    monkeypatch.setattr(failure_notification, "WebClient", _Slack)
+    monkeypatch.setattr(failure_notification, "get_slack_token", lambda: "token")
+    # A lookback into the future puts "before" outside it, as a change from
+    # before the lookback window would be.
+    monkeypatch.setattr(
+        failure_notification, "FRESHNESS_FIRST_TICK_LOOKBACK_SECONDS", -3600
+    )
+
+    with DagsterInstance.ephemeral() as instance:
+        instance.report_runless_asset_event(
+            _freshness_change(["mart", "before"], "FAIL", "PASS")
+        )
+        context = build_sensor_context(instance=instance)
+        freshness_failure_sensor(context)
+        initialized = context.cursor
+        assert initialized not in {None, "-1"}
+        assert posted == []
+
+        for change in [
+            _freshness_change(["mart", "stale"], "FAIL", "PASS"),
+            _freshness_change(["mart", "recovered"], "PASS", "FAIL"),
+            _freshness_change(["reporting", "warned"], "FAIL", "WARN"),
+        ]:
+            instance.report_runless_asset_event(change)
+        context = build_sensor_context(instance=instance, cursor=initialized)
+        freshness_failure_sensor(context)
+
+        assert len(posted) == 1
+        text = _block_text(posted[0]["blocks"])
+        # Older than the lookback: history, not news.
+        assert "mart/before" not in text
+        assert "mart/stale" in text
+        assert "reporting/warned" in text
+        assert "(was WARN)" in text
+        assert "mart/recovered" not in text
+        assert "Last materialized: never" in text
+
+        context = build_sensor_context(instance=instance, cursor=context.cursor)
+        freshness_failure_sensor(context)
+        assert len(posted) == 1
+
+
+def test_a_failure_written_before_the_first_tick_is_still_announced() -> None:
+    """The daemon writes a model's first state as soon as lakehouse loads with
+    its policy, which can be before delivery's sensor first ticks, and it never
+    writes that state again.
+    """
+    with DagsterInstance.ephemeral() as instance:
+        instance.report_runless_asset_event(
+            _freshness_change(["mart", "stale_at_deploy"], "FAIL", "UNKNOWN")
+        )
+
+        cursor = first_freshness_cursor(instance)
+        failures, _ = collect_new_freshness_failures(instance, int(cursor))
+
+    assert cursor == "-1"
+    assert [
+        r.event_log_entry.dagster_event.event_specific_data.key.path for r in failures
+    ] == [["mart", "stale_at_deploy"]]
+
+
+def test_a_failure_that_recovered_in_the_same_batch_is_not_announced() -> None:
+    records = [
+        _record(1, _freshness_change(["mart", "recovered"], "FAIL", "PASS")),
+        _record(2, _freshness_change(["mart", "still_stale"], "FAIL", "PASS")),
+        _record(3, _freshness_change(["mart", "recovered"], "PASS", "FAIL")),
+    ]
+
+    failures, next_cursor = collect_new_freshness_failures(
+        _instance_returning(records, {}), 0
+    )
+
+    assert [f.storage_id for f in failures] == [2]
+    assert next_cursor == "3"
+
+
+@pytest.mark.parametrize("split_across_ticks", [False, True])
+def test_a_failure_back_from_a_policy_reload_is_not_announced_again(
+    split_across_ticks: bool,  # noqa: FBT001
+) -> None:
+    """Production sequence on every lakehouse reload for dim_concept, which the
+    ml location also references: FAIL -> NOT_APPLICABLE, then 30 seconds later
+    NOT_APPLICABLE -> FAIL. The two can land in one tick's batch or in two, and
+    so can the change that put the asset into FAIL in the first place.
+    """
+    with DagsterInstance.ephemeral() as instance:
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "FAIL", "PASS"),
+            _freshness_change(["dimensional", "was_passing"], "PASS", "UNKNOWN"),
+        ]:
+            instance.report_runless_asset_event(change)
+        cursor = latest_event_cursor(instance, DagsterEventType.FRESHNESS_STATE_CHANGE)
+
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "NOT_APPLICABLE", "FAIL"),
+            _freshness_change(["dimensional", "was_passing"], "NOT_APPLICABLE", "PASS"),
+            # Started failing within the tick before the reload: news once.
+            _freshness_change(["dimensional", "failed_just_before"], "FAIL", "PASS"),
+            _freshness_change(
+                ["dimensional", "failed_just_before"], "NOT_APPLICABLE", "FAIL"
+            ),
+        ]:
+            instance.report_runless_asset_event(change)
+        announced = []
+        if split_across_ticks:
+            failures, next_cursor = collect_new_freshness_failures(
+                instance, int(cursor)
+            )
+            announced += failures
+            assert next_cursor is not None
+            cursor = next_cursor
+        for change in [
+            _freshness_change(["dimensional", "flapped"], "FAIL", "NOT_APPLICABLE"),
+            # Passing before the reload, failing after it: news.
+            _freshness_change(["dimensional", "was_passing"], "FAIL", "NOT_APPLICABLE"),
+            # A policy new in this reload that starts out failing: news.
+            _freshness_change(["dimensional", "new_policy"], "FAIL", "NOT_APPLICABLE"),
+            _freshness_change(
+                ["dimensional", "failed_just_before"], "FAIL", "NOT_APPLICABLE"
+            ),
+        ]:
+            instance.report_runless_asset_event(change)
+        failures, _ = collect_new_freshness_failures(instance, int(cursor))
+        announced += failures
+
+    assert [
+        r.event_log_entry.dagster_event.event_specific_data.key.path[-1]
+        for r in announced
+    ] == ["failed_just_before", "was_passing", "new_policy"]
+
+
+def test_freshness_failure_message_links_each_asset() -> None:
+    change = _freshness_change(["mart", "a b"], "FAIL", "PASS")
+
+    blocks = freshness_failure_message([(change, 0.0)])
+
+    detail = next(b for b in blocks if b["type"] == "section")
+    assert detail["accessory"]["url"] == f"{dagster_url}/assets/mart/a%20b"
+    assert "1970-01-01 00:00 UTC" in detail["text"]["text"]
+
+
+def test_collect_new_freshness_failures_caps_one_message() -> None:
+    backlog = [
+        _record(
+            storage_id, _freshness_change(["mart", str(storage_id)], "FAIL", "PASS")
+        )
+        for storage_id in range(1, MAX_FAILURES_PER_MESSAGE + 10)
+    ]
+
+    failures, next_cursor = collect_new_freshness_failures(
+        _instance_returning(backlog, {}), 0
+    )
+
+    assert len(failures) == MAX_FAILURES_PER_MESSAGE
+    assert next_cursor == str(MAX_FAILURES_PER_MESSAGE)
+    assert (
+        len(
+            freshness_failure_message(
+                [
+                    (r.event_log_entry.dagster_event.event_specific_data, None)
+                    for r in failures
+                ]
+            )
+        )
+        <= 50
+    )

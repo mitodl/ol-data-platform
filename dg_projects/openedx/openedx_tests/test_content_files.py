@@ -209,6 +209,35 @@ def test_failed_extraction_is_recorded_not_dropped():
     assert [r["size_bytes"] for r in rows] == [4, 9]
 
 
+def test_every_row_status_has_the_same_keys():
+    """Every row status carries the same keys, file_extension included."""
+
+    def by_path(_file_bytes, content_type):
+        if content_type == "application/pdf":
+            msg = "Tika exploded"
+            raise ValueError(msg)
+        return "" if content_type == "text/plain" else "text"
+
+    rows, _ = rows_for(
+        [
+            ("static/broken.pdf", b"junk"),
+            ("static/blank.txt", b"   "),
+            ("about/overview.html", b""),
+            ("static/page.html", b"<p>hi</p>"),
+        ],
+        extract=by_path,
+    )
+
+    assert [r["extraction_status"] for r in rows] == [
+        "failed",
+        "empty",
+        "empty",
+        "extracted",
+    ]
+    assert len({frozenset(row) for row in rows}) == 1
+    assert [r["file_extension"] for r in rows] == [".pdf", ".txt", ".html", ".html"]
+
+
 def test_empty_extraction_is_recorded_not_dropped():
     """A scanned PDF yielding no text is recorded, so the absence is visible.
 

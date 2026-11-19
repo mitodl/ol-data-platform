@@ -25,6 +25,10 @@
 -- MIT Learn keeps a learner out of the contract's courses until they consent
 -- (ContractContent.tsx, behind the B2BDataConsent flag), so a member who declined has
 -- no enrollment and is listed as not enrolled.
+-- course_readable_id groups a learner's runs of one course (mitodl/hq#14464). The view
+-- stays per run: the learner Overview picks a course's run by whether it is open today,
+-- which this nightly view would freeze, so the reader picks it, as with
+-- needs_attention_since.
 -- Built from the sources rather than from mv_b2b_learner_enrollment: the refresh asset
 -- refreshes MVs in name order, which would refresh this one first.
 with activity as (
@@ -69,6 +73,8 @@ enrollments as (
         cr.courserun_title,
         cr.courserun_start_on,
         cr.courserun_end_on,
+        co.course_readable_id,
+        co.course_title,
         p.enrollment_created_on,
         p.enrollment_is_active,
         p.enrollment_mode,
@@ -88,6 +94,10 @@ enrollments as (
     from {{ source('dimensional', 'afact_learner_courserun_progress') }} p
     join {{ source('dimensional', 'dim_course_run') }} cr
         on p.courserun_fk = cr.courserun_pk
+    -- course_pk is unique among current rows, so the join keeps the view's grain.
+    left join {{ source('dimensional', 'dim_course') }} co
+        on cr.course_fk = co.course_pk
+        and co.is_current = true
     left join activity a
         on p.user_fk = a.user_fk and p.courserun_fk = a.courserun_fk
     where p.enrollment_is_active = true
@@ -104,6 +114,8 @@ select
     e.courserun_title,
     e.courserun_start_on,
     e.courserun_end_on,
+    e.course_readable_id,
+    e.course_title,
     u.user_pk,
     u.user_global_id,
     u.email,

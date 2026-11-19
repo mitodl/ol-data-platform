@@ -3,16 +3,20 @@
 import logging
 import math
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import httpx2 as httpx
 import pytest
 from dagster import AssetCheckEvaluation, AssetCheckSeverity, AssetKey
+from dagster._core.definitions.freshness import FreshnessState, FreshnessStateChange
 from dagster_dbt import DagsterDbtTranslator
 from lakehouse.lib.openmetadata_asset_checks import (
     TEST_DEFINITION_NAME,
     push_check_evaluations,
+    push_freshness_changes,
+    reconcile_freshness_test_cases,
     table_fqns_by_asset_key,
 )
 
@@ -261,3 +265,103 @@ def test_the_deadline_also_bounds_checks_on_tables_openmetadata_lacks() -> None:
     )
 
     assert (pushed, handled) == (0, 1)
+
+
+def _freshness_record(
+    new_state: FreshnessState,
+    previous_state: FreshnessState,
+    *,
+    storage_id: int,
+    asset_key: AssetKey = DIM_USER,
+) -> SimpleNamespace:
+    change = FreshnessStateChange(
+        key=asset_key,
+        new_state=new_state,
+        previous_state=previous_state,
+        state_change_timestamp=1_760_000_000.25,
+    )
+    entry = SimpleNamespace(
+        timestamp=1_760_000_001.0,
+        dagster_event=SimpleNamespace(event_specific_data=change),
+    )
+    return SimpleNamespace(storage_id=storage_id, event_log_entry=entry)
+
+
+def test_freshness_changes_continue_the_freshness_check_test_case() -> None:
+    client = _FakeClient(existing={TEST_DEFINITION_GET, TEST_CASE_GET})
+    records = [
+        _freshness_record(FreshnessState.FAIL, FreshnessState.PASS, storage_id=1),
+        # Never materialized: says nothing about freshness, so no result.
+        _freshness_record(
+            FreshnessState.UNKNOWN, FreshnessState.NOT_APPLICABLE, storage_id=2
+        ),
+        _freshness_record(FreshnessState.PASS, FreshnessState.FAIL, storage_id=3),
+    ]
+
+    assert push_freshness_changes(
+        records, {DIM_USER: DIM_USER_FQN}, client, LOG, math.inf
+    ) == (2, 3)
+    # The test case the replaced freshness_check wrote to already exists.
+    assert [(method, endpoint) for method, endpoint, _ in client.calls] == [
+        ("GET", TEST_DEFINITION_GET),
+        ("GET", TEST_CASE_GET),
+        ("POST", RESULT_ENDPOINT),
+        ("POST", RESULT_ENDPOINT),
+    ]
+    failed, passed = client.calls[2][2], client.calls[3][2]
+    assert failed == {
+        "timestamp": 1_760_000_000_250,
+        "testCaseStatus": "Failed",
+        "result": "Dagster freshness policy FAIL (was PASS).",
+        "testResultValue": [],
+    }
+    assert passed is not None
+    assert passed["testCaseStatus"] == "Success"
+
+
+def _state(state: FreshnessState) -> SimpleNamespace:
+    return SimpleNamespace(
+        freshness_state=state,
+        updated_at=datetime(2026, 11, 18, 12, 0, tzinfo=UTC),
+    )
+
+
+def test_reconcile_creates_only_the_missing_freshness_test_cases() -> None:
+    covered = AssetKey(["dimensional", "dim_course"])
+    covered_fqn = f"{DIM_USER_FQN[: -len('dim_user')]}dim_course"
+    never_built = AssetKey(["mart", "never_built"])
+    # dim_user already has the test case the state-change sensor keeps current.
+    client = _FakeClient(existing={TEST_CASE_GET})
+    states = {
+        DIM_USER: _state(FreshnessState.FAIL),
+        covered: _state(FreshnessState.PASS),
+        never_built: _state(FreshnessState.UNKNOWN),
+        AssetKey(["raw", "unmapped"]): _state(FreshnessState.PASS),
+    }
+    fqns = {
+        DIM_USER: DIM_USER_FQN,
+        covered: covered_fqn,
+        never_built: f"{covered_fqn}_never_built",
+    }
+
+    assert reconcile_freshness_test_cases(states, fqns, client, LOG) == 1
+
+    covered_case = (
+        "Starburst%20Galaxy.ol_data_lake_production.ol_warehouse_production_dimensional"
+        ".dim_course.dagster_freshness_check"
+    )
+    assert [(method, endpoint) for method, endpoint, _ in client.calls] == [
+        ("GET", TEST_CASE_GET),
+        ("GET", f"v1/dataQuality/testCases/name/{covered_case}"),
+        ("GET", TEST_DEFINITION_GET),
+        ("PUT", "v1/dataQuality/testDefinitions"),
+        ("GET", f"v1/dataQuality/testCases/name/{covered_case}"),
+        ("POST", "v1/dataQuality/testCases"),
+        ("POST", f"v1/dataQuality/testCases/testCaseResults/{covered_case}"),
+    ]
+    result = client.calls[-1][2]
+    assert result is not None
+    assert result["testCaseStatus"] == "Success"
+    assert result["timestamp"] == int(
+        datetime(2026, 11, 18, 12, 0, tzinfo=UTC).timestamp() * 1000
+    )

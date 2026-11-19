@@ -15,15 +15,15 @@ with source as (
             when passed_timestamp = 'NULL' then null
             else {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
                 regexp_replace_with_backreferences('passed_timestamp', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
-            )) }}
+            ), fractional_digits=9) }}
         end as courserungrade_first_passed_on
         --- use regex here to preserve the faction of second if value uses nanosecond
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('created', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
-        )) }} as courserungrade_created_on
+        ), fractional_digits=9) }} as courserungrade_created_on
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('modified', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
-        )) }} as courserungrade_updated_on
+        ), fractional_digits=9) }} as courserungrade_updated_on
     from most_recent_source
 )
 

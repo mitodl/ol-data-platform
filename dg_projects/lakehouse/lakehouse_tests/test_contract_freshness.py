@@ -1,40 +1,43 @@
-"""Freshness checks bounded by data contract SLAs, with the layer default elsewhere."""
+"""Freshness policies bounded by data contract SLAs, else the layer default."""
 
-from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-from dagster import AssetKey, FreshnessPolicy
+from dagster import AssetKey, AssetsDefinition, FreshnessPolicy
 from dagster_dbt import dbt_assets
 from lakehouse.lib import contract_freshness
 from lakehouse.lib.contract_freshness import (
     CONTRACTS_FALLBACK,
-    build_freshness_checks,
     contract_freshness_bounds,
     dbt_model_key_lookup,
     find_contracts_dir,
-    with_uncontracted_freshness_policy,
+    with_freshness_policies,
 )
 from ol_dbt_cli.lib.data_contracts import load_contracts
 
 DEFAULT = timedelta(hours=26)
+DEFAULT_POLICY = FreshnessPolicy.time_window(fail_window=DEFAULT)
 DIM_USER = AssetKey(["dimensional", "dim_user"])
 DIM_COURSE = AssetKey(["dimensional", "dim_course"])
 STG_USER = AssetKey(["staging", "stg_user"])
+# _manifest's models have one-part keys.
+DIM_USER_MODEL = AssetKey(["dim_user"])
+DIM_COURSE_MODEL = AssetKey(["dim_course"])
+STG_USER_MODEL = AssetKey(["stg_user"])
 
 
-def _bounds_by_key(checks) -> dict[AssetKey, list[float]]:
-    found: dict[AssetKey, list[float]] = {}
-    for check in checks:
-        for spec in check.check_specs:
-            params = spec.metadata["dagster/freshness_params"].value
-            found.setdefault(spec.asset_key, []).append(
-                params["lower_bound_delta_seconds"]
-            )
-    return found
+def _project() -> AssetsDefinition:
+    @dbt_assets(manifest=_manifest(["dim_user", "dim_course", "stg_user"]))
+    def project(): ...
+
+    return project
+
+
+def _policies(assets: AssetsDefinition) -> dict[AssetKey, FreshnessPolicy | None]:
+    return {key: spec.freshness_policy for key, spec in assets.specs_by_key.items()}
 
 
 def _write_contract(
@@ -48,55 +51,51 @@ def _write_contract(
     )
 
 
-class TestBuildFreshnessChecks:
+class TestWithFreshnessPolicies:
     def test_contract_bound_replaces_the_default(self) -> None:
-        checks = build_freshness_checks(
-            default_keys=[DIM_USER, DIM_COURSE],
-            default_bound=DEFAULT,
-            contract_bounds={DIM_USER: timedelta(hours=6)},
+        # A weekly contract would otherwise pass while a 26-hour default
+        # reported the asset stale.
+        mapped = with_freshness_policies(
+            _project(),
+            default_keys=[DIM_USER_MODEL, DIM_COURSE_MODEL],
+            default_policy=DEFAULT_POLICY,
+            contract_bounds={DIM_USER_MODEL: timedelta(weeks=1)},
         )
 
-        assert _bounds_by_key(checks) == {
-            DIM_USER: [timedelta(hours=6).total_seconds()],
-            DIM_COURSE: [DEFAULT.total_seconds()],
+        assert _policies(mapped) == {
+            DIM_USER_MODEL: FreshnessPolicy.time_window(fail_window=timedelta(weeks=1)),
+            DIM_COURSE_MODEL: DEFAULT_POLICY,
+            STG_USER_MODEL: None,
         }
 
-    def test_contracted_asset_outside_the_default_groups_is_checked(self) -> None:
-        checks = build_freshness_checks(
-            default_keys=[DIM_COURSE],
-            default_bound=DEFAULT,
-            contract_bounds={STG_USER: timedelta(days=7)},
+    def test_contracted_asset_outside_the_default_groups_gets_a_policy(
+        self,
+    ) -> None:
+        mapped = with_freshness_policies(
+            _project(),
+            default_keys=[DIM_COURSE_MODEL],
+            default_policy=DEFAULT_POLICY,
+            contract_bounds={STG_USER_MODEL: timedelta(days=7)},
         )
 
-        assert _bounds_by_key(checks)[STG_USER] == [timedelta(days=7).total_seconds()]
+        assert _policies(mapped) == {
+            DIM_USER_MODEL: None,
+            DIM_COURSE_MODEL: DEFAULT_POLICY,
+            STG_USER_MODEL: FreshnessPolicy.time_window(fail_window=timedelta(days=7)),
+        }
 
-    def test_no_asset_gets_two_freshness_checks(self) -> None:
-        # A contract bound equal to the default must not add a second check on
-        # top of the default one either.
-        checks = build_freshness_checks(
-            default_keys=[DIM_USER, DIM_COURSE],
-            default_bound=DEFAULT,
-            contract_bounds={DIM_USER: DEFAULT, STG_USER: timedelta(hours=1)},
-        )
+    def test_keys_and_checks_are_kept(self) -> None:
+        project = _project()
 
-        check_keys = Counter(
-            (spec.asset_key, spec.name) for c in checks for spec in c.check_specs
-        )
-        assert set(check_keys.values()) == {1}
-        assert {key for key, _ in check_keys} == {DIM_USER, DIM_COURSE, STG_USER}
-
-    def test_no_contracts_keeps_one_default_check(self) -> None:
-        checks = build_freshness_checks(
-            default_keys=[DIM_USER, DIM_COURSE],
-            default_bound=DEFAULT,
+        mapped = with_freshness_policies(
+            project,
+            default_keys=[DIM_USER_MODEL],
+            default_policy=DEFAULT_POLICY,
             contract_bounds={},
         )
 
-        assert len(checks) == 1
-        assert _bounds_by_key(checks) == {
-            DIM_USER: [DEFAULT.total_seconds()],
-            DIM_COURSE: [DEFAULT.total_seconds()],
-        }
+        assert mapped.keys == project.keys
+        assert set(mapped.check_keys) == set(project.check_keys)
 
 
 class TestContractFreshnessBounds:
@@ -186,17 +185,13 @@ def test_dbt_model_key_lookup_only_resolves_selected_models() -> None:
     lookup = dbt_model_key_lookup(project)
 
     assert lookup("dim_user") == AssetKey(["dim_user"])
-    # In the manifest but selected out of this definition: no asset to check.
+    # In the manifest but selected out of this definition: no asset for a policy.
     assert lookup("stg_user") is None
     assert lookup("missing") is None
 
 
-def test_freshness_policy_skips_contracted_assets(tmp_path: Path) -> None:
-    # A weekly contract would otherwise pass its check while a 48-hour policy
-    # reported the asset stale.
-    @dbt_assets(manifest=_manifest(["dim_user", "dim_course"]))
-    def project(): ...
-
+def test_contract_sla_becomes_the_models_policy(tmp_path: Path) -> None:
+    project = _project()
     _write_contract(
         tmp_path,
         "dim_user",
@@ -206,16 +201,18 @@ def test_freshness_policy_skips_contracted_assets(tmp_path: Path) -> None:
     bounds = contract_freshness_bounds(
         load_contracts(tmp_path), dbt_model_key_lookup(project)
     )
-    policy = FreshnessPolicy.time_window(
-        fail_window=timedelta(hours=48), warn_window=timedelta(hours=30)
+
+    mapped = with_freshness_policies(
+        project,
+        default_keys=project.keys,
+        default_policy=DEFAULT_POLICY,
+        contract_bounds=bounds,
     )
 
-    mapped = with_uncontracted_freshness_policy(
-        project, keys=project.keys, contract_bounds=bounds, policy=policy
+    assert _policies(mapped)[DIM_USER_MODEL] == FreshnessPolicy.time_window(
+        fail_window=timedelta(weeks=1)
     )
-
-    policies = {key: spec.freshness_policy for key, spec in mapped.specs_by_key.items()}
-    assert policies == {AssetKey(["dim_user"]): None, AssetKey(["dim_course"]): policy}
+    assert _policies(mapped)[DIM_COURSE_MODEL] == DEFAULT_POLICY
 
 
 class TestContractsDir:
@@ -256,7 +253,7 @@ class TestContractsDir:
         self._nowhere(tmp_path, monkeypatch)
         monkeypatch.setattr(contract_freshness, "DAGSTER_ENV", "dev")
 
-        with pytest.warns(UserWarning, match="default freshness bound"):
+        with pytest.warns(UserWarning, match="default freshness policy"):
             assert find_contracts_dir() == CONTRACTS_FALLBACK
 
     @pytest.mark.parametrize("environment", ["qa", "production"])
@@ -268,5 +265,5 @@ class TestContractsDir:
         self._nowhere(tmp_path, monkeypatch)
         monkeypatch.setattr(contract_freshness, "DAGSTER_ENV", environment)
 
-        with pytest.raises(FileNotFoundError, match="default freshness bound"):
+        with pytest.raises(FileNotFoundError, match="default freshness policy"):
             find_contracts_dir()

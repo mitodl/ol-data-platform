@@ -199,6 +199,17 @@ open_learning:
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
+    # A developer's own copy of the production warehouse,
+    # ol_warehouse_production_<suffix>_<layer>, like the Trino dev_production output.
+    starrocks_dev_production:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      catalog: ol_data_lake_production
+      schema: ol_warehouse_production{{ "_{}".format(var('schema_suffix')) }}
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
     # CI StarRocks writing its own lake (ol-infrastructure#6533). DBT_TARGET_MAP
     # in lakehouse.lib.dbt_environment names this output for DAGSTER_ENVIRONMENT=ci.
     # Without a schema_suffix var it builds the canonical ol_warehouse_ci_<layer>

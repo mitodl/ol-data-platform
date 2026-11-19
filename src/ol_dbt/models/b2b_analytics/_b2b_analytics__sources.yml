@@ -28,6 +28,10 @@ sources:
   - name: dim_course_run
     description: Course run dimension. Filter to platform='mitxonline' and is_current=true
       for B2B joins.
+  - name: dim_course
+    description: >
+      Course dimension, SCD2. Filter to is_current=true; course_pk is unique
+      among current rows.
   - name: dim_program
     description: Program metadata.
   - name: bridge_organization_courserun

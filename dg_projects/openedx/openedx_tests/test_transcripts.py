@@ -151,6 +151,21 @@ def test_malformed_transcript_is_recorded_as_failed():
     assert rows[0]["content_type"] == "application/json"
 
 
+def test_every_row_status_has_the_same_keys():
+    """Every row status carries the same keys, file_extension included."""
+    rows, _ = rows_for(
+        [
+            ("static/subs_bad.srt.sjson", b"{broken"),
+            ("static/subs_empty.srt.sjson", b'{"text": []}'),
+            ("static/subs_good.srt.sjson", b'{"text": ["fine"]}'),
+        ]
+    )
+
+    assert [r["extraction_status"] for r in rows] == ["failed", "empty", "extracted"]
+    assert len({frozenset(row) for row in rows}) == 1
+    assert {r["file_extension"] for r in rows} == {".sjson"}
+
+
 def test_empty_transcript_is_recorded_not_dropped():
     """An empty caption track and a file never seen are different facts."""
     rows, counters = rows_for([("static/subs_x.srt.sjson", b'{"text": []}')])
