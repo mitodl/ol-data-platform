@@ -11,7 +11,7 @@ select
     , max(negative_exact_keywords) as negative_exact_keywords
     , max(negative_keywords) as negative_keywords
     , {{ array_join(
-        array_agg_filter('cast(campaign_version as varchar)', 'true', order_by='campaign_version')
+        array_agg_filter('cast(campaign_version as varchar)', 'true', order_by='campaign_version nulls last')
         , '; '
     ) }} as used_by_campaign_versions
 from {{ ref('int__google_ads__campaign_versions') }}

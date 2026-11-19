@@ -87,7 +87,7 @@ with keyword_days as (
             , campaign_name
             , setting
             , previous_value
-            , row_number() over (partition by course, campaign_name, setting order by change_at) as change_rank
+            , row_number() over (partition by course, campaign_name, setting order by change_at nulls last) as change_rank
         from setting_changes
     ) as ranked
     where change_rank = 1 and previous_value is not null
@@ -122,7 +122,7 @@ with keyword_days as (
                 course
                 , campaign_name
                 , case when change_type = 'negative_keyword' then 'negative_version' else 'keyword_version' end
-            order by change_date
+            order by change_date nulls last
             rows unbounded preceding
         ) as varchar) as setting_value
     from changes
@@ -140,7 +140,7 @@ with keyword_days as (
         , campaign_name
         , setting
         , valid_from
-        , lead(valid_from) over (partition by course, campaign_name, setting order by valid_from) as valid_to
+        , lead(valid_from) over (partition by course, campaign_name, setting order by valid_from nulls last) as valid_to
         , setting_value
     from (
         select * from initial_settings
@@ -198,14 +198,14 @@ with keyword_days as (
 , day_changes as (
     select
         day_serving.*
-        , lag(day_serving.report_date) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date) is null as is_first_day
-        , coalesce(cast(lag(day_serving.daily_budget) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date) as varchar), '')
+        , lag(day_serving.report_date) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date nulls last) is null as is_first_day
+        , coalesce(cast(lag(day_serving.daily_budget) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date nulls last) as varchar), '')
         != coalesce(cast(day_serving.daily_budget as varchar), '') as budget_changed
-        , lag(day_serving.serving_status) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date) != day_serving.serving_status
+        , lag(day_serving.serving_status) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date nulls last) != day_serving.serving_status
         as serving_changed
-        , lag(day_serving.keyword_version) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date) != day_serving.keyword_version
+        , lag(day_serving.keyword_version) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date nulls last) != day_serving.keyword_version
         as keywords_changed
-        , lag(day_serving.negative_version) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date) != day_serving.negative_version
+        , lag(day_serving.negative_version) over (partition by day_serving.course, day_serving.campaign_name order by day_serving.report_date nulls last) != day_serving.negative_version
         as negatives_changed
     from day_serving
 )
@@ -217,7 +217,7 @@ with keyword_days as (
             when day_changes.is_first_day or day_changes.budget_changed or day_changes.serving_changed or day_changes.keywords_changed or day_changes.negatives_changed then 1
             else 0
         end) over (
-            partition by day_changes.course, day_changes.campaign_name order by day_changes.report_date rows unbounded preceding
+            partition by day_changes.course, day_changes.campaign_name order by day_changes.report_date nulls last rows unbounded preceding
         ) as version_number
         , case
             when day_changes.is_first_day then 'first_seen'
@@ -264,7 +264,7 @@ with keyword_days as (
     select
         intervals.*
         , lead(intervals.start_date) over (
-            partition by intervals.course, intervals.campaign_name order by intervals.start_date
+            partition by intervals.course, intervals.campaign_name order by intervals.start_date nulls last
         ) as end_date
     from intervals
 )
@@ -274,7 +274,7 @@ with keyword_days as (
         kept_intervals.*
         , case when created.campaign_name is not null then 'configured' else 'clicked' end as keyword_source
         , row_number() over (
-            partition by kept_intervals.course order by kept_intervals.campaign_name, kept_intervals.start_date
+            partition by kept_intervals.course order by kept_intervals.campaign_name nulls last, kept_intervals.start_date nulls last
         ) as campaign_version
     from kept_intervals
     inner join interval_rows
@@ -447,18 +447,18 @@ with keyword_days as (
         , campaign_version
         {%- for list_type in list_types %}
         , coalesce({{ array_join(
-            array_agg_filter('keyword_text', "list_type = '" ~ list_type ~ "'", order_by='keyword_text', distinct=true)
+            array_agg_filter('keyword_text', "list_type = '" ~ list_type ~ "'", order_by='keyword_text nulls last', distinct=true)
             , '; '
         ) }}, '') as {{ list_type }}_keywords
         , count(distinct case when list_type = '{{ list_type }}' then keyword_text end) as {{ list_type }}_keyword_count
         {%- endfor %}
         , coalesce({{ array_join(
-            array_agg_filter('keyword_text', "list_type in ('broad', 'phrase', 'exact')", order_by='keyword_text', distinct=true)
+            array_agg_filter('keyword_text', "list_type in ('broad', 'phrase', 'exact')", order_by='keyword_text nulls last', distinct=true)
             , '; '
         ) }}, '') as unique_keywords
         , count(distinct case when list_type in ('broad', 'phrase', 'exact') then keyword_text end) as unique_keyword_count
         , coalesce({{ array_join(
-            array_agg_filter('keyword_text', "list_type like 'negative_%'", order_by='keyword_text', distinct=true)
+            array_agg_filter('keyword_text', "list_type like 'negative_%'", order_by='keyword_text nulls last', distinct=true)
             , '; '
         ) }}, '') as negative_keywords
         , count(distinct case when list_type like 'negative_%' then keyword_text end) as negative_keyword_count
@@ -500,7 +500,7 @@ with keyword_days as (
         , negative_broad_keywords
         , negative_phrase_keywords
         , negative_exact_keywords
-        , concat('ks_', lpad(cast(row_number() over (partition by course order by min(campaign_version)) as varchar), 4, '0'))
+        , concat('ks_', lpad(cast(row_number() over (partition by course order by min(campaign_version) nulls last) as varchar), 4, '0'))
         as keyword_set_id
     from versions_with_lists
     group by

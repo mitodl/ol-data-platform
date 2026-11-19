@@ -104,6 +104,10 @@ models:
     and
     the report's and JSONL's through the rename events there. The user who made each
     change is left out.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
   - name: course
     description: str, ad_opt_v2's course folder name
@@ -256,6 +260,10 @@ models:
     without keyword rows, and versions with no known budget, are left out. Keyword
     lists are the configured keywords for campaigns created inside the history, and
     otherwise the keywords with rows in the keyword-day panel.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
   - name: course
     description: str, ad_opt_v2's course folder name
@@ -347,6 +355,10 @@ models:
   description: Each course's distinct campaign keyword lists, as ad_opt_v2's campaign-keyword-sets.csv
     (the CampaignKeywordSets schema in ads-optimizer). One row per keyword_set_id
     in int__google_ads__campaign_versions.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
   - name: course
     description: str, ad_opt_v2's course folder name
@@ -389,6 +401,10 @@ models:
     out the course's excluded campaigns and days without cost, adds zero rows for
     every day of an active version that had none, and takes impressions and impression
     shares from int__google_ads__campaign_daily.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
   - name: course
     description: str, ad_opt_v2's course folder name
@@ -439,6 +455,10 @@ models:
     set over the whole campaign-day panel, as ad_opt_v2's compute_segment_conv_per_click_rates
     (the SegmentConvPerClickRates schema in ads-optimizer). The library computes these
     from the panel it is given when not supplied.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
   - name: course
     description: str, ad_opt_v2's course folder name
