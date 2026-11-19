@@ -1,7 +1,10 @@
+{# static_assets_version is newer than the raw table: dlt adds the column on the first load
+   of a file the transcript asset wrote after it began recording the bundle version. #}
+{% set raw_transcripts = source('ol_warehouse_raw_data', 'raw__openedx__s3__course_transcript_text') %}
+{% set static_assets_version_exists = relation_has_column(raw_transcripts, 'static_assets_version') %}
+
 with source as (
-    {{ newest_course_file_rows(
-        source('ol_warehouse_raw_data', 'raw__openedx__s3__course_transcript_text'), extracted_at_column='extracted_at'
-    ) }}
+    {{ newest_course_file_rows(raw_transcripts, extracted_at_column='extracted_at') }}
 )
 
 select
@@ -17,6 +20,8 @@ select
     , content                               as content_file_text
     , extraction_status                     as content_file_extraction_status
     , _file_modified_at                     as content_file_extracted_at
+    , {{ 'static_assets_version' if static_assets_version_exists else 'cast(null as varchar)' }}
+    as content_file_static_assets_version
 from source
 -- An empty snapshot loads as one marker row so it can become the newest file;
 -- the marker itself is not a file.

@@ -168,6 +168,30 @@ models:
       course_xml_version of the run's integrations__learn__content_files rows.
     tests: [not_null]
 
+- name: integrations__learn__content_file_waiting_runs
+  description: >
+    One row per MITx Online or xPRO course run that has files but is left out of
+    integrations__learn__content_files until it is ready: its newest blocks haven't
+    been through the exclusions check, or its document or transcript text is from
+    another export than its blocks. The ml location's embedding sensor keeps such
+    a
+    run's chunks as they are, as Learn keeps a run it reads no rows for, instead of
+    rebuilding them empty.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id]
+  columns:
+  - name: etl_source
+    description: str, mitxonline or xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, xpro]
+  - name: run_readable_id
+    description: str, course run id, as in integrations__learn__content_files
+    tests: [not_null]
 - name: integrations__learn__ocw_content_files
   description: >
     One row per ContentFile of an OCW course run, for MIT Learn's

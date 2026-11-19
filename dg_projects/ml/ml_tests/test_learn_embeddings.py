@@ -252,9 +252,17 @@ def runs() -> pl.DataFrame:
     )
 
 
+def waiting_runs(*held: tuple[str, str]) -> pl.DataFrame:
+    return pl.DataFrame(
+        [{"etl_source": source, "run_readable_id": run} for source, run in held],
+        schema={"etl_source": pl.String, "run_readable_id": pl.String},
+    )
+
+
 def load_sources(tables: dict[str, pl.DataFrame], **contents: str | None) -> None:
     tables["integrations__learn__content_files"] = content_files(**contents)
     tables["integrations__learn__mitxonline_runs"] = runs()
+    tables["integrations__learn__content_file_waiting_runs"] = waiting_runs()
 
 
 def instance() -> DagsterInstance:
@@ -434,6 +442,7 @@ def load_xpro(tables: dict[str, pl.DataFrame], platform_code: str | None) -> Non
             "platform_code": pl.String,
         },
     )
+    tables["integrations__learn__content_file_waiting_runs"] = waiting_runs()
 
 
 def build_xpro_chunks(tables) -> Any:
@@ -989,6 +998,7 @@ def load_mitxonline_runs(tables: dict[str, pl.DataFrame], count: int) -> list[st
     tables["integrations__learn__mitxonline_runs"] = pl.DataFrame(
         [{"readable_id": f"resource-{run}", "run_id": run} for run in runs_by_hash]
     )
+    tables["integrations__learn__content_file_waiting_runs"] = waiting_runs()
     load_empty_xpro_and_ocw(tables)
     return runs_by_hash
 
@@ -1035,6 +1045,32 @@ def test_a_run_that_loses_its_last_file_is_emptied(tables):
     assert build_content_files(tables, dagster_instance).success
     assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].is_empty()
     assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
+
+
+def test_a_held_back_run_keeps_its_chunks(tables):
+    load_sources(tables, **{"block-v1:a": "Text."})
+    load_empty_xpro_and_ocw(tables)
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    chunks = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]]
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert not vectors.is_empty()
+
+    # The files model leaves the run out while its new export's text is extracted.
+    tables["integrations__learn__content_files"] = content_files(none="").clear()
+    tables["integrations__learn__content_file_waiting_runs"] = waiting_runs(
+        ("mitxonline", RUN)
+    )
+    result: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance)
+    )
+
+    assert result.asset_events == []
+    assert content_file_text_versions("mitxonline", RUN, registered=[RUN]).is_empty()
+    # A rebuild asked for anyway (a chunker change) fails and writes nothing.
+    assert not build_content_files(tables, dagster_instance).success
+    assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].equals(chunks)
+    assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].equals(vectors)
 
 
 # ------------------------------------------------------------------- smokecheck

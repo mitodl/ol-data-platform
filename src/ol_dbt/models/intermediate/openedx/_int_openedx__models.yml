@@ -65,6 +65,13 @@ models:
   - name: course_xml_version
     description: str, the version of the export the run's blocks came from, when the
       exclusions asset ran over it; null when is_exclusion_checked is false
+  - name: is_text_current
+    description: boolean, false for every file of a run whose document or transcript
+      text was extracted from another export's static asset bundle than its newest
+      blocks were written with (extraction hasn't caught up); true when the versions
+      agree or either side predates recording them
+    tests:
+    - not_null
   - name: is_exclusion_checked
     description: boolean, true when the exclusions asset ran over the export this
       run's blocks came from, so is_excluded is known
@@ -181,6 +188,8 @@ unit_tests:
         there, content_file_extraction_status: extracted}
   # A file of a checked run with no row of its own is not excluded. R2 was
   # never checked and R3 was checked against an older export.
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows: []
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -283,6 +292,8 @@ unit_tests:
     rows: []
   - input: ref('stg__openedx__s3__course_transcript_text')
     rows: []
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows: []
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -326,6 +337,8 @@ unit_tests:
       content_file_extraction_status: extracted}
   - input: ref('stg__openedx__s3__course_transcript_text')
     rows: []
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows: []
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -355,6 +368,163 @@ unit_tests:
       release_date: "2032-06-01T12:00:00.000000Z"}
     - {source_path: course/static/slides.pdf, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@slides.pdf",
       release_date: null}
+- name: test_int__openedx__content_files_holds_back_text_from_another_export
+  description: >
+    A run's files are text-current when every document and transcript row was
+    extracted from the static asset bundle its newest blocks were written with.
+    R2's document, R4's transcript and both of R5's documents are from an older
+    bundle, so every file of those runs is held back, once each. A version
+    missing on one side is no evidence: R3's blocks and R6's document predate
+    the bundle version, and R1 agrees, so those stay current. The versions are
+    the newest snapshots', so R7's empty transcript snapshot, which has no file
+    rows, still holds R7 back.
+  model: int__openedx__content_files
+  given:
+  - input: ref('stg__openedx__s3__course_xml_blocks')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b1,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R2", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b2,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R3", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: null,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R4", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b4,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R5", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b5,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R6", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b6,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R7", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_static_assets_version: b7,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R2", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R3", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R4", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: null}
+    - {courserun_readable_id: "course-v1:X+Y+R5", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b0}
+    - {courserun_readable_id: "course-v1:X+Y+R5", content_file_source_system: xpro,
+      content_file_path: static/b.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b0}
+    - {courserun_readable_id: "course-v1:X+Y+R6", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: null}
+    - {courserun_readable_id: "course-v1:X+Y+R7", content_file_source_system: xpro,
+      content_file_path: static/a.pdf, content_file_extension: .pdf, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b7}
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R4", content_file_source_system: xpro,
+      content_file_path: static/a.srt, content_file_extension: .srt, content_file_text: Text,
+      content_file_extraction_status: extracted, content_file_static_assets_version: b3}
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R2", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R3", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: b1}
+    - {courserun_readable_id: "course-v1:X+Y+R4", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: null}
+    - {courserun_readable_id: "course-v1:X+Y+R4", content_file_source_system: xpro,
+      content_file_text_kind: transcript, content_file_static_assets_version: b3}
+    - {courserun_readable_id: "course-v1:X+Y+R5", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: b0}
+    - {courserun_readable_id: "course-v1:X+Y+R6", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: null}
+    - {courserun_readable_id: "course-v1:X+Y+R7", content_file_source_system: xpro,
+      content_file_text_kind: document, content_file_static_assets_version: b7}
+    - {courserun_readable_id: "course-v1:X+Y+R7", content_file_source_system: xpro,
+      content_file_text_kind: transcript, content_file_static_assets_version: b0}
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R2", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R3", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R4", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R5", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R6", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R7", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
+  expect:
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/chapter/week_1.xml,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_path: course/static/a.pdf,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R2", source_path: course/chapter/week_1.xml,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R2", source_path: course/static/a.pdf,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R3", source_path: course/chapter/week_1.xml,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R3", source_path: course/static/a.pdf,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R4", source_path: course/chapter/week_1.xml,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R4", source_path: course/static/a.pdf,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R4", source_path: course/static/a.srt,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R5", source_path: course/chapter/week_1.xml,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R5", source_path: course/static/a.pdf,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R5", source_path: course/static/b.pdf,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R6", source_path: course/chapter/week_1.xml,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R6", source_path: course/static/a.pdf,
+      is_text_current: true}
+    - {courserun_readable_id: "course-v1:X+Y+R7", source_path: course/chapter/week_1.xml,
+      is_text_current: false}
+    - {courserun_readable_id: "course-v1:X+Y+R7", source_path: course/static/a.pdf,
+      is_text_current: false}
 - name: test_int__openedx__content_files_colon_url_names
   description: >
     A block whose url_name has a colon is stored below its type folder (a:b in
@@ -406,6 +576,8 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: mitxonline,
       content_file_path: static/v2.srt, content_file_extension: .srt, content_file_text: Bye,
       content_file_extraction_status: extracted}
+  - input: ref('stg__openedx__s3__course_text_snapshots')
+    rows: []
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: mitxonline,
