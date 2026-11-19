@@ -174,11 +174,40 @@ def test_lake_target_refuses_a_schema_glue_cannot_load(mock_fetch, mock_port_for
 
 
 @pytest.mark.parametrize(
-    ("env", "target", "allow_canonical_writes"),
+    ("env", "target", "suffix"),
     [
-        ("qa", "starrocks_qa_lake", False),
+        # Seeds would land in the canonical dimensional schema.
+        ("production", "starrocks_dev_production", "dimensional"),
+        # The profile schema would be the raw schema the loaders write.
+        ("production", "starrocks_dev_production", "raw"),
+        ("qa", "starrocks_dev_qa", "staging"),
+        ("ci", "ci", "mart"),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_suffixed_lake_target_refuses_a_canonical_schema(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str, suffix: str
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        run(env=env, target=target, vars=f"{{schema_suffix: {suffix}}}")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "cli_vars", "allow_canonical_writes"),
+    [
+        ("qa", "starrocks_qa_lake", "{schema_suffix: alice}", False),
+        # YAML reads these as falsy values, and they were still passed.
+        ("qa", "starrocks_qa_lake", "{schema_suffix: 0}", False),
+        ("qa", "starrocks_qa_lake", "{schema_suffix: ''}", False),
         # The flag allows the canonical schemas, not a suffix the profile drops.
-        ("production", "starrocks_production_lake", True),
+        ("production", "starrocks_production_lake", "{schema_suffix: alice}", True),
     ],
 )
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
@@ -190,11 +219,12 @@ def test_canonical_lake_target_refuses_a_schema_suffix(  # noqa: PLR0913
     mock_dbt_run,
     env: str,
     target: str,
+    cli_vars: str,
     allow_canonical_writes: bool,  # noqa: FBT001
 ) -> None:
     """The profile drops the suffix, so dbt would build the canonical schemas the caller asked to avoid."""
     with pytest.raises(SystemExit) as exc_info:
-        run(env=env, target=target, vars="{schema_suffix: alice}", allow_canonical_writes=allow_canonical_writes)
+        run(env=env, target=target, vars=cli_vars, allow_canonical_writes=allow_canonical_writes)
 
     assert exc_info.value.code == 1
     mock_fetch.assert_not_called()
@@ -241,6 +271,19 @@ def test_production_default_target_needs_the_flag_to_write(mock_fetch, mock_port
     assert exc_info.value.code == 1
     mock_fetch.assert_not_called()
     mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_readonly_does_not_exempt_an_oidc_profile(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """starrocks_qa logs in with its own OIDC identity, so the readonly Vault role says nothing about it."""
+    with pytest.raises(SystemExit) as exc_info:
+        run(env="production", target="starrocks_qa", vault_role="readonly")
+
+    assert exc_info.value.code == 1
+    mock_fetch.assert_not_called()
     mock_dbt_run.assert_not_called()
 
 
