@@ -85,3 +85,4 @@ def test_a_subset_backfills_only_its_daily_tables(
     dlt = _run(monkeypatch, [150, 0], selected=(landing,))
 
     assert dlt.backfill_tables == [{landing}, {landing}]
+    assert dlt.loads == ["backfill", "backfill", landing]

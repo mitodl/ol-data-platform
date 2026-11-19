@@ -4,8 +4,8 @@ Loads the Search campaign data the Google Ads budget optimizer (mitodl/ad_opt_v2
 reads, for every client account under the MIT Open Learning manager account. The
 GAQL follows ad_opt_v2's queries (``utils/gaql_queries.py``,
 ``scripts/pull_change_events.py``) with ids added and its campaign-name filters
-left to staging. Landing pages, locations, clicks, conversion actions, ad groups
-and ads are for reporting and attribution, not the optimizer.
+left to staging. Landing pages, clicks, conversion actions, ad groups and ads
+are for reporting and attribution, not the optimizer.
 
 Data flow, per client account:
     customer_client     -> raw__google_ads__api__customer_clients    (replace)

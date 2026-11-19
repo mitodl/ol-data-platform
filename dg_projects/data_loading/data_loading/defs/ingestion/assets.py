@@ -446,8 +446,9 @@ def load_in_batches(
 ) -> tuple[list[Any], int, int]:
     """Run one dlt load per byte budget until the table's backlog is drained.
 
-    ``build_source`` returns a budgeted source for the one table. Returns the
-    last batch's materializations, how many batches ran, and the rows they
+    ``build_source`` returns a budgeted source, for one table or several whose
+    progress ``resource_name`` counts (Google Ads counts its fetch log). Returns
+    the last batch's materializations, how many batches ran, and the rows they
     loaded between them.
 
     A batch that normalizes zero rows means the cursor already covers every
