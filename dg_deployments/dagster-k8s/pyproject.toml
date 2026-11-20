@@ -6,7 +6,7 @@
 name = "dagster-k8s-image"
 version = "0.1.0"
 description = "Locked dependency set for the Dagster webserver and daemon image"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.15,<3.16"
 dependencies = [
     # Provides the pooled Postgres storage classes that dagster_instance.yaml
     # points the instance at.

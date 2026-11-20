@@ -116,7 +116,7 @@ RUN DBT_STARROCKS_HOST=localhost \
         --target starrocks_qa_vault --target-path target/starrocks
 
 # Then, use a final image without uv
-FROM python:3.14-slim-bookworm
+FROM python:3.15-slim-bookworm@sha256:96599df822d0e1c6bb700014a05c7f3c8cabc6e0f7ff3c4f9f69cee033b4b5d9
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
