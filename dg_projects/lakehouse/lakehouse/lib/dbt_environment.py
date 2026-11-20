@@ -62,8 +62,13 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # in-cluster FE with a Vault login per invocation (see dbt_credentials in
 # assets/lakehouse/dbt.py). Nothing builds QA on Trino any more, so the two
 # engines never write the same QA tables. The image's baked manifest is still
-# compiled against Trino production, so the QA asset graph can differ from what
-# the build runs by the few nodes gated on target.type.
+# compiled against Trino production, so in QA the asset graph and what the
+# build runs can disagree on whatever target.type decides. Node-wise that is
+# only the cohort3 unit test (excluded from builds anyway); the b2b models are
+# disabled on both targets. Config differs more: e.g. the graph's metadata has
+# the Trino-only +properties and lacks the StarRocks-only partition_by on
+# tfact_problem_events, while the build does the opposite. Asset keys are the
+# same.
 #
 # "ci" is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
