@@ -8,9 +8,9 @@ machine_learning,Program - MLx - %,,program-v1:xPRO+MLx
 deploying_ai,Course - DAI - %,,course-v1:xPRO+DAI
 sys_think,Course - System Thinking - %,,course-v1:xPRO+LASERxE1
 generative_ai,Course - Generative AI - %,,
-mm_ds,Program - mmDS - %,,
-mm_ds,Course in Program - Uncertianty & Data%,,
-mm_ds,%Machine Learning w Python - mmDS%,,
+mm_ds,Program - mmDS - %,,program-v1:MITxT+SDS
+mm_ds,Course in Program - Uncertianty & Data%,,program-v1:MITxT+SDS
+mm_ds,%Machine Learning w Python - mmDS%,,program-v1:MITxT+SDS
 mm_finance,Program - mFin - %,,program-v1:MITxT+FIN
 mm_finance,%Course in Program - Financial accounting%,,program-v1:MITxT+FIN
 mm_finance,Course in Program - Foundations of Modern Finance%,,program-v1:MITxT+FIN
