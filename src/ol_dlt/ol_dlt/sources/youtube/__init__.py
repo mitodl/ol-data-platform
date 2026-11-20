@@ -49,7 +49,9 @@ YOUTUBE_MAX_RESULTS = 50
 # Sentinel playlist id meaning "ingest every playlist on the channel".
 WILDCARD_PLAYLIST_ID = "all"
 
-# fetch_status of a raw__youtube__api__transcripts row.
+# fetch_status of a raw__youtube__api__transcripts row. On a video's status row,
+# fetched means every transcript it lists was fetched, and failed that one or
+# more were not.
 TRANSCRIPT_FETCHED = "fetched"
 # The video lists no transcript, or its owner disabled them.
 TRANSCRIPT_NONE = "none"
@@ -475,26 +477,33 @@ def youtube_source(  # noqa: C901
             "raw__youtube__api__transcripts",
             ("video_id", "language_code", "is_generated"),
         ),
+        # Nullable so dlt can add them to a table created under the old key:
+        # Iceberg cannot add a required column to an existing table.
+        columns={
+            "language_code": {"data_type": "text", "nullable": True},
+            "is_generated": {"data_type": "bool", "nullable": True},
+        },
     )
     def youtube_transcripts(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield every transcript of every video, and how fetching went.
 
         Transcripts are fetched with ``youtube-transcript-api`` (imported lazily
-        so the module loads without the dependency present). A video gets one
-        row per transcript YouTube lists, in every language, uploaded and
-        auto-generated alike (``is_generated``). Which one a consumer reads,
-        e.g. MIT Learn's English one, is its choice. A video whose transcripts
-        could not be listed gets one row with no language and the reason in
-        ``fetch_status``; so does a transcript that could not be fetched.
+        so the module loads without the dependency present). Each run writes:
 
-        Upserted by key, so a row stays until the same key is written again:
-        a video's latest attempt is its rows with the newest ``fetched_at``.
+        - one row per transcript fetched, keyed by its ``language_code`` and
+          ``is_generated``, in every language YouTube lists, uploaded and
+          auto-generated alike. Which one a consumer reads, e.g. MIT Learn's
+          English one, is its choice. A row stays until the same transcript is
+          fetched again, so a failed or blocked run keeps the last good text.
+        - one status row per video, with an empty ``language_code``: the
+          outcome of this run's attempt (``fetch_status``), and in ``error`` the
+          exception of each failure, prefixed by its language when one
+          transcript failed.
 
         Once YouTube blocks the run's IP, every later request fails the same
         way, so the rest of the videos are marked blocked without a request.
         """
         from youtube_transcript_api import (
-            NoTranscriptFound,
             RequestBlocked,
             TranscriptsDisabled,
             VideoUnavailable,
@@ -507,14 +516,14 @@ def youtube_source(  # noqa: C901
         fetched_at = datetime.now(tz=UTC)
         blocked = False
 
-        def row(video_id: str, status: str, **fields: Any) -> dict[str, Any]:
+        def row(video_id: str, **fields: Any) -> dict[str, Any]:
             return {
                 "video_id": video_id,
                 "etl_source": "youtube",
                 "language_code": "",
                 "language": None,
                 "is_generated": False,
-                "fetch_status": status,
+                "fetch_status": None,
                 "error": None,
                 "transcript": None,
                 "segments": None,
@@ -522,54 +531,68 @@ def youtube_source(  # noqa: C901
                 **fields,
             }
 
+        def describe(exc: Exception) -> str:
+            return f"{type(exc).__name__}: {exc}".strip().removesuffix(":")[:500]
+
         for video_id in _video_ids(listing):
             if blocked:
-                yield row(video_id, TRANSCRIPT_BLOCKED)
+                yield row(video_id, fetch_status=TRANSCRIPT_BLOCKED)
                 continue
             try:
                 transcripts = list(ytt_api.list(video_id))
-            except (NoTranscriptFound, TranscriptsDisabled):
-                yield row(video_id, TRANSCRIPT_NONE)
+            except TranscriptsDisabled:
+                yield row(video_id, fetch_status=TRANSCRIPT_NONE)
                 continue
-            except VideoUnavailable:
-                yield row(video_id, TRANSCRIPT_UNAVAILABLE)
+            except VideoUnavailable as exc:
+                yield row(
+                    video_id, fetch_status=TRANSCRIPT_UNAVAILABLE, error=describe(exc)
+                )
                 continue
             except RequestBlocked as exc:
-                logger.warning("YouTube blocks transcript requests: %s", exc)
+                logger.warning("YouTube blocks transcript requests: %s", type(exc))
                 blocked = True
-                yield row(video_id, TRANSCRIPT_BLOCKED, error=type(exc).__name__)
+                yield row(
+                    video_id, fetch_status=TRANSCRIPT_BLOCKED, error=describe(exc)
+                )
                 continue
             except Exception as exc:
                 logger.exception("Failed to list transcripts for video_id=%s", video_id)
-                yield row(video_id, TRANSCRIPT_FAILED, error=type(exc).__name__)
+                yield row(video_id, fetch_status=TRANSCRIPT_FAILED, error=describe(exc))
                 continue
-            if not transcripts:
-                yield row(video_id, TRANSCRIPT_NONE)
+
+            errors = []
             for transcript in transcripts:
-                keys = {
-                    "language_code": transcript.language_code,
-                    "language": transcript.language,
-                    "is_generated": transcript.is_generated,
-                }
                 try:
                     fetched = transcript.fetch()
+                except RequestBlocked as exc:
+                    logger.warning("YouTube blocks transcript requests: %s", type(exc))
+                    blocked = True
+                    errors.append(f"{transcript.language_code}: {describe(exc)}")
+                    break
                 except Exception as exc:
                     logger.exception(
                         "Failed to fetch the %s transcript of video_id=%s",
                         transcript.language_code,
                         video_id,
                     )
-                    yield row(
-                        video_id, TRANSCRIPT_FAILED, error=type(exc).__name__, **keys
-                    )
+                    errors.append(f"{transcript.language_code}: {describe(exc)}")
                     continue
                 yield row(
                     video_id,
-                    TRANSCRIPT_FETCHED,
+                    language_code=transcript.language_code,
+                    language=transcript.language,
+                    is_generated=transcript.is_generated,
+                    fetch_status=TRANSCRIPT_FETCHED,
                     transcript=formatter.format_transcript(fetched),
                     segments=fetched.to_raw_data(),
-                    **keys,
                 )
+            if blocked:
+                status = TRANSCRIPT_BLOCKED
+            elif errors:
+                status = TRANSCRIPT_FAILED
+            else:
+                status = TRANSCRIPT_FETCHED if transcripts else TRANSCRIPT_NONE
+            yield row(video_id, fetch_status=status, error="; ".join(errors) or None)
 
     yield youtube_listing
     yield youtube_channels

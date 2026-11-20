@@ -174,7 +174,6 @@ def test_resources_share_one_playlist_listing(monkeypatch, tmp_path):
 
 
 class _FakeTranscriptErrors:
-    NoTranscriptFound = type("NoTranscriptFound", (Exception,), {})
     TranscriptsDisabled = type("TranscriptsDisabled", (Exception,), {})
     VideoUnavailable = type("VideoUnavailable", (Exception,), {})
     RequestBlocked = type("RequestBlocked", (Exception,), {})
@@ -221,7 +220,6 @@ def _install_fake_transcript_api(monkeypatch, listings=None):
     fake: Any = types.ModuleType("youtube_transcript_api")
     fake.YouTubeTranscriptApi = _Api
     for name in (
-        "NoTranscriptFound",
         "TranscriptsDisabled",
         "VideoUnavailable",
         "RequestBlocked",
@@ -289,48 +287,65 @@ def test_transcripts_land_every_language_uploaded_and_generated(monkeypatch):
         ("vid1", "en", False, "fetched", "hello", None),
         ("vid1", "en", True, "fetched", "hello auto", None),
         ("vid1", "es", False, "fetched", "hola", None),
+        ("vid1", "", False, "fetched", None, None),
     ]
     assert rows[0]["language"] == "Language en"
     assert rows[2]["segments"] == [{"text": "hola", "start": 0.0, "duration": 1.0}]
     assert len({row["fetched_at"] for row in rows}) == 1
 
 
-def test_a_video_without_transcripts_has_a_row_saying_why(monkeypatch):
+def test_a_video_without_transcripts_has_a_status_row_saying_why(monkeypatch):
     rows, _calls = _transcript_rows(
         monkeypatch,
-        ["none", "disabled", "gone", "broken", "empty", "bad-es"],
+        ["disabled", "gone", "broken", "empty"],
         {
-            "none": _FakeTranscriptErrors.NoTranscriptFound(),
             "disabled": _FakeTranscriptErrors.TranscriptsDisabled(),
-            "gone": _FakeTranscriptErrors.VideoUnavailable(),
+            "gone": _FakeTranscriptErrors.VideoUnavailable("private"),
             "broken": ValueError("unparsable"),
             "empty": [],
-            "bad-es": [("en", False, "hello"), ("es", False, ValueError("bad"))],
         },
     )
 
     assert _summary(rows) == [
-        ("none", "", False, "none", None, None),
         ("disabled", "", False, "none", None, None),
-        ("gone", "", False, "unavailable", None, None),
-        ("broken", "", False, "failed", None, "ValueError"),
+        ("gone", "", False, "unavailable", None, "VideoUnavailable: private"),
+        ("broken", "", False, "failed", None, "ValueError: unparsable"),
         ("empty", "", False, "none", None, None),
-        ("bad-es", "en", False, "fetched", "hello", None),
-        ("bad-es", "es", False, "failed", None, "ValueError"),
     ]
 
 
-def test_once_youtube_blocks_the_run_no_more_requests_are_made(monkeypatch):
-    rows, calls = _transcript_rows(
+def test_a_transcript_that_fails_writes_no_row_of_its_own(monkeypatch):
+    """So a failed fetch never overwrites the text an earlier run landed."""
+    rows, _calls = _transcript_rows(
         monkeypatch,
-        ["ok", "blocked", "later1", "later2"],
-        {"blocked": _FakeTranscriptErrors.IpBlocked()},
+        ["bad-es"],
+        {"bad-es": [("en", False, "hello"), ("es", False, ValueError("bad"))]},
     )
 
+    assert _summary(rows) == [
+        ("bad-es", "en", False, "fetched", "hello", None),
+        ("bad-es", "", False, "failed", None, "es: ValueError: bad"),
+    ]
+
+
+@pytest.mark.parametrize("blocked_by", ["list", "fetch"])
+def test_once_youtube_blocks_the_run_no_more_requests_are_made(monkeypatch, blocked_by):
+    block = _FakeTranscriptErrors.IpBlocked("429")
+    listings = {
+        "blocked": block
+        if blocked_by == "list"
+        else [("en", False, block), ("es", False, "hola")]
+    }
+    rows, calls = _transcript_rows(
+        monkeypatch, ["ok", "blocked", "later1", "later2"], listings
+    )
+
+    error = "IpBlocked: 429" if blocked_by == "list" else "en: IpBlocked: 429"
     assert calls == ["ok", "blocked"]
     assert _summary(rows) == [
         ("ok", "en", False, "fetched", "hello", None),
-        ("blocked", "", False, "blocked", None, "IpBlocked"),
+        ("ok", "", False, "fetched", None, None),
+        ("blocked", "", False, "blocked", None, error),
         ("later1", "", False, "blocked", None, None),
         ("later2", "", False, "blocked", None, None),
     ]
