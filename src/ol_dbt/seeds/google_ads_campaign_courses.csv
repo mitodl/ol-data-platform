@@ -1,0 +1,18 @@
+course,campaign_name_pattern,campaign_id,product_readable_id
+universal_ai,Program - UAI - %,,program-v1:UAI+B2C
+mm_dedp,Program - mmDEDP - %Public Policy%,,program-v1:MITx+DEDP-Public-Policy
+mm_dedp,Program - mmDEDP - %Internat%,,program-v1:MITx+DEDP
+systems_engineering,Program - SysEng - %,,program-v1:xPRO+SysEngx
+quantum_computing,Program - Quantum Computing - %,,program-v1:xPRO+QCF
+machine_learning,Program - MLx - %,,program-v1:xPRO+MLx
+deploying_ai,Course - DAI - %,,course-v1:xPRO+DAI
+sys_think,Course - System Thinking - %,,course-v1:xPRO+LASERxE1
+generative_ai,Course - Generative AI - %,,
+mm_ds,Program - mmDS - %,,
+mm_ds,Course in Program - Uncertianty & Data%,,
+mm_ds,%Machine Learning w Python - mmDS%,,
+mm_finance,Program - mFin - %,,program-v1:MITxT+FIN
+mm_finance,%Course in Program - Financial accounting%,,program-v1:MITxT+FIN
+mm_finance,Course in Program - Foundations of Modern Finance%,,program-v1:MITxT+FIN
+mm_scm,Course in Program - Supply Chain Fundamentals%,,program-v1:MITxT+SCM
+mm_pom,Course in Program - Manufacturing %,,program-v1:MITxT+POM

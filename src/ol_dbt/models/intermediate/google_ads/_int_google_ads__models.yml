@@ -3,18 +3,25 @@ version: 2
 
 models:
 - name: int__google_ads__keyword_daily
-  description: Each product's keyword clicks, cost and conversions per day, as ad_opt_v2's
+  description: Each course's keyword clicks, cost and conversions per day, as ad_opt_v2's
     keyword-day panel after clean_kw_day_panel (the KwDayPanel schema in ads-optimizer).
     Keeps Search campaigns not named EXCLUDE or Experiment, the three keyword match
-    types, days from the product's min_date, ad group keywords with clicks or counted
-    conversions, and the product's ad networks. Where ad_opt_v2 keeps one ad group's
-    row for a keyword, this adds the ad groups together.
+    types, days from the account's history_start_date, the Google Search network only
+    for the MicroMasters courses, and ad group keywords with clicks or counted conversions.
+    Where ad_opt_v2 keeps one ad group's row for a keyword, this adds the ad groups
+    together.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: account_id
+    description: str, Google Ads client account id
     tests:
     - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
   - name: report_date
     description: date, the report day in the account's time zone
     tests:
@@ -41,8 +48,8 @@ models:
   - name: cost
     description: decimal, cost in the account currency, to the cent
   - name: all_conversions
-    description: double, all_conversions of the product's conversion actions, to two
-      decimals; 0 for a product with none
+    description: double, all_conversions of the counted conversion actions (google_ads_conversion_actions),
+      to two decimals; 0 when there are none
   - name: currency_code
     description: str, account currency; null on rows with conversions but no clicks
   - name: keyword_first_page_cpc
@@ -52,23 +59,29 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - account_id
         - report_date
         - campaign_name
         - keyword_text
         - keyword_match_type
 
 - name: int__google_ads__campaign_daily
-  description: Each product's Search campaign impressions and impression shares per
+  description: Each course's Search campaign impressions and impression shares per
     day, as ad_opt_v2's campaign-day report (reports/campaign-day-report.csv). Keeps
-    campaigns not named EXCLUDE or Experiment, with impressions, from the product's
-    min_date.
+    campaigns not named EXCLUDE or Experiment, with impressions, from the account's
+    history_start_date.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: account_id
+    description: str, Google Ads client account id
     tests:
     - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
   - name: report_date
     description: date, the report day in the account's time zone
     tests:
@@ -92,13 +105,13 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - account_id
         - report_date
         - campaign_id
 
 - name: int__google_ads__campaign_changes
   description: >
-    Each product's Search campaign changes, the input of ad_opt_v2's parse_change_history:
+    Each course's Search campaign changes, the input of ad_opt_v2's parse_change_history:
     budget, campaign status, start and end, ad group status, and keyword and negative
     keyword changes. The change history report comes first, then the JSONL after the
     report's last change, then the API after the JSONL's last change. Campaign names
@@ -111,11 +124,9 @@ models:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
-    tests:
-    - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
   - name: change_source
     description: str, report, jsonl or api
     tests:
@@ -165,7 +176,7 @@ models:
     description: str, the value after the change, in the same form; null for an end
       date that was removed
   - name: change_order
-    description: bigint, the change's place in the product's replay order; same-second
+    description: bigint, the change's place in the course's replay order; same-second
       changes keep their source's order
     tests:
     - not_null
@@ -173,19 +184,21 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - change_order
 
 - name: int__google_ads__campaign_state
-  description: Each product's Search campaigns that are not removed, from the account's
+  description: Each course's Search campaigns that are not removed, from the account's
     latest daily snapshot, with budget, status, schedule and keyword, negative and
     location counts, as ad_opt_v2's account-state snapshot.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
-    tests:
-    - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
   - name: snapshot_date
     description: date, the snapshot the state comes from
     tests:
@@ -200,8 +213,8 @@ models:
     description: str, USA, A, B or C from the campaign name; null when the name has
       none
   - name: campaign_is_excluded
-    description: boolean, true when the name has one of the product's excluded campaign
-      patterns
+    description: boolean, true when the name has Remarketing, which ad_opt_v2 leaves
+      out of training and planning
     tests:
     - not_null
   - name: campaign_status
@@ -240,7 +253,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - campaign_id
 
 - name: int__google_ads__campaign_names
@@ -274,11 +287,11 @@ models:
         - campaign_id
         - name
 
-- name: int__google_ads__campaign_products
-  description: Each Google Ads campaign's product, the one key every other model here
-    groups by. google_ads_campaign_products maps a campaign by its campaign_id, or
-    else by a pattern its latest name matches (Program - UAI - %); a campaign that
-    matches no row has no product and is left out of every panel.
+- name: int__google_ads__campaign_courses
+  description: Each Google Ads campaign's course, the key the other models group by.
+    google_ads_campaign_courses maps a campaign by its campaign_id, or else by a pattern
+    its latest name matches (Program - UAI - %). A campaign that matches no row is
+    not here, and the other models keep its rows with no course.
   config:
     meta:
       # Both Google Ads units are omitted from QA.
@@ -294,22 +307,19 @@ models:
     - not_null
   - name: campaign_name
     description: str, the campaign's latest name
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises;
-      the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think
     tests:
     - not_null
+  - name: product_readable_id
+    description: str, the course_readable_id or program_readable_id the campaign advertises,
+      when the seed gives one; the course, not a course run. DEDP's two tracks are
+      two programs in one course.
   - name: product_name
     description: str, the product's catalog title from dim_course or dim_program,
-      e.g. System Thinking, for people reading plans and reports
-    tests:
-    - not_null
-  - name: min_date
-    description: date, the product's first report date, from google_ads_product_settings
-    tests:
-    - not_null
+      e.g. System Thinking
   tests:
-  # A campaign two rules match would be counted in two products.
+  # A campaign two rules match would be counted in two courses.
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
@@ -317,7 +327,7 @@ models:
         - campaign_id
 
 - name: int__google_ads__campaign_versions
-  description: Each product's Search campaign versions, as ad_opt_v2's parse_change_history
+  description: Each course's Search campaign versions, as ad_opt_v2's parse_change_history
     writes them (campaign-summary.csv; the CampaignSummary schema in ads-optimizer).
     The campaign's settings are replayed from int__google_ads__campaign_changes for
     every day from its first keyword row, and consecutive days with the same budget,
@@ -330,13 +340,12 @@ models:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
     tests:
     - not_null
   - name: campaign_version
-    description: bigint, the version's number within the product, ordered by campaign
+    description: bigint, the version's number within the course, ordered by campaign
       name and start date
     tests:
     - not_null
@@ -408,17 +417,17 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - campaign_version
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - campaign_name
         - start_date
 
 - name: int__google_ads__campaign_keyword_sets
-  description: Each product's distinct campaign keyword lists, as ad_opt_v2's campaign-keyword-sets.csv
+  description: Each course's distinct campaign keyword lists, as ad_opt_v2's campaign-keyword-sets.csv
     (the CampaignKeywordSets schema in ads-optimizer). One row per keyword_set_id
     in int__google_ads__campaign_versions.
   config:
@@ -426,9 +435,8 @@ models:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
     tests:
     - not_null
   - name: keyword_set_id
@@ -458,24 +466,23 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - keyword_set_id
 
 - name: int__google_ads__campaign_day_panel
-  description: Each product's Search campaign clicks, cost and conversions per day
+  description: Each course's Search campaign clicks, cost and conversions per day
     under the campaign version that held that day, as ad_opt_v2's generate_campaign_day_panel
     (campaign-day-panel.csv; the CampaignDayPanel schema in ads-optimizer). Leaves
-    out the product's excluded campaigns and days without cost, adds zero rows for
-    every day of an active version that had none, and takes impressions and impression
-    shares from int__google_ads__campaign_daily.
+    out Remarketing campaigns and days without cost, adds zero rows for every day
+    of an active version that had none, and takes impressions and impression shares
+    from int__google_ads__campaign_daily.
   config:
     meta:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
     tests:
     - not_null
   - name: report_date
@@ -499,8 +506,8 @@ models:
   - name: cost
     description: decimal, cost to the cent; 0 on a filled day
   - name: all_conversions
-    description: double, all_conversions of the product's conversion actions, to four
-      decimals
+    description: double, all_conversions of the counted conversion actions (google_ads_conversion_actions),
+      to four decimals
   - name: impressions
     description: bigint, impressions; 0 when the campaign-day report has no row
   - name: search_impression_share
@@ -514,12 +521,12 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - report_date
         - campaign_version
 
 - name: int__google_ads__segment_conversion_rates
-  description: Each product's conversions per click for each region and match-type
+  description: Each course's conversions per click for each region and match-type
     set over the whole campaign-day panel, as ad_opt_v2's compute_segment_conv_per_click_rates
     (the SegmentConvPerClickRates schema in ads-optimizer). The library computes these
     from the panel it is given when not supplied.
@@ -528,9 +535,8 @@ models:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id or program_readable_id the campaign advertises,
-      from int__google_ads__campaign_products; the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
     tests:
     - not_null
   - name: campaign_region
@@ -549,6 +555,6 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - product_readable_id
+        - course
         - campaign_region
         - match_types

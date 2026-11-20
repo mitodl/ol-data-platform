@@ -10,7 +10,7 @@
 {%- set schedule_date_re = "'[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4}'" %}
 
 -- history_folder is ad_opt_v2's course folder its history files came from; the API takes over
--- after a folder's history ends, in that folder's account. Each change's product comes from its
+-- after a folder's history ends, in that folder's account. Each change's course comes from its
 -- campaign at the end.
 with history_accounts as (
     select history_folder, account_id from {{ ref('google_ads_history_accounts') }}
@@ -518,12 +518,12 @@ with history_accounts as (
     having count(distinct names.latest_name) = 1
 )
 
--- History rows name their campaign but not its id, so products are matched by latest name.
-, name_products as (
-    select campaign_name, max(product_readable_id) as product_readable_id
-    from {{ ref('int__google_ads__campaign_products') }}
+-- History rows name their campaign but not its id, so courses are matched by latest name.
+, name_courses as (
+    select campaign_name, max(course) as course
+    from {{ ref('int__google_ads__campaign_courses') }}
     group by campaign_name
-    having count(distinct product_readable_id) = 1
+    having count(distinct course) = 1
 )
 
 , current_changes as (
@@ -548,7 +548,7 @@ with history_accounts as (
 )
 
 select
-    name_products.product_readable_id
+    name_courses.course
     , current_changes.change_source
     , current_changes.change_at
     , current_changes.campaign_name
@@ -566,7 +566,7 @@ select
     , current_changes.new_value
     -- Same-second changes keep their source order, as ad_opt_v2's stable sort does.
     , row_number() over (
-        partition by name_products.product_readable_id
+        partition by name_courses.course
         order by
             current_changes.change_at nulls last
             , current_changes.sort_1 nulls last
@@ -574,7 +574,7 @@ select
             , current_changes.sort_3 nulls last
     ) as change_order
 from current_changes
-inner join name_products on current_changes.campaign_name = name_products.campaign_name
+left join name_courses on current_changes.campaign_name = name_courses.campaign_name
 -- parse_change_history's Search campaigns: the name says Search and not Experiment.
 where
     current_changes.campaign_name like '%Search%'

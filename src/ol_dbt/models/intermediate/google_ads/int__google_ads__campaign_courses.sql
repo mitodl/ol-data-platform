@@ -1,6 +1,7 @@
--- Each campaign's product: the google_ads_campaign_products row naming its campaign_id, else
--- the row whose pattern its latest name matches. A campaign that matches no row has no product.
--- product_name is the catalog title, for people; the id is the key.
+-- Each campaign's course: the google_ads_campaign_courses row naming its campaign_id, else the
+-- row whose pattern its latest name matches. A campaign that matches no row is not here, and the
+-- other models keep its rows with no course. product_readable_id and product_name are for
+-- people and joins; course is the key.
 with campaigns as (
     select account_id, campaign_id, latest_name as campaign_name
     from {{ ref('int__google_ads__campaign_names') }}
@@ -8,28 +9,22 @@ with campaigns as (
 )
 
 , rules as (
-    select product_readable_id, campaign_name_pattern, campaign_id
-    from {{ ref('google_ads_campaign_products') }}
+    select course, campaign_name_pattern, campaign_id, product_readable_id
+    from {{ ref('google_ads_campaign_courses') }}
 )
 
 , by_id as (
-    select campaigns.account_id, campaigns.campaign_id, rules.product_readable_id
+    select campaigns.account_id, campaigns.campaign_id, rules.course, rules.product_readable_id
     from campaigns
     inner join rules on campaigns.campaign_id = rules.campaign_id
 )
 
 , by_name as (
-    select campaigns.account_id, campaigns.campaign_id, rules.product_readable_id
+    select campaigns.account_id, campaigns.campaign_id, rules.course, rules.product_readable_id
     from campaigns
     inner join rules on rules.campaign_id is null and campaigns.campaign_name like rules.campaign_name_pattern
     left join by_id on campaigns.account_id = by_id.account_id and campaigns.campaign_id = by_id.campaign_id
     where by_id.campaign_id is null
-)
-
-, min_dates as (
-    select product_readable_id, cast(setting_value as date) as min_date
-    from {{ ref('google_ads_product_settings') }}
-    where setting = 'min_date'
 )
 
 , product_names as (
@@ -47,14 +42,13 @@ select
     matched.account_id
     , matched.campaign_id
     , campaigns.campaign_name
+    , matched.course
     , matched.product_readable_id
     , product_names.product_name
-    , min_dates.min_date
 from (
-    select account_id, campaign_id, product_readable_id from by_id
+    select account_id, campaign_id, course, product_readable_id from by_id
     union all
-    select account_id, campaign_id, product_readable_id from by_name
+    select account_id, campaign_id, course, product_readable_id from by_name
 ) as matched
 inner join campaigns on matched.account_id = campaigns.account_id and matched.campaign_id = campaigns.campaign_id
-left join min_dates on matched.product_readable_id = min_dates.product_readable_id
 left join product_names on matched.product_readable_id = product_names.product_readable_id

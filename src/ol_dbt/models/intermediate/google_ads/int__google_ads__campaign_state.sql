@@ -1,6 +1,7 @@
 -- ad_opt_v2's account-state snapshot, from each account's latest daily snapshot.
-with products as (
-    select product_readable_id, account_id, campaign_id, min_date from {{ ref('int__google_ads__campaign_products') }}
+-- A campaign no google_ads_campaign_courses row maps is kept, with no course.
+with courses as (
+    select account_id, campaign_id, course from {{ ref('int__google_ads__campaign_courses') }}
 )
 
 , latest_snapshots as (
@@ -11,7 +12,7 @@ with products as (
 
 , campaigns as (
     select
-        products.product_readable_id
+        courses.course
         , campaign_snapshots.account_id
         , campaign_snapshots.snapshot_date
         , campaign_snapshots.campaign_resource_name
@@ -28,10 +29,10 @@ with products as (
         on
             campaign_snapshots.account_id = latest_snapshots.account_id
             and campaign_snapshots.snapshot_date = latest_snapshots.snapshot_date
-    inner join products
+    left join courses
         on
-            campaign_snapshots.account_id = products.account_id
-            and campaign_snapshots.campaign_id = products.campaign_id
+            campaign_snapshots.account_id = courses.account_id
+            and campaign_snapshots.campaign_id = courses.campaign_id
     where
         {{ google_ads_is_search_campaign('campaign_snapshots.campaign_name', 'campaign_snapshots.campaign_channel_type') }}
         and campaign_snapshots.campaign_status != 'REMOVED'
@@ -98,12 +99,12 @@ with products as (
 )
 
 select
-    campaigns.product_readable_id
+    campaigns.course
     , campaigns.snapshot_date
     , campaigns.campaign_id
     , campaigns.campaign_name
     , {{ google_ads_campaign_region('campaigns.campaign_name') }} as campaign_region
-    , excluded_campaigns.campaign_name is not null as campaign_is_excluded
+    , {{ google_ads_is_excluded_campaign('campaigns.campaign_name') }} as campaign_is_excluded
     , campaigns.campaign_status
     , campaigns.campaign_start_at
     , campaigns.campaign_end_at
@@ -131,5 +132,3 @@ left join shared_negative_counts
     on
         campaigns.account_id = shared_negative_counts.account_id
         and campaigns.campaign_id = shared_negative_counts.campaign_id
-left join ({{ google_ads_excluded_campaigns('campaigns') }}) as excluded_campaigns
-    on campaigns.product_readable_id = excluded_campaigns.product_readable_id and campaigns.campaign_name = excluded_campaigns.campaign_name

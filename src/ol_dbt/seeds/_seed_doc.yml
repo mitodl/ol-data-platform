@@ -366,21 +366,23 @@ seeds:
         config:
           error_if: ">0"
 
-- name: google_ads_campaign_products
-  description: The product each Google Ads campaign advertises, for the optimizer.
-    A row maps one campaign by campaign_id, or every campaign whose name matches campaign_name_pattern.
+- name: google_ads_campaign_courses
+  description: The ad_opt_v2 course each Google Ads campaign belongs to. A row maps
+    one campaign by campaign_id, or every campaign whose name matches campaign_name_pattern.
     Marketing names campaigns "<Program | Course> - <code> - ...", in every account,
-    so one row per product maps new campaigns without a change here. A campaign that
-    matches no row is left out; add a row when a product launches.
+    so one row per course maps new campaigns without a change here; older names that
+    break the convention get their own rows. A campaign that matches no row keeps
+    its rows with no course; add a row when a course launches.
   config:
     column_types:
-      product_readable_id: varchar
+      course: varchar
       campaign_name_pattern: varchar
       campaign_id: bigint
+      product_readable_id: varchar
   columns:
-  - name: product_readable_id
-    description: str, the course_readable_id (dim_course) or program_readable_id (dim_program)
-      the campaigns advertise; the course, not a course run
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think; DEDP's two tracks are
+      both mm_dedp
     tests:
     - not_null
   - name: campaign_name_pattern
@@ -389,54 +391,20 @@ seeds:
   - name: campaign_id
     description: bigint, one campaign this row maps, for a name that does not follow
       the convention; it wins over every pattern
-
-- name: google_ads_product_settings
-  description: Each product's report settings, from ad_opt_v2's config/default.yaml
-    and course.yaml files. min_date is the first report day. conversion_action names
-    the conversions that count; a product without one counts none. excluded_campaign_pattern
-    marks campaigns the optimizer leaves out (a case-insensitive substring). ad_network
-    keeps only that network; a product without one keeps every network.
-  config:
-    column_types:
-      product_readable_id: varchar
-      setting: varchar
-      setting_value: varchar
-  tests:
-  - dbt_utils.unique_combination_of_columns:
-      arguments:
-        combination_of_columns:
-        - product_readable_id
-        - setting
-        - setting_value
-  columns:
   - name: product_readable_id
-    description: str, a product in google_ads_campaign_products
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('google_ads_campaign_products')
-          field: product_readable_id
-  - name: setting
-    description: str, min_date, conversion_action, excluded_campaign_pattern or ad_network
-    tests:
-    - accepted_values:
-        arguments:
-          values: ['min_date', 'conversion_action', 'excluded_campaign_pattern', 'ad_network']
-  - name: setting_value
-    description: str, the setting's value, e.g. 2024-10-07, HubSpot - Customers, Remarketing
-      or SEARCH
-    tests:
-    - not_null
+    description: str, optional, the course_readable_id (dim_course) or program_readable_id
+      (dim_program) the campaigns advertise; the course, not a course run
 
 - name: google_ads_history_accounts
   description: The Google Ads account of each ad_opt_v2 course folder its change history
-    files came from. The history covers a folder's account up to the files' last change,
-    and API change events take over after it. Used for nothing else.
+    files came from, and the day that history starts. Budgets cannot be replayed before
+    it, so the daily panels start there. API change events take over after the files'
+    last change.
   config:
     column_types:
       history_folder: varchar
       account_id: varchar
+      history_start_date: date
   columns:
   - name: history_folder
     description: str, ad_opt_v2's course folder name, e.g. systems_engineering
@@ -448,3 +416,8 @@ seeds:
     tests:
     - not_null
     - unique
+  - name: history_start_date
+    description: date, the first day of the folder's change history (each course.yaml's
+      min_date)
+    tests:
+    - not_null

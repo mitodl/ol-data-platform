@@ -1,13 +1,14 @@
 -- ad_opt_v2's generate_campaign_day_panel: each Search campaign's clicks, cost and conversions per
 -- day under the version that held that day, with zero rows for serving days that had no cost.
 with keyword_days as (
-    select product_readable_id, report_date, campaign_name, campaign_region, clicks, cost, all_conversions
+    select course, report_date, campaign_name, campaign_region, clicks, cost, all_conversions
     from {{ ref('int__google_ads__keyword_daily') }}
+    where course is not null
 )
 
 , versions as (
     select
-        product_readable_id
+        course
         , campaign_version
         , campaign_name
         , campaign_region
@@ -20,9 +21,9 @@ with keyword_days as (
 )
 
 , campaign_list as (
-    select product_readable_id, campaign_name from keyword_days
+    select course, campaign_name from keyword_days
     union
-    select product_readable_id, campaign_name from versions
+    select course, campaign_name from versions
 )
 
 , excluded as (
@@ -33,7 +34,7 @@ with keyword_days as (
     select keyword_days.*
     from keyword_days
     left join excluded
-        on keyword_days.product_readable_id = excluded.product_readable_id and keyword_days.campaign_name = excluded.campaign_name
+        on keyword_days.course = excluded.course and keyword_days.campaign_name = excluded.campaign_name
     where excluded.campaign_name is null
 )
 
@@ -41,20 +42,20 @@ with keyword_days as (
     select versions.*
     from versions
     left join excluded
-        on versions.product_readable_id = excluded.product_readable_id and versions.campaign_name = excluded.campaign_name
+        on versions.course = excluded.course and versions.campaign_name = excluded.campaign_name
     where excluded.campaign_name is null
 )
 
 , last_days as (
-    select product_readable_id, max(report_date) as last_day
+    select course, max(report_date) as last_day
     from included_days
-    group by product_readable_id
+    group by course
 )
 
 -- Days the campaign spent nothing are dropped, as the panel keeps only days with cost.
 , campaign_day_totals as (
     select
-        product_readable_id
+        course
         , report_date
         , campaign_name
         , campaign_region
@@ -62,13 +63,13 @@ with keyword_days as (
         , sum(cost) as cost
         , sum(all_conversions) as all_conversions
     from included_days
-    group by product_readable_id, report_date, campaign_name, campaign_region
+    group by course, report_date, campaign_name, campaign_region
     having sum(cost) > 0
 )
 
 , version_days as (
     select
-        campaign_day_totals.product_readable_id
+        campaign_day_totals.course
         , campaign_day_totals.report_date
         , included_versions.campaign_version
         , campaign_day_totals.campaign_name
@@ -81,7 +82,7 @@ with keyword_days as (
     from campaign_day_totals
     inner join included_versions
         on
-            campaign_day_totals.product_readable_id = included_versions.product_readable_id
+            campaign_day_totals.course = included_versions.course
             and campaign_day_totals.campaign_name = included_versions.campaign_name
             and campaign_day_totals.report_date >= included_versions.start_date
             and (included_versions.end_date is null or campaign_day_totals.report_date < included_versions.end_date)
@@ -90,7 +91,7 @@ with keyword_days as (
 -- Every day of an active version, up to its end or the panel's last day.
 , active_version_days as (
     select
-        bounded.product_readable_id
+        bounded.course
         , cast({{ dbt.dateadd('day', 'days.day_number - 1', 'bounded.start_date') }} as date) as report_date
         , bounded.campaign_version
         , bounded.campaign_name
@@ -106,7 +107,7 @@ with keyword_days as (
                 , cast({{ dbt.dateadd('day', 1, 'last_days.last_day') }} as date)
             ) as end_before
         from included_versions
-        inner join last_days on included_versions.product_readable_id = last_days.product_readable_id
+        inner join last_days on included_versions.course = last_days.course
         where included_versions.campaign_serving_status = 'active'
     ) as bounded
     cross join
@@ -117,7 +118,7 @@ with keyword_days as (
 
 , zero_days as (
     select
-        active_version_days.product_readable_id
+        active_version_days.course
         , active_version_days.report_date
         , active_version_days.campaign_version
         , active_version_days.campaign_name
@@ -130,10 +131,10 @@ with keyword_days as (
     from active_version_days
     left join version_days
         on
-            active_version_days.product_readable_id = version_days.product_readable_id
+            active_version_days.course = version_days.course
             and active_version_days.campaign_version = version_days.campaign_version
             and active_version_days.report_date = version_days.report_date
-    where active_version_days.report_date < active_version_days.end_before and version_days.product_readable_id is null
+    where active_version_days.report_date < active_version_days.end_before and version_days.course is null
 )
 
 , panel_days as (
@@ -145,7 +146,7 @@ with keyword_days as (
 -- Impressions sum and shares average when a name covers two campaigns on a day.
 , impression_days as (
     select
-        product_readable_id
+        course
         , report_date
         , campaign_name
         , sum(impressions) as impressions
@@ -153,11 +154,11 @@ with keyword_days as (
         , avg(search_budget_lost_impression_share) as search_budget_lost_impression_share
         , avg(search_rank_lost_impression_share) as search_rank_lost_impression_share
     from {{ ref('int__google_ads__campaign_daily') }}
-    group by product_readable_id, report_date, campaign_name
+    group by course, report_date, campaign_name
 )
 
 select
-    panel_days.product_readable_id
+    panel_days.course
     , panel_days.report_date
     , panel_days.campaign_version
     , panel_days.campaign_name
@@ -174,6 +175,6 @@ select
 from panel_days
 left join impression_days
     on
-        panel_days.product_readable_id = impression_days.product_readable_id
+        panel_days.course = impression_days.course
         and panel_days.report_date = impression_days.report_date
         and panel_days.campaign_name = impression_days.campaign_name

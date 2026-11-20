@@ -99,13 +99,38 @@
 {%- endmacro %}
 
 
+{% macro google_ads_is_excluded_campaign(campaign_name_expr) -%}
+    {#- ad_opt_v2's excluded_campaign_patterns: Search remarketing targets past visitors, a
+        different audience, so it is left out of training and planning. -#}
+    lower({{ campaign_name_expr }}) like '%remarketing%'
+{%- endmacro %}
+
+
 {% macro google_ads_excluded_campaigns(source_relation) -%}
-    {#- Campaigns whose name holds one of the product's excluded_campaign_patterns, ignoring case. -#}
-    select distinct named.product_readable_id, named.campaign_name
+    select distinct named.course, named.campaign_name
     from {{ source_relation }} as named
-    inner join {{ ref('google_ads_product_settings') }} as excluded
-        on
-            named.product_readable_id = excluded.product_readable_id
-            and excluded.setting = 'excluded_campaign_pattern'
-            and lower(named.campaign_name) like concat('%', lower(excluded.setting_value), '%')
+    where {{ google_ads_is_excluded_campaign('named.campaign_name') }}
+{%- endmacro %}
+
+
+{% macro google_ads_search_network_only(course_expr, ad_network_expr) -%}
+    {#- ad_opt_v2's MicroMasters ad_networks: Search Partners took most of their clicks at a
+        few cents each, so their pull keeps the Google Search network only. -#}
+    (
+        {{ course_expr }} is null
+        or {{ course_expr }} not in ('mm_dedp', 'mm_ds', 'mm_finance', 'mm_pom', 'mm_scm')
+        or {{ ad_network_expr }} = 'SEARCH'
+    )
+{%- endmacro %}
+
+
+{% macro google_ads_conversion_actions() -%}
+    {#- The conversion actions that count, by name; each account names its customer
+        conversion differently, and no two accounts share a name. -#}
+    (
+        'MIT Learn (web) purchase'
+        , 'HubSpot - Customer'
+        , 'HubSpot - Customers'
+        , 'MITx Online Production (GA4 for Catalog Site)  (web) purchase'
+    )
 {%- endmacro %}
