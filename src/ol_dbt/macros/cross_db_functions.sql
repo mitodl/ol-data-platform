@@ -896,11 +896,18 @@
 {%- endmacro %}
 
 {% macro starrocks__session_variables_hint(variables) -%}
-    /*+ SET_VAR(
-    {%- for name, value in variables | dictsort -%}
-        {{ name }}={{ value }}{{ ", " if not loop.last }}
-    {%- endfor -%}
-    ) */
+    {%- if variables -%}
+        /*+ SET_VAR(
+        {%- for name, value in variables | dictsort -%}
+            {{ name }}=
+            {%- if value is boolean -%}{{ value | string | lower }}
+            {%- elif value is number -%}{{ value }}
+            {%- else -%}'{{ value }}'
+            {%- endif -%}
+            {{ ", " if not loop.last }}
+        {%- endfor -%}
+        ) */
+    {%- endif -%}
 {%- endmacro %}
 
 
