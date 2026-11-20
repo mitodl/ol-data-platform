@@ -85,8 +85,8 @@
     {#- ad_opt_v2's region rule: the first "-"-separated part naming USA/US, or A, B or C (optionally "Region A"). -#}
     {%- set pattern = "'(?:^|-)(?:[^-]*\\b(USA?)\\b|\\s*(?:Region )?([ABC])(?:[ /(]|\\s*(?:-|$)))'" -%}
     case
-        when nullif(regexp_extract({{ campaign_expr }}, {{ pattern }}, 1), '') is not null then 'USA'
-        else nullif(regexp_extract({{ campaign_expr }}, {{ pattern }}, 2), '')
+        when {{ regexp_extract_or_null(campaign_expr, pattern, 1) }} is not null then 'USA'
+        else {{ regexp_extract_or_null(campaign_expr, pattern, 2) }}
     end
 {%- endmacro %}
 

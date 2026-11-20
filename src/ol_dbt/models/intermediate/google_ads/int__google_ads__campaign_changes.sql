@@ -110,14 +110,14 @@ with history_accounts as (
         history_folder
         , change_source
         , change_at
-        , regexp_extract(change_detail, {{ budget_re }}, 1) as campaign_name
+        , {{ regexp_extract_or_null('change_detail', budget_re, 1) }} as campaign_name
         , ad_group_name
         , 'budget' as change_type
         , cast(null as varchar) as keyword_action
         , cast(null as varchar) as keyword_text
         , cast(null as varchar) as keyword_match_type
-        , replace(regexp_extract(change_detail, {{ budget_re }}, 2), ',', '') as previous_value
-        , replace(regexp_extract(change_detail, {{ budget_re }}, 3), ',', '') as new_value
+        , replace({{ regexp_extract_or_null('change_detail', budget_re, 2) }}, ',', '') as previous_value
+        , replace({{ regexp_extract_or_null('change_detail', budget_re, 3) }}, ',', '') as new_value
         , sort_1
         , sort_2
         , sort_3
@@ -136,8 +136,8 @@ with history_accounts as (
         , null as keyword_action
         , null as keyword_text
         , null as keyword_match_type
-        , lower(nullif(regexp_extract(change_detail, {{ status_re }}, 1), '')) as previous_value
-        , lower(regexp_extract(change_detail, {{ status_re }}, 2)) as new_value
+        , lower({{ regexp_extract_or_null('change_detail', status_re, 1) }}) as previous_value
+        , lower({{ regexp_extract_or_null('change_detail', status_re, 2) }}) as new_value
         , sort_1
         , sort_2
         , sort_3
@@ -154,16 +154,16 @@ with history_accounts as (
         , change_at
         , campaign_name
         , ad_group_name
-        , concat('campaign_', lower(regexp_extract(change_detail, {{ schedule_re }}, 1))) as change_type
+        , concat('campaign_', lower({{ regexp_extract_or_null('change_detail', schedule_re, 1) }})) as change_type
         , null as keyword_action
         , null as keyword_text
         , null as keyword_match_type
         , cast(cast({{ date_parse(
-            "nullif(regexp_extract(regexp_extract(change_detail, " ~ schedule_re ~ ", 2), " ~ schedule_date_re ~ "), '')"
+            regexp_extract_or_null(regexp_extract_or_null('change_detail', schedule_re, 2), schedule_date_re)
             , "'%b %d, %Y'"
         ) }} as date) as varchar) as previous_value
         , cast(cast({{ date_parse(
-            "nullif(regexp_extract(regexp_extract(change_detail, " ~ schedule_re ~ ", 3), " ~ schedule_date_re ~ "), '')"
+            regexp_extract_or_null(regexp_extract_or_null('change_detail', schedule_re, 3), schedule_date_re)
             , "'%b %d, %Y'"
         ) }} as date) as varchar) as new_value
         , sort_1
@@ -183,16 +183,17 @@ with history_accounts as (
         , campaign_name
         , ad_group_name
         , case
-            when regexp_extract(change_header, {{ keyword_header_re }}, 1) = 'negative ' then 'negative_keyword'
+            when {{ regexp_extract_or_null('change_header', keyword_header_re, 1) }} = 'negative ' then 'negative_keyword'
             else 'keyword'
         end as change_type
-        , regexp_extract(change_header, {{ keyword_header_re }}, 3) as keyword_action
+        , {{ regexp_extract_or_null('change_header', keyword_header_re, 3) }} as keyword_action
         , {{ google_ads_clean_keyword(
-            "coalesce(nullif(regexp_extract(change_detail, " ~ keyword_detail_re ~ ", 1), ''), "
-            ~ "nullif(regexp_extract(change_detail, " ~ keyword_detail_re ~ ", 2), ''), "
-            ~ "regexp_extract(change_detail, " ~ keyword_detail_re ~ ", 3))"
+            "coalesce("
+            ~ regexp_extract_or_null('change_detail', keyword_detail_re, 1) ~ ", "
+            ~ regexp_extract_or_null('change_detail', keyword_detail_re, 2) ~ ", "
+            ~ regexp_extract_or_null('change_detail', keyword_detail_re, 3) ~ ")"
         ) }} as keyword_text
-        , upper(regexp_extract(change_header, {{ keyword_header_re }}, 2)) as keyword_match_type
+        , upper({{ regexp_extract_or_null('change_header', keyword_header_re, 2) }}) as keyword_match_type
         , null as previous_value
         , null as new_value
         , sort_1
@@ -213,8 +214,8 @@ with history_accounts as (
         , null as keyword_action
         , null as keyword_text
         , null as keyword_match_type
-        , lower(nullif(regexp_extract(change_detail, {{ status_re }}, 1), '')) as previous_value
-        , lower(regexp_extract(change_detail, {{ status_re }}, 2)) as new_value
+        , lower({{ regexp_extract_or_null('change_detail', status_re, 1) }}) as previous_value
+        , lower({{ regexp_extract_or_null('change_detail', status_re, 2) }}) as new_value
         , sort_1
         , sort_2
         , sort_3
@@ -249,13 +250,19 @@ with history_accounts as (
 )
 
 , keyword_lookup as (
-    select keyword_resource_name as criterion_resource_name, ad_group_name, keyword_text, keyword_match_type
+    select
+        keyword_resource_name as criterion_resource_name
+        , ad_group_name
+        , keyword_text
+        , keyword_match_type
+        , case when keyword_is_negative then 'true' when not keyword_is_negative then 'false' end as keyword_is_negative
     from (
         select
             keyword_resource_name
             , ad_group_name
             , keyword_text
             , keyword_match_type
+            , keyword_is_negative
             , row_number() over (partition by keyword_resource_name order by snapshot_date desc) as keyword_rank
         from {{ ref('stg__google_ads__api__keyword_snapshots') }}
     ) as ranked
@@ -263,12 +270,20 @@ with history_accounts as (
 
     union all
 
-    select campaign_criterion_resource_name, null as ad_group_name, keyword_text, keyword_match_type
+    select
+        campaign_criterion_resource_name
+        , null as ad_group_name
+        , keyword_text
+        , keyword_match_type
+        , case
+            when campaign_criterion_is_negative then 'true' when not campaign_criterion_is_negative then 'false'
+        end as keyword_is_negative
     from (
         select
             campaign_criterion_resource_name
             , keyword_text
             , keyword_match_type
+            , campaign_criterion_is_negative
             , row_number() over (
                 partition by campaign_criterion_resource_name order by snapshot_date desc
             ) as keyword_rank
@@ -444,19 +459,27 @@ with history_accounts as (
             when api_events.change_resource_type = 'AD_GROUP_CRITERION'
                 then coalesce(keyword_lookup.ad_group_name, ad_group_names.ad_group_name)
         end as ad_group_name
+        -- A REMOVE event carries the keyword only in old_resource.
         , coalesce(
             {{ json_query_string('api_events.new_resource', "'$.ad_group_criterion.keyword.text'") }}
             , {{ json_query_string('api_events.new_resource', "'$.campaign_criterion.keyword.text'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.ad_group_criterion.keyword.text'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.campaign_criterion.keyword.text'") }}
             , keyword_lookup.keyword_text
         ) as raw_keyword_text
         , coalesce(
             {{ json_query_string('api_events.new_resource', "'$.ad_group_criterion.keyword.match_type'") }}
             , {{ json_query_string('api_events.new_resource', "'$.campaign_criterion.keyword.match_type'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.ad_group_criterion.keyword.match_type'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.campaign_criterion.keyword.match_type'") }}
             , keyword_lookup.keyword_match_type
         ) as raw_match_type
         , coalesce(
             {{ json_query_string('api_events.new_resource', "'$.ad_group_criterion.negative'") }}
             , {{ json_query_string('api_events.new_resource', "'$.campaign_criterion.negative'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.ad_group_criterion.negative'") }}
+            , {{ json_query_string('api_events.old_resource', "'$.campaign_criterion.negative'") }}
+            , keyword_lookup.keyword_is_negative
             , case when api_events.change_resource_type = 'CAMPAIGN_CRITERION' then 'true' else 'false' end
         ) = 'true' as is_negative
         , coalesce(

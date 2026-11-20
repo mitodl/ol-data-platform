@@ -325,6 +325,8 @@ models:
         combination_of_columns:
         - account_id
         - campaign_id
+      config:
+        error_if: '>0'
 
 - name: int__google_ads__campaign_versions
   description: Each course's Search campaign versions, as ad_opt_v2's parse_change_history

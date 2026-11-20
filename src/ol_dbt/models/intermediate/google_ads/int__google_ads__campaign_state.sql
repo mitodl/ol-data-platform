@@ -5,8 +5,10 @@ with courses as (
 )
 
 , latest_snapshots as (
-    select account_id, max(snapshot_date) as snapshot_date
-    from {{ ref('stg__google_ads__api__campaign_snapshots') }}
+    -- From fetch_log: a successful fetch of no campaigns has no rows of its own.
+    select account_id, max(fetch_window_end) as snapshot_date
+    from {{ ref('stg__google_ads__api__fetch_log') }}
+    where fetch_table_name = 'raw__google_ads__api__campaign_snapshots'
     group by account_id
 )
 
