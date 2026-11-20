@@ -74,3 +74,27 @@ unit_tests:
     - {key: courses/a/resources/discourses/, content: null, extraction_status: null}
     - {key: courses/a/resources/gone-courses/, content: null, extraction_status: null}
     - {key: courses/a/resources/video/, content: Intro to courses, extraction_status: extracted}
+- name: test_integrations__learn__ocw_content_files_has_no_text_for_types_learn_does_not_read
+  description: >
+    The platform reads .tex, .ipynb and .epub files, which Learn's VALID_FILE_TYPES
+    leaves out. Learn keeps such a resource with no text and no extraction status,
+    missing from the bucket or not. A type Learn reads, in any case, keeps its text.
+  model: integrations__learn__ocw_content_files
+  given:
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/notes-tex/,
+      content_type: file, content: '\section{Intro}', extraction_status: extracted,
+      has_text_file: true, transcript_unreadable: false, is_3play_artifact: false,
+      text_file_path: /courses/a/notes.tex}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/lab/, content_type: file,
+      content: null, extraction_status: missing, has_text_file: true, transcript_unreadable: false,
+      is_3play_artifact: false, text_file_path: /courses/a/lab1.ipynb}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/slides/,
+      content_type: file, content: Slide text, extraction_status: extracted, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false, text_file_path: /courses/a/Slides.PPTX}
+  expect:
+    rows:
+    - {key: courses/a/resources/notes-tex/, content: null, extraction_status: null}
+    - {key: courses/a/resources/lab/, content: null, extraction_status: null}
+    - {key: courses/a/resources/slides/, content: Slide text, extraction_status: extracted}

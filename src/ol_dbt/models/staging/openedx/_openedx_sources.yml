@@ -48,9 +48,11 @@ sources:
         export; null in files written before the archive asset recorded it
   - name: raw__openedx__s3__course_document_text
     description: >
-      Text Apache Tika extracted from the documents (PDFs, HTML, Office files) in
-      each Open edX course run's static assets, one row per document, written by
-      the openedx location's extract_course_document_text asset. Appended one
+      Text extracted from the files in each Open edX course run's static assets
+      (Tika, notebooks directly), one row per file, a file of a type the platform
+      does not read included as skipped_unsupported (in files written before
+      2026-11 such files have no row), written by the openedx location's
+      extract_course_document_text asset. Appended one
       file per course version; staging keeps each course's newest file.
     columns:
     - name: course_id
@@ -63,13 +65,15 @@ sources:
       description: str, lower-cased file extension with its dot; absent on failed
         rows written before the asset set it on them
     - name: content_type
-      description: str, the MIME type the file was sent to Tika as
+      description: str, the file's MIME type from its extension, application/octet-stream
+        when unknown
     - name: size_bytes
-      description: str, the file's size in bytes
+      description: str, the file's size in bytes; null on a skipped_unsupported row
     - name: content
       description: str, the extracted text; null when extraction was empty or failed
     - name: extraction_status
-      description: str, extracted, empty or failed; null on an empty-file marker row
+      description: str, extracted, empty, failed, or skipped_unsupported for a file
+        whose type the platform does not read; null on an empty-file marker row
     - name: extracted_at
       description: str, ISO 8601 UTC time the asset extracted the file's text, one
         value per landed file; null in files written before the assets stamped it

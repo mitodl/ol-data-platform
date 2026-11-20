@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import requests
 
 from ol_dlt import tika
+from ol_file_types import notebook_text
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,24 @@ def extract(
         raise_if_token_rejected(error, reading)
         logger.exception("Tika could not read %s", reading)
         return None, STATUS_FAILED, may_pass(error)
+    return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
+
+
+def extract_notebook(body: bytes, reading: str) -> Extraction:
+    """Read a Jupyter notebook's cells without Tika, and report how it went.
+
+    :param body: The ``.ipynb`` file.
+    :param reading: What to call the file in logs.
+    :returns: The text, its status, and whether to read the file again (never:
+        the same bytes fail the same way).
+    """
+    if not body:
+        return None, STATUS_EMPTY, False
+    try:
+        text = notebook_text(body)
+    except ValueError:
+        logger.warning("%s is not a readable notebook", reading, exc_info=True)
+        return None, STATUS_FAILED, False
     return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
 
 

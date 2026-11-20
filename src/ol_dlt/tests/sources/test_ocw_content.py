@@ -1170,6 +1170,43 @@ def test_file_over_the_size_limit_is_failed_without_being_read(
     assert tika.calls == 0
 
 
+def test_a_notebook_is_read_without_tika(bucket: FakeS3) -> None:
+    key = "courses/a-course/lab1.ipynb"
+    bucket.objects[key] = json.dumps(
+        {"cells": [{"cell_type": "code", "source": "import numpy"}]}
+    ).encode()
+    tika = FakeTika()
+
+    result = ocw_content._extract_text(bucket, tika, _BUCKET, key, 10)  # noqa: SLF001
+
+    assert result == ("import numpy", "extracted", False)
+    assert tika.calls == 0
+
+
+def test_a_broken_notebook_is_failed_and_not_retried(bucket: FakeS3) -> None:
+    key = "courses/a-course/lab1.ipynb"
+    bucket.objects[key] = b"not json"
+
+    result = ocw_content._extract_text(  # noqa: SLF001
+        bucket, FakeTika(), _BUCKET, key, 8
+    )
+
+    assert result == (None, "failed", False)
+
+
+@pytest.mark.parametrize(
+    ("path", "key"),
+    [
+        ("/courses/a-course/notes.tex", "courses/a-course/notes.tex"),
+        ("/courses/a-course/lab1.ipynb", "courses/a-course/lab1.ipynb"),
+        ("/courses/a-course/book.epub", "courses/a-course/book.epub"),
+        ("/courses/a-course/logo.png", None),
+    ],
+)
+def test_bucket_key_reads_the_platform_file_types(path: str, key: str | None) -> None:
+    assert ocw_content.bucket_key(path) == key
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("files", [1, FAILURES_BEFORE_PROBE])
 def test_rejected_tika_token_fails_the_load_whatever_the_course_size(

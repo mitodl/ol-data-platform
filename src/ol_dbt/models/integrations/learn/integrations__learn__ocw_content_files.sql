@@ -24,6 +24,11 @@
   reads, the file is missing and Learn drops the resource; without one, Learn
   keeps the resource with no text (the one production case on 2026-11-20, a
   24.908 PDF named ..._Discourses.pdf).
+
+  The platform reads more file types than Learn (ol_file_types: .epub, .ipynb,
+  .tex and others besides Learn's list). Learn never reads a file whose
+  extension is not in VALID_FILE_TYPES, so such a resource keeps its row here
+  with no text and no extraction status, as it has in Learn.
 #}
 
 {% set learn_text_extensions = [
@@ -41,6 +46,14 @@ with int_content_files as (
         ) as learn_cuts_path
         -- What Learn's cut key holds after "courses", up to the next "courses".
         , {{ regexp_extract_or_null('text_file_path', "'courses(.*?)courses'", 1) }} as learn_cut_rest
+        -- Path.suffix of the text file, as Learn tests the key it would read.
+        -- A page has no text file and keeps its content.
+        , coalesce(
+            lower(
+                {{ regexp_extract_or_null(regexp_replace_all('text_file_path', "'/+$'", "''"), "'\\.[^./]+$'") }}
+            ) in ('{{ learn_text_extensions | join("', '") }}')
+            , text_file_path is null
+        ) as learn_reads_text_file
     from {{ ref('int__ocw__content_files') }}
 )
 
@@ -63,13 +76,13 @@ with int_content_files as (
         , description
         , url
         , file_type
-        , case when not learn_cuts_path then content end as content
+        , case when not learn_cuts_path and learn_reads_text_file then content end as content
         , content_type
         , image_src
         , file_extension
         , case
-            when not learn_cuts_path then extraction_status
-            when learn_reads_cut_key then 'missing'
+            when learn_cuts_path and learn_reads_cut_key then 'missing'
+            when not learn_cuts_path and learn_reads_text_file then extraction_status
         end as extraction_status
         , retrieved_on
         , content_tags

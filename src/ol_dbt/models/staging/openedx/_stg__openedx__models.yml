@@ -96,11 +96,12 @@ models:
   - name: content_file_text
     description: str, the extracted text; null when extraction was empty or failed
   - name: content_file_extraction_status
-    description: str, extracted, empty or failed
+    description: str, extracted, empty or failed; skipped_unsupported for a file whose
+      type the platform does not read (ol_file_types)
     tests:
     - accepted_values:
         arguments:
-          values: [extracted, empty, failed]
+          values: [extracted, empty, failed, skipped_unsupported]
   - name: content_file_extracted_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp
@@ -193,11 +194,12 @@ models:
   - name: content_file_text
     description: str, the extracted text; null when extraction was empty or failed
   - name: content_file_extraction_status
-    description: str, extracted, empty or failed; null on a marker row
+    description: str, extracted, empty, failed or skipped_unsupported; null on a marker
+      row
     tests:
     - accepted_values:
         arguments:
-          values: [extracted, empty, failed]
+          values: [extracted, empty, failed, skipped_unsupported]
   - name: content_file_extracted_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp
