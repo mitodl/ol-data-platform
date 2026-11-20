@@ -16,7 +16,8 @@ Data flow:
         -> raw__youtube__api__playlists    (one row per playlist)
         -> raw__youtube__api__playlist_items (one row per playlist + video)
         -> raw__youtube__api__videos       (one row per video)
-        -> raw__youtube__api__transcripts  (one row per video with a transcript)
+        -> raw__youtube__api__transcripts  (one row per transcript of a video, in
+           every language, or a row saying why a video has none)
 
 The API key is resolved lazily at run time. The qa and production profiles
 read it from Vault (``YOUTUBE_VAULT_PATH``), where the dagster stack in
@@ -29,8 +30,11 @@ Run standalone:
 
 import base64
 import functools
+import json
 import logging
 from collections.abc import Callable, Generator, Iterable, Iterator
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import dlt
@@ -46,6 +50,68 @@ YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 YOUTUBE_MAX_RESULTS = 50
 # Sentinel playlist id meaning "ingest every playlist on the channel".
 WILDCARD_PLAYLIST_ID = "all"
+
+# fetch_status of a raw__youtube__api__transcripts row. On a video's status row,
+# fetched means every transcript it lists was fetched, and failed that one or
+# more were not.
+TRANSCRIPT_FETCHED = "fetched"
+# The video lists no transcript, or its owner disabled them.
+TRANSCRIPT_NONE = "none"
+TRANSCRIPT_UNAVAILABLE = "unavailable"
+# YouTube refused the request (IpBlocked, RequestBlocked).
+TRANSCRIPT_BLOCKED = "blocked"
+TRANSCRIPT_FAILED = "failed"
+
+
+class TranscriptTracks(StrEnum):
+    """Which of a video's transcript tracks the source fetches.
+
+    YouTube lists auto-generated tracks in many languages for some videos (the
+    audio YouTube dubbed into other languages), each a request of its own.
+    """
+
+    # Every uploaded track, and the auto-generated track in the video's own
+    # language.
+    NATIVE = "native"
+    # Every track YouTube lists.
+    ALL = "all"
+
+
+# Legacy codes YouTube still uses beside their current ones.
+_LANGUAGE_ALIASES = {"iw": "he", "in": "id", "ji": "yi", "tl": "fil"}
+
+
+def _language(code: str | None) -> str:
+    """Return the primary subtag of a language code: en-US -> en, iw -> he."""
+    language = (code or "").split("-")[0].lower()
+    return _LANGUAGE_ALIASES.get(language, language)
+
+
+def tracks_to_fetch(
+    transcripts: list[Any], tracks: TranscriptTracks, video_languages: set[str]
+) -> list[Any]:
+    """Pick the transcript tracks of one video to fetch.
+
+    :param transcripts: The tracks youtube-transcript-api lists for the video.
+    :param tracks: Which tracks to keep.
+    :param video_languages: Primary subtags of the languages the Data API gives
+        the video (defaultAudioLanguage, defaultLanguage); may be empty.
+    :returns: The tracks to fetch, uploaded first. For ``NATIVE``, a video the
+        API gives no language for takes its uploaded tracks' languages as its
+        own. A video with no uploaded track and no auto-generated track in its
+        language keeps every auto-generated track: its metadata language can
+        be the channel's default rather than the one spoken.
+    """
+    uploaded = [track for track in transcripts if not track.is_generated]
+    generated = [track for track in transcripts if track.is_generated]
+    if tracks is TranscriptTracks.ALL:
+        return uploaded + generated
+    native = video_languages or {_language(t.language_code) for t in uploaded}
+    in_native = [t for t in generated if _language(t.language_code) in native]
+    if in_native or uploaded:
+        generated = in_native
+    return uploaded + generated
+
 
 _CONFIG_FILE_REPO_DEFAULT = "mitodl/open-video-data"
 _CONFIG_FILE_FOLDER_DEFAULT = "youtube"
@@ -215,6 +281,16 @@ def _video_ids_for_playlist(playlist_id: str, api_key: str) -> Generator[str]:
             yield video_id
 
 
+def _videos(
+    video_ids: Iterable[str], part: str, api_key: str
+) -> Generator[dict[str, Any]]:
+    """Yield the Data API's record of each video, fetched in batches."""
+    for batch in _batched(video_ids, YOUTUBE_MAX_RESULTS):
+        yield from _yt_paged_items(
+            "videos", {"part": part, "id": ",".join(batch)}, api_key
+        )
+
+
 def _batched(items: Iterable[str], size: int) -> Generator[list[str]]:
     """Yield successive lists of at most ``size`` items."""
     batch: list[str] = []
@@ -267,6 +343,7 @@ def youtube_source(  # noqa: C901
     github_repo: str = _CONFIG_FILE_REPO_DEFAULT,
     github_folder: str = _CONFIG_FILE_FOLDER_DEFAULT,
     github_branch: str = "main",
+    transcript_tracks: str = TranscriptTracks.NATIVE.value,
 ) -> Generator[Any]:
     """Load MIT Learn YouTube data from the Data API v3 into five raw tables.
 
@@ -278,7 +355,8 @@ def youtube_source(  # noqa: C901
       raw__youtube__api__playlists   - one record per ingested playlist
       raw__youtube__api__playlist_items - one record per video in a playlist
       raw__youtube__api__videos      - one record per video across all playlists
-      raw__youtube__api__transcripts - one record per video that has a transcript
+      raw__youtube__api__transcripts - one record per transcript of a video, keyed
+        (video_id, language_code, is_generated), or per video with none
 
     Credentials are resolved lazily at execution time (not at import) so the
     module loads cleanly when secrets are absent in local development.
@@ -292,8 +370,12 @@ def youtube_source(  # noqa: C901
         github_repo: GitHub repository containing the channel YAML configs.
         github_folder: Folder within the repo containing YAML config files.
         github_branch: Git branch to read configs from.
+        transcript_tracks: Which transcript tracks to fetch, a TranscriptTracks
+            value: ``native`` (uploaded tracks and the auto-generated track in
+            the video's own language) or ``all``.
     """
     table_format = config.active_table_format()
+    tracks = TranscriptTracks(transcript_tracks)
 
     # One resolution per source instance: in deployed profiles each one is a Vault
     # login and read, and the listing and three of the table resources need it.
@@ -444,32 +526,51 @@ def youtube_source(  # noqa: C901
     @_refuse_empty
     def youtube_videos(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
-        key = _api_key()
-        for batch in _batched(_video_ids(listing), YOUTUBE_MAX_RESULTS):
-            for video in _yt_paged_items(
-                "videos",
-                {"part": "snippet,contentDetails,statistics", "id": ",".join(batch)},
-                key,
-            ):
-                yield {
-                    "video_id": video["id"],
-                    "etl_source": "youtube",
-                    **video,
-                }
+        for video in _videos(
+            _video_ids(listing), "snippet,contentDetails,statistics", _api_key()
+        ):
+            yield {
+                "video_id": video["id"],
+                "etl_source": "youtube",
+                **video,
+            }
 
     @dlt.transformer(
         data_from=youtube_listing,
-        **_table("raw__youtube__api__transcripts", "video_id"),
+        **_table(
+            "raw__youtube__api__transcripts",
+            ("video_id", "language_code", "is_generated"),
+        ),
+        # Nullable so dlt can add them to a table created under the old key:
+        # Iceberg cannot add a required column to an existing table.
+        columns={
+            "language_code": {"data_type": "text", "nullable": True},
+            "is_generated": {"data_type": "bool", "nullable": True},
+        },
     )
     def youtube_transcripts(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
-        """Yield one record per video that has a transcript.
+        """Yield every transcript of every video, and how fetching went.
 
         Transcripts are fetched with ``youtube-transcript-api`` (imported lazily
-        so the module loads without the dependency present). Videos with
-        transcripts disabled or unavailable are skipped, not raised.
+        so the module loads without the dependency present). Each run writes:
+
+        - one row per transcript fetched, keyed by its ``language_code`` and
+          ``is_generated``: the tracks ``transcript_tracks`` picks (by default
+          every uploaded track and the auto-generated track in the video's own
+          language). Which one a consumer reads, e.g. MIT Learn's English one,
+          is its choice. A row stays until the same transcript is fetched
+          again, so a failed or blocked run keeps the last good text.
+        - one status row per video, with an empty ``language_code``: the
+          outcome of this run's attempt (``fetch_status``), in ``error`` the
+          exception of each failure, prefixed by its language when one
+          transcript failed, and in ``listed_tracks`` every track YouTube
+          lists for the video, fetched or not.
+
+        Once YouTube blocks the run's IP, every later request fails the same
+        way, so the rest of the videos are marked blocked without a request.
         """
         from youtube_transcript_api import (
-            NoTranscriptFound,
+            RequestBlocked,
             TranscriptsDisabled,
             VideoUnavailable,
             YouTubeTranscriptApi,
@@ -478,21 +579,119 @@ def youtube_source(  # noqa: C901
 
         ytt_api = YouTubeTranscriptApi()
         formatter = TextFormatter()
-        for video_id in _video_ids(listing):
-            try:
-                fetched = ytt_api.fetch(video_id)
-            except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable):
-                logger.debug("No transcript available for video_id=%s", video_id)
-                continue
-            except Exception:
-                logger.exception("Failed to fetch transcript for video_id=%s", video_id)
-                continue
-            yield {
+        fetched_at = datetime.now(tz=UTC)
+        blocked = False
+
+        def row(video_id: str, **fields: Any) -> dict[str, Any]:
+            return {
                 "video_id": video_id,
                 "etl_source": "youtube",
-                "transcript": formatter.format_transcript(fetched),
-                "segments": fetched.to_raw_data(),
+                "language_code": "",
+                "language": None,
+                "is_generated": False,
+                "fetch_status": None,
+                "error": None,
+                "transcript": None,
+                "segments": None,
+                "listed_tracks": None,
+                "fetched_at": fetched_at,
+                **fields,
             }
+
+        def describe(exc: Exception) -> str:
+            return f"{type(exc).__name__}: {exc}".strip().removesuffix(":")[:500]
+
+        video_ids = list(_video_ids(listing))
+        # The language each video is spoken in, for picking its native track:
+        # one snippet request per 50 videos.
+        video_languages: dict[str, set[str]] = {}
+        if tracks is TranscriptTracks.NATIVE:
+            for video in _videos(video_ids, "snippet", _api_key()):
+                snippet = video.get("snippet") or {}
+                language = _language(
+                    snippet.get("defaultAudioLanguage")
+                    or snippet.get("defaultLanguage")
+                )
+                video_languages[video["id"]] = {language} if language else set()
+
+        for video_id in video_ids:
+            if blocked:
+                yield row(video_id, fetch_status=TRANSCRIPT_BLOCKED)
+                continue
+            try:
+                transcripts = list(ytt_api.list(video_id))
+            except TranscriptsDisabled:
+                yield row(video_id, fetch_status=TRANSCRIPT_NONE)
+                continue
+            except VideoUnavailable as exc:
+                yield row(
+                    video_id, fetch_status=TRANSCRIPT_UNAVAILABLE, error=describe(exc)
+                )
+                continue
+            except RequestBlocked as exc:
+                logger.warning("YouTube blocks transcript requests: %s", type(exc))
+                blocked = True
+                yield row(
+                    video_id, fetch_status=TRANSCRIPT_BLOCKED, error=describe(exc)
+                )
+                continue
+            except Exception as exc:
+                logger.exception("Failed to list transcripts for video_id=%s", video_id)
+                yield row(video_id, fetch_status=TRANSCRIPT_FAILED, error=describe(exc))
+                continue
+
+            errors = []
+            fetched_any = False
+            for transcript in tracks_to_fetch(
+                transcripts, tracks, video_languages.get(video_id, set())
+            ):
+                try:
+                    fetched = transcript.fetch()
+                except RequestBlocked as exc:
+                    logger.warning("YouTube blocks transcript requests: %s", type(exc))
+                    blocked = True
+                    errors.append(f"{transcript.language_code}: {describe(exc)}")
+                    break
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to fetch the %s transcript of video_id=%s",
+                        transcript.language_code,
+                        video_id,
+                    )
+                    errors.append(f"{transcript.language_code}: {describe(exc)}")
+                    continue
+                yield row(
+                    video_id,
+                    language_code=transcript.language_code,
+                    language=transcript.language,
+                    is_generated=transcript.is_generated,
+                    fetch_status=TRANSCRIPT_FETCHED,
+                    transcript=formatter.format_transcript(fetched),
+                    segments=fetched.to_raw_data(),
+                )
+                fetched_any = True
+            if blocked:
+                status = TRANSCRIPT_BLOCKED
+            elif errors:
+                status = TRANSCRIPT_FAILED
+            else:
+                status = TRANSCRIPT_FETCHED if fetched_any else TRANSCRIPT_NONE
+            yield row(
+                video_id,
+                fetch_status=status,
+                error="; ".join(errors) or None,
+                # Every track YouTube lists, fetched or not, so a later choice
+                # to fetch more knows what there is.
+                listed_tracks=json.dumps(
+                    [
+                        {
+                            "language_code": t.language_code,
+                            "is_generated": t.is_generated,
+                        }
+                        for t in transcripts
+                    ]
+                ),
+            )
 
     yield youtube_listing
     yield youtube_channels

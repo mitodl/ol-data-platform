@@ -1,8 +1,6 @@
 ---
 # Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
 # cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
-# raw__youtube__api__transcripts is not declared: the source defines it, but no
-# production load has written a row yet, so the table does not exist.
 schema_version: 1
 deployment: youtube
 layer: api
@@ -45,3 +43,18 @@ tables:
   primary_key:
   - - video_id
   modeled: true
+# Upserted by key: a transcript stays until it is fetched again, and each video
+# has one status row (empty language_code) for the latest attempt. YouTube
+# refuses production's transcript requests (IpBlocked), so in production it
+# holds mostly blocked status rows until the official captions API replaces the
+# scraper.
+- name: raw__youtube__api__transcripts
+  raw_table: raw__youtube__api__transcripts
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - fetched_at
+  primary_key:
+  - - video_id
+  - - language_code
+  - - is_generated
+  modeled: false

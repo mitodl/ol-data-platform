@@ -953,6 +953,7 @@
         'raw__youtube__api__channels': '_dlt_load_id',
         'raw__youtube__api__playlist_items': '_dlt_load_id',
         'raw__youtube__api__playlists': '_dlt_load_id',
+        'raw__youtube__api__transcripts': '_dlt_load_id',
         'raw__youtube__api__videos': '_dlt_load_id',
     }) %}
 {% endmacro %}
