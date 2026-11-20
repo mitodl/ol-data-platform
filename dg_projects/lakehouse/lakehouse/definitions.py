@@ -38,6 +38,7 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
+from lakehouse.assets.history_load_guard import build_history_load_guard_checks
 from lakehouse.assets.iceberg_maintenance import (
     WAREHOUSE_ENV,
     iceberg_dbt_layer_maintenance,
@@ -102,6 +103,7 @@ from lakehouse.lib.dbt_environment import (
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
+from lakehouse.lib.history_load_guard import guarded_tables
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -844,6 +846,19 @@ openmetadata_table_fqns = table_fqns_by_asset_key(
     asset_keys=set(full_dbt_project.keys),
     service=TRINO_SERVICE,
 )
+# The load-side raw history guard (lakehouse.lib.history_load_guard): a blocking
+# check on each Airbyte-loaded raw table a live raw history snapshot reads. The
+# sync_and_stage_* jobs select the checks on their group's assets, so it runs
+# after every scheduled sync, and the snapshot waits for it to pass.
+history_load_guard_checks = build_history_load_guard_checks(
+    guarded_tables(get_manifest_and_translator_from_dbt_assets([full_dbt_project])[0]),
+    {
+        key: group
+        for assets_def in airbyte_assets
+        for key, group in assets_def.group_names_by_key.items()
+    },
+)
+
 asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
     openmetadata_table_fqns
 )
@@ -879,6 +894,8 @@ defs = Definitions(
         # the Sentry hook the assets get. AssetChecksDefinition subclasses
         # AssetsDefinition, so with_failure_hooks attaches it.
         *with_failure_hooks(qa_mirror_checks),
+        # Runs dbt, so a failed invocation raises and needs the hook too.
+        *with_failure_hooks(history_load_guard_checks),
     ],
     resources=resources_dict,
     executor=executor_for_environment(

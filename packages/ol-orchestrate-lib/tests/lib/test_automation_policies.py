@@ -29,6 +29,7 @@ from dagster._core.test_utils import create_run_for_test
 from ol_orchestrate.lib.automation_policies import (
     dbt_upstream_or_code_changes,
     keyset_snapshot_upstream_or_code_changes,
+    raw_load_check_passed,
     upstream_or_code_changes,
 )
 
@@ -736,6 +737,8 @@ def test_dbt_condition_tree_is_unchanged() -> None:
 
 RAW_KEY = AssetKey(["ol_warehouse_raw_data", "raw__app__postgres__thing"])
 KEYSET_KEY = AssetKey(["ol_warehouse_raw_data", "raw__app__postgres__thing__keyset"])
+LOAD_CHECK = "history_load_not_short"
+LOAD_CHECK_KEY = dg.AssetCheckKey(RAW_KEY, LOAD_CHECK)
 SNAPSHOT_KEY = AssetKey(["history", "snapshot_raw__app__postgres__thing"])
 
 
@@ -757,7 +760,9 @@ class KeysetGraph:
         @dg.asset(
             key=SNAPSHOT_KEY,
             deps=[RAW_KEY, KEYSET_KEY],
-            automation_condition=keyset_snapshot_upstream_or_code_changes(KEYSET_KEY),
+            automation_condition=keyset_snapshot_upstream_or_code_changes(
+                KEYSET_KEY, LOAD_CHECK_KEY
+            ),
         )
         def snapshot() -> None: ...
 
@@ -825,7 +830,7 @@ def test_keyset_snapshot_latches_have_their_own_cursors() -> None:
     The same latch used twice (the pending-parent hold's ``armed``) may share.
     """
     latches: dict[str, list[dg.AutomationCondition]] = {}
-    pending = [keyset_snapshot_upstream_or_code_changes(KEYSET_KEY)]
+    pending = [keyset_snapshot_upstream_or_code_changes(KEYSET_KEY, LOAD_CHECK_KEY)]
     while pending:
         node = pending.pop()
         if isinstance(node, SinceCondition):
@@ -888,3 +893,162 @@ def test_a_load_held_for_the_keyset_runs_with_the_first_load_after_it_goes_stale
     keyset_graph.materialize(RAW_KEY)
 
     assert keyset_graph.tick()
+
+
+class GuardedGraph:
+    """A raw table with a load guard check, and the history snapshot reading it.
+
+    ``keyset`` adds a keyset table and gives the snapshot the keyset condition;
+    otherwise the snapshot has the dbt condition with the load gate appended,
+    as lakehouse's dbt_automation_condition builds it. The raw table also has
+    a second check that always fails, which the gate must not wait on.
+    KeysetGraph's raw table has no guard check at all, so its tests show the
+    gate passing where none is defined.
+    """
+
+    def __init__(self, instance: dg.DagsterInstance, *, keyset: bool) -> None:
+        self.instance = instance
+        self.cursor = None
+        self.passes = True
+
+        # Real runs, not runless events: a check and a materialization that
+        # share a run id (runless events all have the empty one) read as the
+        # check evaluating that materialization.
+        @dg.asset(key=RAW_KEY)
+        def raw() -> dg.MaterializeResult:
+            return dg.MaterializeResult(data_version=dg.DataVersion(str(uuid.uuid4())))
+
+        @dg.asset_check(asset=RAW_KEY, name=LOAD_CHECK)
+        def load_check() -> dg.AssetCheckResult:
+            return dg.AssetCheckResult(
+                passed=self.passes, severity=dg.AssetCheckSeverity.ERROR
+            )
+
+        @dg.asset_check(asset=RAW_KEY, name="unrelated")
+        def unrelated_check() -> dg.AssetCheckResult:
+            return dg.AssetCheckResult(
+                passed=False, severity=dg.AssetCheckSeverity.ERROR
+            )
+
+        @dg.asset(key=KEYSET_KEY, deps=[RAW_KEY])
+        def keyset_table() -> dg.MaterializeResult:
+            return dg.MaterializeResult(data_version=dg.DataVersion(str(uuid.uuid4())))
+
+        self.raw, self.load_check = raw, load_check
+        self.unrelated_check = unrelated_check
+        self.keyset = keyset_table if keyset else None
+        if keyset:
+            deps = [RAW_KEY, KEYSET_KEY]
+            condition = keyset_snapshot_upstream_or_code_changes(
+                KEYSET_KEY, LOAD_CHECK_KEY
+            )
+        else:
+            deps = [RAW_KEY]
+            condition = dbt_upstream_or_code_changes() & raw_load_check_passed(
+                LOAD_CHECK_KEY
+            )
+
+        @dg.asset(key=SNAPSHOT_KEY, deps=deps, automation_condition=condition)
+        def snapshot() -> None: ...
+
+        self.defs = dg.Definitions(
+            assets=[raw, *([keyset_table] if keyset else []), snapshot],
+            asset_checks=[load_check, unrelated_check],
+        )
+
+    def load(self, *, passed: bool | None) -> None:
+        """Load raw in one run with its check (None: without it), then the keyset.
+
+        The keyset runs in its own run after the load, as data_loading's does.
+        """
+        checks = [self.unrelated_check]
+        if passed is not None:
+            self.passes = passed
+            checks.append(self.load_check)
+        dg.materialize([self.raw, *checks], instance=self.instance)
+        if self.keyset is not None:
+            dg.materialize(
+                [self.keyset], instance=self.instance, selection=[KEYSET_KEY]
+            )
+
+    def check(self, *, passed: bool) -> None:
+        """Run the raw check alone, against the latest load."""
+        self.passes = passed
+        dg.materialize(
+            [self.raw, self.load_check],
+            instance=self.instance,
+            selection=dg.AssetSelection.checks(self.load_check),
+        )
+
+    def tick(self) -> bool:
+        """Return whether the snapshot is requested."""
+        result = dg.evaluate_automation_conditions(
+            defs=self.defs, instance=self.instance, cursor=self.cursor
+        )
+        self.cursor = result.cursor
+        return bool(result.get_num_requested(SNAPSHOT_KEY))
+
+
+@pytest.fixture(params=[False, True], ids=["full-read", "keyset"])
+def guarded_graph(request) -> Iterator[GuardedGraph]:
+    with dg.DagsterInstance.ephemeral() as ephemeral_instance:
+        graph = GuardedGraph(ephemeral_instance, keyset=request.param)
+        graph.load(passed=True)
+        graph.instance.report_runless_asset_event(
+            dg.AssetMaterialization(asset_key=SNAPSHOT_KEY)
+        )
+        graph.tick()
+        assert not graph.tick()
+        yield graph
+
+
+def test_a_load_whose_check_has_not_run_holds_the_snapshot(guarded_graph) -> None:
+    guarded_graph.load(passed=None)
+
+    assert not any(guarded_graph.tick() for _ in range(3))
+
+
+def test_a_load_that_fails_its_check_holds_the_snapshot(guarded_graph) -> None:
+    guarded_graph.load(passed=False)
+
+    assert not any(guarded_graph.tick() for _ in range(3))
+
+
+def test_a_passing_check_starts_the_snapshot_once(guarded_graph) -> None:
+    """E.g. the check rerun with allow_short after a deliberate purge."""
+    guarded_graph.load(passed=False)
+    assert not guarded_graph.tick()
+
+    guarded_graph.check(passed=True)
+
+    assert guarded_graph.tick()
+    assert not guarded_graph.tick()
+
+
+def test_a_good_load_after_a_short_one_starts_one_snapshot(guarded_graph) -> None:
+    """The held change is latched, so the next load that passes releases it."""
+    guarded_graph.load(passed=False)
+    assert not guarded_graph.tick()
+
+    guarded_graph.load(passed=True)
+
+    assert guarded_graph.tick()
+    assert not guarded_graph.tick()
+
+
+def test_a_failing_guard_leaves_the_load_run_successful(guarded_graph) -> None:
+    """Not blocking, so staging in the same run is not held back by it."""
+    guarded_graph.passes = False
+    result = dg.materialize(
+        [guarded_graph.raw, guarded_graph.load_check], instance=guarded_graph.instance
+    )
+
+    assert result.success
+    assert [e.passed for e in result.get_asset_check_evaluations()] == [False]
+
+
+def test_the_load_gate_keeps_the_dbt_tree_cursors() -> None:
+    """Appending the gate adds an operand; it does not wrap the tree."""
+    default = dbt_upstream_or_code_changes()
+    gated = default & raw_load_check_passed(LOAD_CHECK_KEY)
+    assert gated.children[:-1] == default.children

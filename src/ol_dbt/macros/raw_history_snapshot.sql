@@ -265,18 +265,8 @@
         {{ return(none) }}
     {%- endif -%}
     {%- set keys = [unique_key] if unique_key is string else unique_key -%}
-    {%- set limit = max_delete_fraction
-        if max_delete_fraction is not none
-        else var('raw_history_max_delete_fraction', 0.1) -%}
-    {%- set floor = var('raw_history_min_delete_count', 10) -%}
+    {%- set limit, floor = raw_history_guard_limits(max_delete_fraction) -%}
     {%- set allow_list = var('raw_history_allow_deletes', []) -%}
-    {%- if limit is not number or floor is not number -%}
-        {{ exceptions.raise_compiler_error(
-            "raw_history_delete_guard: the delete fraction and "
-            ~ "raw_history_min_delete_count must be numbers, got "
-            ~ limit ~ " and " ~ floor
-        ) }}
-    {%- endif -%}
     {#- A mapping is iterable, and `in` would test only its keys, so
         {snapshot_x: false} would still allow the deletes. -#}
     {%- if allow_list is string or allow_list is mapping or allow_list is not iterable -%}
@@ -319,11 +309,7 @@
         ~ (" (allowed for this run)" if allowed else ""),
         info=true
     ) }}
-    {%- set everything = current_count > 0 and missing_count == current_count -%}
-    {%- set too_many = missing_count > current_count * limit and (
-        missing_count > floor or missing_count * 2 >= current_count
-    ) -%}
-    {%- if not allowed and (everything or too_many) -%}
+    {%- if not allowed and raw_history_guard_trips(missing_count, current_count, limit, floor) -%}
         {{ exceptions.raise_compiler_error(
             "raw_history_delete_guard: " ~ this.identifier ~ " would mark "
             ~ missing_count ~ " of its " ~ current_count ~ " current records "
@@ -333,4 +319,41 @@
             ~ "'{raw_history_allow_deletes: [" ~ this.identifier ~ "]}'."
         ) }}
     {%- endif -%}
+{% endmacro %}
+
+
+{#-
+    The delete fraction and floor both raw history guards apply: the
+    per-table `max_delete_fraction` when given, else
+    var('raw_history_max_delete_fraction', 0.1), and
+    var('raw_history_min_delete_count', 10). Returns [fraction, floor].
+-#}
+{% macro raw_history_guard_limits(max_delete_fraction=none) %}
+    {%- set limit = max_delete_fraction
+        if max_delete_fraction is not none
+        else var('raw_history_max_delete_fraction', 0.1) -%}
+    {%- set floor = var('raw_history_min_delete_count', 10) -%}
+    {%- if limit is not number or floor is not number -%}
+        {{ exceptions.raise_compiler_error(
+            "raw history guard: the delete fraction and "
+            ~ "raw_history_min_delete_count must be numbers, got "
+            ~ limit ~ " and " ~ floor
+        ) }}
+    {%- endif -%}
+    {{ return([limit, floor]) }}
+{% endmacro %}
+
+
+{#-
+    Whether `missing` of `current` records is too many to lose in one run:
+    all of them, or more than `limit` of them unless no more than `floor` and
+    fewer than half. Shared by raw_history_delete_guard (missing keys) and
+    raw_history_load_guard (the load's shortfall), so the two cannot disagree.
+-#}
+{% macro raw_history_guard_trips(missing, current, limit, floor) %}
+    {%- set everything = current > 0 and missing == current -%}
+    {%- set too_many = missing > current * limit and (
+        missing > floor or missing * 2 >= current
+    ) -%}
+    {{ return(everything or too_many) }}
 {% endmacro %}
