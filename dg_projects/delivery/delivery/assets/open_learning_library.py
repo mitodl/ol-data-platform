@@ -29,7 +29,6 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     MetadataValue,
-    RetryPolicy,
     asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -37,7 +36,12 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
-from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
+from delivery.lib.learn_webhook import (
+    WEBHOOK_RETRY_POLICY,
+    LearnDeliveryConfig,
+    skip_run_retries,
+    webhook_failure,
+)
 
 log = logging.getLogger(__name__)
 
@@ -136,7 +140,7 @@ def build_resources(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         "Iceberg table and POST as a signed webhook batch to MIT Learn."
     ),
     deps=[AssetKey(["integrations", "integrations__learn__oll_courses"])],
-    retry_policy=RetryPolicy(max_retries=3, delay=5.0),
+    retry_policy=WEBHOOK_RETRY_POLICY,
 )
 def oll_webhook(
     context: AssetExecutionContext,
@@ -144,6 +148,7 @@ def oll_webhook(
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver OLL courses to MIT Learn via signed webhook."""
+    skip_run_retries(context)
     context.log.info("Reading %s from Glue database %s", _TABLE, _GLUE_DB)
     df: pl.DataFrame = get_dbt_model_as_dataframe(
         database_name=_GLUE_DB,
