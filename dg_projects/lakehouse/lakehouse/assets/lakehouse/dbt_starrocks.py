@@ -33,7 +33,7 @@ from lakehouse.lib.starrocks_dbt import (
     unreadable_base_tables,
 )
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
-from lakehouse.resources.starrocks import StarRocksResource
+from lakehouse.resources.starrocks import LoginNotPropagatedError, StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
 # `+enabled: "{{ target.type == 'starrocks' }}"`, so they only exist in a
@@ -186,7 +186,7 @@ def starrocks_dbt_assets(
         )
         build_args.append("--full-refresh")
 
-    last_exc: DagsterDbtCliRuntimeError | None = None
+    last_exc: DagsterDbtCliRuntimeError | LoginNotPropagatedError | None = None
     for attempt in range(MAX_BUILD_ATTEMPTS):
         if attempt:
             delay = retry_delay(attempt)
@@ -200,8 +200,16 @@ def starrocks_dbt_assets(
             )
             time.sleep(delay)
 
-        with starrocks_credentials(starrocks):
-            invocation = starrocks_dbt.cli(build_args, context=context)
+        # A login some FE still refuses after the wait is the same transient
+        # failure the build retries on 1045, so it gets the same retry.
+        try:
+            with starrocks_credentials(starrocks):
+                invocation = starrocks_dbt.cli(build_args, context=context)
+        except LoginNotPropagatedError as not_propagated:
+            if attempt == MAX_BUILD_ATTEMPTS - 1:
+                raise
+            last_exc = not_propagated
+            continue
 
         # The subprocess is already spawned, with the credentials in its
         # environment, by the time .cli() returns. Streaming takes minutes and

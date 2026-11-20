@@ -46,6 +46,26 @@ _RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2003, 2006, 2013})
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
 
+# A login Vault just created is written on the leader FE and reaches the
+# followers through journal replay, so for a short while some FEs refuse it.
+_LOGIN_NOT_REPLAYED: frozenset[int] = frozenset({1044, 1045})
+# How long `wait_for_login` waits for every FE to accept a new login. Vault
+# propagation resolves well inside 30s (lib/starrocks_dbt.py's retry notes).
+LOGIN_PROPAGATION_TIMEOUT_SECONDS = 120
+_LOGIN_POLL_INTERVAL_SECONDS = 2
+
+
+class LoginNotPropagatedError(Exception):
+    """A new login was still refused by some FE when the wait ran out."""
+
+    def __init__(self, username: str, refusing: dict[str, str]) -> None:
+        self.refusing = refusing
+        detail = "; ".join(f"{fe}: {error}" for fe, error in sorted(refusing.items()))
+        super().__init__(
+            f"StarRocks login {username} was not accepted by every FE within "
+            f"{LOGIN_PROPAGATION_TIMEOUT_SECONDS}s: {detail}"
+        )
+
 
 class StarRocksResource(ConfigurableResource["StarRocksResource"]):
     """Executes statements against StarRocks over its MySQL wire protocol port."""
@@ -105,10 +125,23 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         create a database user for each one, as `execute` and `fetch` do.
         """
         username, password = self.generate_credentials()
+        return self._connect_as(
+            self.host, self.port, username, password, database=self.database
+        )
+
+    def _connect_as(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        *,
+        database: str | None = None,
+    ) -> Connection[DictCursor]:
         return connect(
-            host=self.host,
-            port=self.port,
-            database=self.database,
+            host=host,
+            port=port,
+            database=database,
             user=username,
             password=password,
             cursorclass=DictCursor,
@@ -116,6 +149,73 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
             # which the static login must not require.
             ssl=None if self.static_username is not None else _make_ssl_context(),
         )
+
+    def wait_for_login(self, username: str, password: str) -> None:
+        """Return once every reachable FE accepts *username*, a login Vault just made.
+
+        dbt connects through the round-robin FE service, so a login that one FE
+        has not replayed yet fails whichever dbt node lands there with a 1045.
+        Checking each FE directly, by the address SHOW FRONTENDS gives, turns
+        that into a short wait before the spawn, not a failed node mid-build.
+        The static login exists on every FE already and is not checked.
+
+        The FE list is read again on every poll. An FE that refuses the
+        connection itself (2003 and the other connection errors) is skipped:
+        the service routes only to Ready FEs, so dbt can't land there either,
+        and during a rolling restart an FE that is down must not hold the wait
+        open past its deadline. Only 1044/1045 from a reachable FE means the
+        login hasn't replayed there yet. Any other error is raised.
+
+        :raises LoginNotPropagatedError: when some reachable FE still refuses the
+            login, or SHOW FRONTENDS still can't be read, after
+            LOGIN_PROPAGATION_TIMEOUT_SECONDS.
+        """
+        if self.static_username is not None:
+            return
+        deadline = time.monotonic() + LOGIN_PROPAGATION_TIMEOUT_SECONDS
+        while True:
+            refusing = self._login_refusals(username, password)
+            if not refusing:
+                return
+            if time.monotonic() >= deadline:
+                raise LoginNotPropagatedError(username, refusing)
+            time.sleep(_LOGIN_POLL_INTERVAL_SECONDS)
+
+    def _login_refusals(self, username: str, password: str) -> dict[str, str]:
+        """Map each FE (or the service) refusing the login right now to why."""
+        try:
+            conn = self._connect_as(self.host, self.port, username, password)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SHOW FRONTENDS")
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
+        except OperationalError as exc:
+            if exc.args[0] not in _RETRIABLE_ERRORS:
+                raise
+            return {self.host: str(exc)}
+        frontends = [
+            (row["IP"], int(row["QueryPort"])) for row in rows if row["Alive"] == "true"
+        ]
+        if not frontends:
+            # The service answered, so some FE is up. An empty list means the
+            # columns changed shape, and the check would otherwise pass vacuously.
+            return {self.host: "SHOW FRONTENDS listed no live FE"}
+        refusing: dict[str, str] = {}
+        for host, port in frontends:
+            try:
+                self._connect_as(host, port, username, password).close()
+            except OperationalError as exc:
+                if exc.args[0] in _LOGIN_NOT_REPLAYED:
+                    refusing[f"{host}:{port}"] = str(exc)
+                elif exc.args[0] not in _RETRIABLE_ERRORS:
+                    raise
+                else:
+                    log.info(
+                        "Skipping unreachable StarRocks FE %s:%s: %s", host, port, exc
+                    )
+        return refusing
 
     def execute(self, sql: str, *, idempotent: bool = True) -> None:
         """Run *sql*, retrying with fresh credentials on a transient error.

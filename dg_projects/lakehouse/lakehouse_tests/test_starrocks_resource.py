@@ -6,6 +6,7 @@ statements are only retried when the connection itself failed.
 """
 
 import ssl
+import sys
 from typing import Any, Self
 
 import pytest
@@ -183,3 +184,139 @@ def test_a_vault_login_requires_tls(
 
     assert calls[0]["user"] == "user"
     assert isinstance(calls[0]["ssl"], ssl.SSLContext)
+
+
+FES = [
+    {"IP": "fe-0.fe-search", "QueryPort": "9030", "Alive": "true"},
+    {"IP": "fe-1.fe-search", "QueryPort": "9030", "Alive": "true"},
+    {"IP": "fe-2.fe-search", "QueryPort": "9030", "Alive": "false"},
+]
+
+
+class FrontendsConnection(QuietConnection):
+    def cursor(self) -> "FrontendsCursor":
+        return FrontendsCursor(self)
+
+
+class FrontendsCursor(QuietCursor):
+    def execute(self, sql: str, _params: Any = None) -> None:
+        assert sql == "SHOW FRONTENDS"
+
+    def fetchall(self) -> list[dict[str, Any]]:
+        return FES
+
+
+def _frontends_refusing_until(
+    monkeypatch: pytest.MonkeyPatch,
+    refusals: dict[str, int],
+    code: int = 1045,
+    calls: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """Each FE refuses the login *refusals[host]* times, then accepts it."""
+    hosts: list[str] = []
+
+    def fake_connect(**kwargs: Any) -> QuietConnection:
+        host = kwargs["host"]
+        hosts.append(host)
+        if calls is not None:
+            calls.append(kwargs)
+        if refusals.get(host, 0) > 0:
+            refusals[host] -= 1
+            raise OperationalError(code, f"Access denied for user {kwargs['user']}")
+        return FrontendsConnection([])
+
+    monkeypatch.setattr(starrocks_module, "connect", fake_connect)
+    return hosts
+
+
+def test_wait_for_login_checks_every_live_fe(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    hosts = _frontends_refusing_until(monkeypatch, {"fe-1.fe-search": 2})
+
+    resource.wait_for_login("v-user", "pw")
+
+    # Each poll lists the FEs again; fe-1 is polled until it accepts; fe-2 is down.
+    assert hosts == ["starrocks", "fe-0.fe-search", "fe-1.fe-search"] * 3
+
+
+def test_wait_for_login_retries_the_service_itself(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    hosts = _frontends_refusing_until(monkeypatch, {"starrocks": 1})
+
+    resource.wait_for_login("v-user", "pw")
+
+    assert hosts[:2] == ["starrocks", "starrocks"]
+
+
+def test_wait_for_login_names_the_fe_that_never_accepts(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    _frontends_refusing_until(monkeypatch, {"fe-0.fe-search": 10_000})
+    clock = iter(range(0, 10_000, 30))
+    monkeypatch.setattr(starrocks_module.time, "monotonic", lambda: next(clock))
+
+    with pytest.raises(starrocks_module.LoginNotPropagatedError) as raised:
+        resource.wait_for_login("v-user", "pw")
+
+    assert list(raised.value.refusing) == ["fe-0.fe-search:9030"]
+
+
+def test_wait_for_login_raises_an_unrelated_error(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    _frontends_refusing_until(monkeypatch, {"fe-0.fe-search": 1}, code=1064)
+
+    with pytest.raises(OperationalError):
+        resource.wait_for_login("v-user", "pw")
+
+
+def test_wait_for_login_skips_a_static_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    local = StarRocksResource.model_construct(
+        vault_mount_point="database-starrocks",
+        vault_role="admin",
+        host="127.0.0.1",
+        port=9030,
+        database="b2b_analytics",
+        static_username="root",
+        static_password="",
+    )
+    calls = _record_connect_kwargs(monkeypatch)
+
+    local.wait_for_login("root", "")
+
+    assert calls == []
+
+
+def test_wait_for_login_skips_an_fe_that_is_down(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    """A rolling restart must not hold the wait open: dbt can't land there."""
+    _frontends_refusing_until(monkeypatch, {"fe-0.fe-search": 10_000}, code=2003)
+
+    resource.wait_for_login("v-user", "pw")
+
+
+def test_wait_for_login_does_not_pass_on_an_empty_fe_list(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    _frontends_refusing_until(monkeypatch, {})
+    monkeypatch.setattr(sys.modules[__name__], "FES", [])
+    clock = iter(range(0, 10_000, 30))
+    monkeypatch.setattr(starrocks_module.time, "monotonic", lambda: next(clock))
+
+    with pytest.raises(starrocks_module.LoginNotPropagatedError):
+        resource.wait_for_login("v-user", "pw")
+
+
+def test_wait_for_login_connects_with_tls_and_no_database(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    calls: list[dict[str, Any]] = []
+    _frontends_refusing_until(monkeypatch, {}, calls=calls)
+
+    resource.wait_for_login("v-user", "pw")
+
+    assert {c["database"] for c in calls} == {None}
+    assert all(isinstance(c["ssl"], ssl.SSLContext) for c in calls)

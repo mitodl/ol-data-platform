@@ -53,7 +53,9 @@ RETRY_BASE_DELAY = 30
 # connect; it does -- every attempt in _run() opens its own connection, and an
 # FE rolling restart is exactly how that fails.)
 # 1044/1045 are the Vault case: a just-created dynamic user may not be visible
-# yet on the FE node dbt happened to connect to.
+# yet on the FE node dbt happened to connect to. starrocks_credentials now waits
+# for every live FE to accept the login before the spawn, so this is left for an
+# FE that comes back from a restart mid-build and has not replayed it yet.
 #
 # "forward failed" / "SocketTimeoutException" -- FE-side Java exceptions, not
 # wire-protocol codes. dbt connects to the round-robin fe-service, so most
@@ -124,6 +126,10 @@ class StarRocksCredentialSource(Protocol):
         """Return a (username, password) login for the cluster at `host`."""
         ...
 
+    def wait_for_login(self, username: str, password: str) -> None:
+        """Return once every FE of the cluster accepts the login."""
+        ...
+
 
 # Serializes credential injection and the dbt subprocess spawn, so two dbt
 # invocations started in the same process (a manual run overlapping a schedule,
@@ -153,6 +159,7 @@ def starrocks_credentials(
     and read them from the environment.
     """
     username, password = starrocks.generate_credentials()
+    starrocks.wait_for_login(username, password)
     with _CREDENTIALS_LOCK:
         os.environ["DBT_STARROCKS_USERNAME"] = username
         os.environ["DBT_STARROCKS_PASSWORD"] = password
