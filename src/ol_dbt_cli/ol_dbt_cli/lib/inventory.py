@@ -1654,7 +1654,13 @@ def _normalise_declared_stream(stream: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in stream.items() if key not in {"name", "excluded_columns"}}
 
 
-def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationReport) -> None:
+def check_drift(
+    snapshot: dict[str, Any],
+    units: list[Unit],
+    report: ValidationReport,
+    *,
+    retired: set[tuple[str, str]],
+) -> None:
     """Report every way the live workspace differs from what the inventory declares.
 
     Severity follows what the finding says about the inventory. A declaration
@@ -1664,6 +1670,14 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
     UI, or a retired connection someone resumed, and it costs nothing until
     somebody depends on it. A retired connection that stays disabled is the
     expected end state and is not reported.
+
+    The exception is a stream whose table `retired.yml` records: the inventory
+    says it stopped loading, so a declared connection still syncing it is the
+    inventory being wrong (§7.2), and Airbyte keeps recreating a table we
+    dropped. That is an ERROR.
+
+    :param retired: `(unit_key, raw_table)` pairs from
+        `retired_pairs(load_retired(...))`.
     """
     rendered = render_airbyte(units)
     live = _live_connections(snapshot)
@@ -1713,12 +1727,14 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
 
     for name in sorted(set(live) & set(declared)):
         connection, unit = declared[name]
+        key = unit_key(unit)
         _compare_connection(
             name,
             live[name],
             connection,
             unit,
             raw_tables.get(name, {}),
+            frozenset(raw_table for retired_key, raw_table in retired if retired_key == key),
             live_sources,
             report,
         )
@@ -1780,10 +1796,11 @@ def _compare_connection(  # noqa: PLR0913
     declared: dict[str, Any],
     unit: dict[str, Any],
     raw_tables: dict[str, str],
+    retired_tables: frozenset[str],
     live_sources: dict[str, dict[str, Any]],
     report: ValidationReport,
 ) -> None:
-    key = f"{unit['deployment']}/{unit['layer']}"
+    key = unit_key(unit)
     _compare_source(name, live, unit, live_sources, report, key)
 
     if (live_status := live.get("status")) != declared.get("status"):
@@ -1840,15 +1857,6 @@ def _compare_connection(  # noqa: PLR0913
             "table is going stale. Retire it, or re-select the stream.",
         )
 
-    for stream in sorted(set(live_streams) - set(declared_streams)):
-        report.add(
-            DRIFT_CHECK,
-            Severity.WARNING,
-            key,
-            f"connection {name!r} carries stream {stream!r}, which the unit does not declare",
-            "It is being loaded and nothing records that it is.",
-        )
-
     # Where a raw table actually lands, rather than whether the unit's
     # documentation prefix still looks plausible. Comparing `table_prefix`
     # against Airbyte's `prefix` cannot work in either direction: the mongodb
@@ -1859,6 +1867,29 @@ def _compare_connection(  # noqa: PLR0913
     # exactly — so clearing a prefix, which the earlier check skipped as
     # falsey, now shows up as every table in that connection moving.
     live_prefix = live.get("prefix") or ""
+
+    for stream in sorted(set(live_streams) - set(declared_streams)):
+        landed = f"{live_prefix}{stream}"
+        if landed in retired_tables:
+            report.add(
+                DRIFT_CHECK,
+                Severity.ERROR,
+                key,
+                f"connection {name!r} still syncs retired table {landed!r}",
+                "retired.yml records that this table stopped loading, but the "
+                "stream is still selected, so Airbyte keeps writing it (and "
+                "recreates it if it was dropped). Deselect the stream, or "
+                "un-retire the table.",
+            )
+            continue
+        report.add(
+            DRIFT_CHECK,
+            Severity.WARNING,
+            key,
+            f"connection {name!r} carries stream {stream!r}, which the unit does not declare",
+            "It is being loaded and nothing records that it is.",
+        )
+
     for stream in sorted(set(live_streams) & set(declared_streams)):
         landed = f"{live_prefix}{stream}"
         expected = raw_tables.get(stream)

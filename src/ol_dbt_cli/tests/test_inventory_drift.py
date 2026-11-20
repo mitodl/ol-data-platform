@@ -91,9 +91,9 @@ def units(tmp_path: Path) -> list[Any]:
     return load_units(root)
 
 
-def _run(snapshot: dict[str, Any], units: list[Any]) -> ValidationReport:
+def _run(snapshot: dict[str, Any], units: list[Any], retired: set[tuple[str, str]] | None = None) -> ValidationReport:
     report = ValidationReport()
-    check_drift(snapshot, units, report)
+    check_drift(snapshot, units, report, retired=retired or set())
     return report
 
 
@@ -105,7 +105,7 @@ class TestAgreement:
     def test_a_workspace_matching_the_inventory_is_silent(self, units: list[Any]) -> None:
         assert _run(live(), units).issues == []
 
-    def test_an_empty_cursor_matches_an_undeclared_one(self, units: list[Any]) -> None:
+    def test_an_empty_cursor_matches_an_undeclared_one(self) -> None:
         # Airbyte returns `[]` where the render omits the field. Comparing those
         # raw would report drift on nearly every stream, since most have no
         # primary key.
@@ -113,9 +113,7 @@ class TestAgreement:
         del no_key["tables"][0]["cursor_field"]
         snapshot = live()
         snapshot["connections"][0]["configurations"]["streams"][0]["cursorField"] = []
-        report = ValidationReport()
-        check_drift(snapshot, [type(units[0])(path=Path("u.yml"), data=no_key)], report)
-        assert report.issues == []
+        assert _run(snapshot, [_unit(no_key)]).issues == []
 
 
 class TestConnectionDrift:
@@ -272,6 +270,29 @@ class TestStreamDrift:
             {"name": "auth_group", "syncMode": "incremental_append"}
         )
         report = _run(snapshot, units)
+        assert report.errors == []
+        assert "which the unit does not declare" in _messages(report, Severity.WARNING)[0]
+
+    def test_a_retired_stream_still_selected_is_an_error(self, units: list[Any]) -> None:
+        # The unit no longer declares it because it was moved to retired.yml,
+        # so without this it read as an ordinary undeclared stream: a warning
+        # that never fails the scheduled job, while Airbyte kept recreating the
+        # table we dropped.
+        snapshot = live()
+        snapshot["connections"][0]["configurations"]["streams"].append(
+            {"name": "auth_group", "syncMode": "incremental_append"}
+        )
+        report = _run(snapshot, units, retired={("mitxonline/mysql", f"{PREFIX}auth_group")})
+        assert f"still syncs retired table '{PREFIX}auth_group'" in _messages(report, Severity.ERROR)[0]
+        assert _messages(report, Severity.WARNING) == []
+
+    def test_a_table_retired_from_another_unit_stays_a_warning(self, units: list[Any]) -> None:
+        # retired.yml is keyed by unit, like the rest of the inventory.
+        snapshot = live()
+        snapshot["connections"][0]["configurations"]["streams"].append(
+            {"name": "auth_group", "syncMode": "incremental_append"}
+        )
+        report = _run(snapshot, units, retired={("mitx/mysql", f"{PREFIX}auth_group")})
         assert report.errors == []
         assert "which the unit does not declare" in _messages(report, Severity.WARNING)[0]
 
