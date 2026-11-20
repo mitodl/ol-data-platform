@@ -258,7 +258,9 @@ def test_one_source_object_advances_each_run(
         pipelines_dir=str(tmp_path / "pipelines"),
     )
     source = google_ads.google_ads_source(
-        client_factory=lambda: client, start_date="2026-06-01", lookback_days=7
+        client_factory=lambda: client,
+        start_date="2026-06-01",
+        metrics_lookback_days=7,
     ).with_resources("raw__google_ads__api__keyword_daily")
     source.resources["raw__google_ads__api__keyword_daily"].apply_hints(
         table_format="iceberg"
@@ -372,6 +374,40 @@ def test_backfill_loads_in_batches_and_resumes_after_a_failure(
     dates = [r["segments__date"] for r in rows]
     assert len(dates) == len(set(dates))
     assert {"2026-06-01", "2026-11-08"} <= set(dates)
+
+
+@pytest.mark.integration
+def test_only_reports_with_conversions_re_pull_90_days(tmp_path: Path) -> None:
+    client = FakeClient()
+    pipeline = dlt.pipeline(
+        pipeline_name="google_ads_lookback_test",
+        destination=dlt.destinations.duckdb(str(tmp_path / "lookback.duckdb")),
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    source = google_ads.google_ads_source(
+        client_factory=lambda: client, start_date="2026-06-01", today=TODAY
+    ).with_resources(
+        "raw__google_ads__api__keyword_daily",
+        "raw__google_ads__api__keyword_conversions_daily",
+        "raw__google_ads__api__campaign_daily",
+        "raw__google_ads__api__landing_page_daily",
+    )
+    pipeline.run(source)
+    client.queries.clear()
+    pipeline.run(source)
+
+    def first_day(resource: str, where: str) -> str:
+        return min(
+            _match(r"BETWEEN '([\d-]+)'", q).group(1)
+            for _, q in client.queries
+            if f"FROM {resource} " in q and where in q
+        )
+
+    # The first run loaded through 11-08.
+    assert first_day("keyword_view", "metrics.impressions > 0") == "2026-10-09"
+    assert first_day("campaign", "segments.date") == "2026-10-09"
+    assert first_day("keyword_view", "metrics.all_conversions > 0") == "2026-08-10"
+    assert first_day("landing_page_view", "segments.date") == "2026-08-10"
 
 
 def test_snapshots_append_and_daily_reports_merge() -> None:

@@ -87,6 +87,9 @@ DEFAULT_START_DATE = "2021-01-01"
 # Customers come from a HubSpot offline import days to weeks after the click,
 # and Google restates past days' conversions, so each run re-pulls this window.
 DEFAULT_LOOKBACK_DAYS = 90
+# Clicks, cost and impression share stopped changing after 14 days in production
+# (Nov 2026). Older days only change budget, which Google reports as today's.
+METRICS_LOOKBACK_DAYS = 30
 REPORT_CHUNK_DAYS = 31
 # About 2,500 keyword rows per account-window in November 2026, so a backfill
 # batch is ~125,000 rows per table and takes a few minutes.
@@ -491,6 +494,7 @@ def google_ads_source(
     client_factory: Callable[[], GoogleAdsClient] = load_client,
     start_date: str = DEFAULT_START_DATE,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+    metrics_lookback_days: int = METRICS_LOOKBACK_DAYS,
     today: date | None = None,
     backfill_windows: int | None = None,
 ) -> Generator[Any]:
@@ -500,7 +504,10 @@ def google_ads_source(
         client_factory: Returns a ``GoogleAdsClient`` whose ``login_customer_id``
             is the manager account.
         start_date: First date the daily reports load on a new account.
-        lookback_days: Days the daily reports re-pull before the last loaded date.
+        lookback_days: Days the daily reports with conversions re-pull before
+            the last loaded date.
+        metrics_lookback_days: The same for keyword_daily and campaign_daily,
+            which have no conversions.
         today: Overrides the current date (tests).
         backfill_windows: Load only the daily reports, for dates past each
             account's cursor, at most this many account-windows per table, and
@@ -620,12 +627,13 @@ def google_ads_source(
         resource: str,
         fields: tuple[str, ...],
         where: str,
+        days_back: int,
     ) -> Iterator[Any]:
         last_loaded: dict[str, str] = dlt.current.resource_state().setdefault(
             "last_loaded_date", {}
         )
         run_date, retrieved_at = _run_date(), _now()
-        lookback = -1 if backfill_windows else lookback_days
+        lookback = -1 if backfill_windows else days_back
         windows_left = backfill_windows
         for customer_id in client_ids:
             window = report_window(
@@ -693,6 +701,7 @@ def google_ads_source(
             "keyword_view",
             KEYWORD_DAILY_FIELDS,
             "metrics.impressions > 0",
+            metrics_lookback_days,
         )
 
     @dlt.transformer(
@@ -709,6 +718,7 @@ def google_ads_source(
             "keyword_view",
             KEYWORD_CONVERSION_FIELDS,
             "metrics.all_conversions > 0",
+            lookback_days,
         )
 
     @dlt.transformer(
@@ -725,6 +735,7 @@ def google_ads_source(
             "campaign",
             CAMPAIGN_DAILY_FIELDS,
             "metrics.impressions > 0",
+            metrics_lookback_days,
         )
 
     search = "campaign.advertising_channel_type = 'SEARCH' AND metrics.impressions > 0"
@@ -749,6 +760,7 @@ def google_ads_source(
             "landing_page_view",
             LANDING_PAGE_DAILY_FIELDS,
             search,
+            lookback_days,
         )
 
     @dlt.transformer(
