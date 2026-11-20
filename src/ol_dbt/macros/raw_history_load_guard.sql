@@ -14,9 +14,12 @@
     and passes.
 
     The shortfall trips with the rule and vars raw_history_delete_guard uses
-    (raw_history_guard_trips), so the load-side and snapshot-side guards fail
-    on the same numbers. Each table logs one line,
-    `raw_history_load_guard {json}`, which the check parses.
+    (raw_history_guard_trips). A per-table `max_delete_fraction` on the
+    snapshot is not read here; no snapshot sets one and the generator writes
+    none, so add it to `tables` before one does. The count misses a load that
+    drops keys and adds as many new ones; the snapshot-side guard, which
+    compares the keys themselves, still fails that run. Each table logs one
+    line, `raw_history_load_guard {json}`, which the check parses.
 -#}
 {% macro raw_history_load_guard(tables) %}
     {%- set limit, floor = raw_history_guard_limits() -%}

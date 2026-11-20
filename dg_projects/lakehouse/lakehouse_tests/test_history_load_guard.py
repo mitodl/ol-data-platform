@@ -107,6 +107,19 @@ def test_a_composite_key_is_kept_whole() -> None:
     assert guarded_tables(manifest)[0].unique_key == ("a", "b")
 
 
+def test_a_key_the_snapshot_quoted_is_passed_bare() -> None:
+    """The macro quotes it again for its own engine; twice breaks the SQL."""
+    manifest = _manifest(
+        _snapshot(
+            "snapshot_raw__x__a",
+            ["raw__x__a"],
+            unique_key=['"Email"', '"Program Title"'],
+        )
+    )
+
+    assert guarded_tables(manifest)[0].unique_key == ("Email", "Program Title")
+
+
 @pytest.mark.parametrize(
     "node",
     [

@@ -13,9 +13,15 @@ the sync's run, and since the group's tables share one check step, one short
 table would stop staging for the whole connection. Staging is left as it was
 before this check.
 
+An error in the step (a missing raw table, a dbt failure) leaves every table
+in the group without a result for its latest load, so all of the group's
+snapshots wait. That fails closed, and reaches Sentry through the failure hook
+rather than asset_check_failure_sensor.
+
 Only the tables lakehouse loads (Airbyte) are checked here. A table loaded in
 another code location (dlt, in data_loading) has no check, and its snapshot's
-gate passes with nothing to wait for.
+gate passes with nothing to wait for, so a unit's cutover to dlt drops its
+load-side guard until data_loading defines one.
 """
 
 import json
@@ -126,6 +132,9 @@ def _group_check(group: str, tables: list[GuardedTable]) -> AssetChecksDefinitio
         counts = parse_load_counts(
             event.raw_event["info"]["msg"] for event in invocation.stream_raw_events()
         )
+        if missing := sorted({t.raw_table for t in selected} - counts.keys()):
+            msg = f"raw_history_load_guard reported nothing for {', '.join(missing)}"
+            raise RuntimeError(msg)
         for table in selected:
             yield _result(
                 table,

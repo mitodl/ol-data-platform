@@ -137,13 +137,16 @@ def guarded_tables(manifest: Mapping[str, Any]) -> list[GuardedTable]:
         if not is_guarded_snapshot(node):
             continue
         unique_key = node["config"]["unique_key"]
+        keys = [unique_key] if isinstance(unique_key, str) else unique_key
         tables.append(
             GuardedTable(
                 snapshot=node["name"],
                 raw_table=snapshot_raw_table(node),
-                unique_key=(
-                    (unique_key,) if isinstance(unique_key, str) else tuple(unique_key)
-                ),
+                # raw_history_snapshot quotes a key that is not a plain lower-case
+                # identifier before it reaches the config ("Id"), with the parse
+                # target's quote. The macro quotes for the engine it runs on, so
+                # it takes the bare name.
+                unique_key=tuple(key.strip('"') for key in keys),
             )
         )
     return sorted(tables, key=lambda table: table.snapshot)
