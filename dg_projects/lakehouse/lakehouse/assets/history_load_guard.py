@@ -57,8 +57,8 @@ class HistoryLoadGuardConfig(Config):
     allow_short: list[str] = Field(
         default_factory=list,
         description=(
-            "Raw tables to pass even when short. Compare the shortfall with "
-            "the expected delete count first. The snapshot run still needs "
+            "Raw tables to pass even when short. Compare the missing keys "
+            "with the expected delete count first. The snapshot run still needs "
             "raw_history_allow_deletes for its own guard."
         ),
     )
@@ -78,7 +78,7 @@ def _result(
             "snapshot_open_records": MetadataValue.int(count.snapshot_open_records)
             if count.snapshot_open_records is not None
             else MetadataValue.null(),
-            "shortfall": count.shortfall,
+            "missing_keys": count.missing_keys,
             "snapshot": count.snapshot,
             "allowed": allowed,
         },

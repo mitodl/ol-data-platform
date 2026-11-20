@@ -160,7 +160,7 @@ class LoadCount:
     raw_table: str
     loaded_keys: int
     snapshot_open_records: int | None
-    shortfall: int
+    missing_keys: int
     max_fraction: float
     min_count: int
     short: bool
@@ -174,8 +174,9 @@ class LoadCount:
             )
         verdict = "short" if self.short else "within the limit"
         return (
-            f"{self.loaded_keys} keys loaded against {self.snapshot_open_records} "
-            f"open records in {self.snapshot}: {self.shortfall} fewer, {verdict} "
+            f"{self.missing_keys} of the {self.snapshot_open_records} open records "
+            f"in {self.snapshot} are missing from the load of {self.loaded_keys} "
+            f"keys, {verdict} "
             f"(fails above {self.max_fraction} of them, unless no more than "
             f"{self.min_count} and under half)"
         )

@@ -7,19 +7,18 @@
 
     The load is the raw table's distinct keys, or the newest load's for a dlt
     merge feed raw_delete_filter reads by latest_load. A keyset table is
-    counted unfiltered: raw keeps a deleted key's row, so a short count there
-    means the load lost rows, not that the source deleted them. The baseline
+    read unfiltered: raw keeps a deleted key's row, so a key missing there
+    means the load lost it, not that the source deleted it. The baseline
     is the snapshot's open, undeleted records, which is the previous load as
     the history recorded it. A snapshot that has not run yet has no baseline
     and passes.
 
-    The shortfall trips with the rule and vars raw_history_delete_guard uses
-    (raw_history_guard_trips). A per-table `max_delete_fraction` on the
-    snapshot is not read here; no snapshot sets one and the generator writes
-    none, so add it to `tables` before one does. The count misses a load that
-    drops keys and adds as many new ones; the snapshot-side guard, which
-    compares the keys themselves, still fails that run. Each table logs one
-    line, `raw_history_load_guard {json}`, which the check parses.
+    The open records whose key the load lacks trip with the rule and vars
+    raw_history_delete_guard uses (raw_history_guard_trips). A per-table
+    `max_delete_fraction` on the snapshot is not read here; no snapshot sets
+    one and the generator writes none, so add it to `tables` before one does.
+    Each table logs one line, `raw_history_load_guard {json}`, which the
+    check parses.
 -#}
 {% macro raw_history_load_guard(tables) %}
     {%- set limit, floor = raw_history_guard_limits() -%}
@@ -33,36 +32,67 @@
         {%- set spec = raw_delete_filter_map().get(table['raw_table']) -%}
         {%- set newest_load = raw_delete_filter(table['raw_table'], raw)
             if spec is not none and spec['kind'] == 'latest_load' else none -%}
-        {%- set load_sql -%}
-            select count(*) from (
-                select distinct {{ keys | join(', ') }}
-                from {{ raw }}
-                {%- if newest_load %}
-                where {{ newest_load }}
-                {%- endif %}
-            ) as load_keys
+        {%- set load_keys_sql -%}
+            select distinct {{ keys | join(', ') }}
+            from {{ raw }}
+            {%- if newest_load %}
+            where {{ newest_load }}
+            {%- endif %}
         {%- endset -%}
-        {%- set loaded = (run_query(load_sql).rows[0][0] or 0) | int -%}
         {%- set existing = adapter.get_relation(
             database=snapshot.database, schema=snapshot.schema, identifier=snapshot.identifier
         ) -%}
         {%- if existing is none -%}
+            {%- set loaded = (run_query(
+                "select count(*) from (" ~ load_keys_sql ~ ") as load_keys"
+            ).rows[0][0] or 0) | int -%}
             {%- set current = none -%}
+            {%- set missing = 0 -%}
         {%- else -%}
-            {%- set current_sql -%}
-                select count(*) from {{ existing }}
-                where dbt_valid_to is null and coalesce(dbt_is_deleted, 'False') != 'True'
+            {#- The same left join raw_history_delete_guard counts with, so a
+                load that drops keys and adds as many new ones is still short. -#}
+            {%- set guard_sql -%}
+                with load_keys as (
+                    {{ load_keys_sql }}
+                )
+
+                , current_keys as (
+                    select distinct {{ keys | join(', ') }}
+                    from {{ existing }}
+                    where dbt_valid_to is null and coalesce(dbt_is_deleted, 'False') != 'True'
+                )
+
+                select
+                    loaded.loaded_count
+                    , compared.current_count
+                    , compared.missing_count
+                from (select count(*) as loaded_count from load_keys) as loaded
+                cross join (
+                    select
+                        count(*) as current_count
+                        , sum(case when load_keys.{{ keys[0] }} is null then 1 else 0 end)
+                            as missing_count
+                    from current_keys
+                    left join load_keys
+                        on
+                        {%- for key in keys %}
+                            {% if not loop.first %}and {% endif -%}
+                            current_keys.{{ key }} = load_keys.{{ key }}
+                        {%- endfor %}
+                ) as compared
             {%- endset -%}
-            {%- set current = (run_query(current_sql).rows[0][0] or 0) | int -%}
+            {%- set row = run_query(guard_sql).rows[0] -%}
+            {%- set loaded = (row[0] or 0) | int -%}
+            {%- set current = (row[1] or 0) | int -%}
+            {%- set missing = (row[2] or 0) | int -%}
         {%- endif -%}
-        {%- set shortfall = [current - loaded, 0] | max if current is not none else 0 -%}
-        {%- set short = current is not none and raw_history_guard_trips(shortfall, current, limit, floor) -%}
+        {%- set short = current is not none and raw_history_guard_trips(missing, current, limit, floor) -%}
         {{ log("raw_history_load_guard " ~ tojson({
             "snapshot": table['snapshot'],
             "raw_table": table['raw_table'],
             "loaded_keys": loaded,
             "snapshot_open_records": current,
-            "shortfall": shortfall,
+            "missing_keys": missing,
             "max_fraction": limit,
             "min_count": floor,
             "short": short,

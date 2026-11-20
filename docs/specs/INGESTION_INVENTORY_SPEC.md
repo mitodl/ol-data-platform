@@ -1325,9 +1325,9 @@ ignored, fail `validate`.
 The delete guard is the snapshot-side half of two guards against a short load. The load-side
 half is a Dagster check, `history_load_not_short`, on each raw table an `absence: deleted`
 snapshot reads (dg_projects/lakehouse/lakehouse/assets/history_load_guard.py). It runs the
-`raw_history_load_guard` macro, which compares the load's distinct keys (the newest load's,
-for a `latest_load` table) with the snapshot's open, undeleted records, and fails on the delete
-guard's rule and vars (`raw_history_guard_trips`). The snapshot's automation condition waits
+`raw_history_load_guard` macro, which counts the snapshot's open, undeleted records whose key
+the load (the newest load, for a `latest_load` table) lacks, and fails on the delete guard's
+rule and vars (`raw_history_guard_trips`). The snapshot's automation condition waits
 for that check to pass against the latest load (`raw_load_check_passed`), so a short load
 holds the snapshot and the next load that passes releases it. A deliberate mass delete passes
 with the check's `allow_short` run config and the snapshot's `raw_history_allow_deletes` var.

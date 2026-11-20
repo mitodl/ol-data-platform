@@ -149,7 +149,7 @@ def _line(**overrides: Any) -> str:
         "raw_table": "raw__x__a",
         "loaded_keys": 40,
         "snapshot_open_records": 100,
-        "shortfall": 60,
+        "missing_keys": 60,
         "max_fraction": 0.1,
         "min_count": 10,
         "short": True,
@@ -169,7 +169,7 @@ def test_the_macro_lines_are_read_and_other_messages_skipped() -> None:
 
 def test_a_snapshot_not_yet_run_says_so() -> None:
     count = parse_load_counts(
-        [_line(snapshot_open_records=None, shortfall=0, short=False)]
+        [_line(snapshot_open_records=None, missing_keys=0, short=False)]
     )["raw__x__a"]
 
     assert "has not run yet" in count.describe()
