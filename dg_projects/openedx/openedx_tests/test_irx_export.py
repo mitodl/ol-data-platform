@@ -24,6 +24,7 @@ from openedx.assets.irx_export import (
     build_irx_export_asset,
     copy_course_exports,
     latest_course_exports,
+    legacy_batch,
     legacy_csv_columns,
     read_data_files,
     write_legacy_csv,
@@ -150,6 +151,31 @@ def test_role_users_projects_name_to_the_role_header() -> None:
 
     assert role_users.renames == {"name": "role"}
     assert role_users.columns == ("id", "user_id", "org", "course_id", "role")
+
+
+def test_course_ids_match_case_insensitively_and_keep_the_rows_spelling() -> None:
+    enrollment = next(f for f in IRX_EXPORT_FILES if f.name == "enrollment_query")
+    batch = pl.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "user_id": [10, 20, 30],
+            "course_id": [
+                "course-v1:MITx+20.309r_8+2024_fall",
+                "course-v1:MITx+20.309r_8+2024_Fall",
+                "course-v1:MITx+6.002x+2024_Fall",
+            ],
+            "created": [datetime.fromisoformat("2024-08-02 19:40:44")] * 3,
+            "is_active": [True] * 3,
+            "mode": ["honor"] * 3,
+        }
+    )
+
+    cut = legacy_batch(batch, enrollment, ["course-v1:MITx+20.309r_8+2024_Fall"])
+
+    assert cut["course_id"].to_list() == [
+        "course-v1:MITx+20.309r_8+2024_fall",
+        "course-v1:MITx+20.309r_8+2024_Fall",
+    ]
 
 
 def test_every_file_depends_on_its_irx_model() -> None:
