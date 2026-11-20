@@ -21,10 +21,6 @@ with source_offerings as (
 , normalized_offerings as (
     select
         *
-        -- "7 half days" and "5 Half-Days" are one unit, so join them before taking the
-        -- word after the number
-        , replace(replace(lower(trim(courseoffering_duration)), 'half days', 'half-days'), 'half day', 'half-day')
-            as duration_normalized
         , lower(trim(courseoffering_time_commitment)) as time_commitment_normalized
     from source_offerings
 )
@@ -32,18 +28,7 @@ with source_offerings as (
 , offerings as (
     select
         *
-        , {{ regexp_extract_or_null('duration_normalized', "'^(\\d+(?:\\.\\d+)?)'", 1) }} as duration_min_value
-        , {{ regexp_extract_or_null(
-            'duration_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)'", 1
-        ) }} as duration_max_value
-        -- the first word after the number or range (and an optional hyphen, "8-week"),
-        -- up to a space or punctuation ("3 mes/curso", "3 days, online",
-        -- "2 days in person+3 live webinars")
-        , {{ regexp_extract_or_null(
-            'duration_normalized',
-            "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?)?\\s*-?\\s*([^\\s/+,.;:()]+)'",
-            1
-        ) }} as duration_unit_word
+        , {{ duration_parse_parts('courseoffering_duration') }}
         -- A number or range of hours at the start, e.g. "6-8 hours/week", "6–8 hours/week",
         -- "5 - 7 Hours/week", "8 hours, 5 days/week". "3 one-week modules" names no hours.
         , {{ regexp_extract_or_null(
@@ -103,20 +88,9 @@ select
     ) }} as instructors
     , offerings.courseoffering_continuing_ed_credits as continuing_ed_credits
     , nullif(offerings.courseoffering_duration, '') as duration
-    , {{ try_cast('offerings.duration_min_value', 'decimal(8, 2)') }} as duration_min
-    , {{ try_cast('coalesce(offerings.duration_max_value, offerings.duration_min_value)', 'decimal(8, 2)') }}
-        as duration_max
-    , case
-        when offerings.duration_min_value is null then null
-        when offerings.duration_unit_word in ('hour', 'hours', 'hora', 'horas') then 'hour'
-        when offerings.duration_unit_word in ('half-day', 'half-days') then 'half_day'
-        when offerings.duration_unit_word in ('day', 'days', 'día', 'días', 'jour', 'jours') then 'day'
-        when offerings.duration_unit_word in (
-            'week', 'weeks', 'semana', 'semanas', 'semaine', 'semaines', 'settimana', 'settimane'
-        ) then 'week'
-        when offerings.duration_unit_word in ('month', 'months', 'mes', 'meses', 'mois', 'mesi') then 'month'
-        when offerings.duration_unit_word in ('semester', 'semesters', 'semestre', 'semestres') then 'semester'
-    end as duration_unit
+    , {{ duration_min('offerings.') }} as duration_min
+    , {{ duration_max('offerings.') }} as duration_max
+    , {{ duration_unit('offerings.') }} as duration_unit
     , nullif(offerings.courseoffering_time_commitment, '') as time_commitment
     , {{ try_cast('offerings.hours_min_value', 'decimal(8, 2)') }} as time_commitment_min_hours
     , {{ try_cast('coalesce(offerings.hours_max_value, offerings.hours_min_value)', 'decimal(8, 2)') }}
