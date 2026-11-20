@@ -494,9 +494,9 @@ def google_ads_source(
     client_factory: Callable[[], GoogleAdsClient] = load_client,
     start_date: str = DEFAULT_START_DATE,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-    metrics_lookback_days: int = METRICS_LOOKBACK_DAYS,
     today: date | None = None,
     backfill_windows: int | None = None,
+    metrics_lookback_days: int = METRICS_LOOKBACK_DAYS,
 ) -> Generator[Any]:
     """Load Google Ads Search data for every client account under the manager.
 
@@ -506,12 +506,12 @@ def google_ads_source(
         start_date: First date the daily reports load on a new account.
         lookback_days: Days the daily reports with conversions re-pull before
             the last loaded date.
-        metrics_lookback_days: The same for keyword_daily and campaign_daily,
-            which have no conversions.
         today: Overrides the current date (tests).
         backfill_windows: Load only the daily reports, for dates past each
             account's cursor, at most this many account-windows per table, and
             append them. A caller repeats it until a load fetches no window.
+        metrics_lookback_days: Days keyword_daily and campaign_daily, which
+            have no conversions, re-pull before the last loaded date.
     """
     table_format = config.active_table_format()
 
