@@ -186,6 +186,30 @@ class TestOutcome:
         with pytest.raises(Failure, match="no longer describes"):
             _materialise(FakeClient([connection(status="inactive")], [SOURCE]))
 
+    def test_a_retired_stream_still_selected_fails_the_run(
+        self, inventory: Path
+    ) -> None:
+        # Without retired.yml reaching the check this is an undeclared stream,
+        # a warning that never fails the run.
+        (inventory / "retired.yml").write_text(
+            f"""
+schema_version: 1
+retired:
+- deployment: mitxonline
+  layer: mysql
+  raw_tables:
+  - {PREFIX}auth_group
+  retired_on: '2026-11-20'
+  reason: test
+"""
+        )
+        live = connection()
+        live["configurations"]["streams"].append(
+            {"name": "auth_group", "syncMode": "incremental_append"}
+        )
+        with pytest.raises(Failure, match="no longer describes"):
+            _materialise(FakeClient([live], [SOURCE]))
+
     @pytest.mark.usefixtures("inventory")
     def test_a_warning_alone_does_not_fail(self) -> None:
         # An undeclared active connection is usually config made in the UI.

@@ -620,8 +620,9 @@ def drift(
     Takes a dump rather than reading the API, so the credentialed step stays
     separate and a drift report can be re-derived offline from a saved
     snapshot. Exits non-zero when the inventory is wrong about something it
-    declares, or when a connection still syncs a table retired.yml retired; a
-    live connection or stream the inventory merely does not cover is a warning.
+    declares, or when a live connection still syncs a table retired.yml records
+    as retired; a live connection or stream the inventory merely does not cover
+    is a warning.
     """
     units = load_units(inventory_dir)
     if not snapshot.exists():

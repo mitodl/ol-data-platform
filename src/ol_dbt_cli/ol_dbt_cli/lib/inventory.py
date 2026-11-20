@@ -1672,9 +1672,9 @@ def check_drift(
     expected end state and is not reported.
 
     The exception is a stream whose table `retired.yml` records: the inventory
-    says it stopped loading, so a declared connection still syncing it is the
-    inventory being wrong (§7.2), and Airbyte keeps recreating a table we
-    dropped. That is an ERROR.
+    says it stopped loading, so a live connection still syncing it, declared
+    or not, is the inventory being wrong (§7.2), and Airbyte keeps recreating
+    a table we dropped. That is an ERROR.
 
     :param retired: `(unit_key, raw_table)` pairs from
         `retired_pairs(load_retired(...))`.
@@ -1694,6 +1694,7 @@ def check_drift(
         for connection in unit.connections
     }
     live_sources = {str(s.get("sourceId", "")): s for s in snapshot.get("sources") or []}
+    retired_tables = {raw_table for _, raw_table in retired}
 
     for name in sorted(set(declared) - set(live)):
         _, unit = declared[name]
@@ -1714,6 +1715,24 @@ def check_drift(
         # and brings the warning back.
         status = live[name].get("status")
         if status in STOPPED_CONNECTION_STATUSES:
+            continue
+        # No unit declares it, so there is no unit key to match retired.yml on;
+        # the raw table alone says whether it is rewriting something we retired
+        # (a resumed retired connection, or one left active after its unit
+        # moved to dlt).
+        live_prefix = live[name].get("prefix") or ""
+        rewritten = sorted({f"{live_prefix}{stream}" for stream in _live_streams(live[name]) or {}} & retired_tables)
+        if rewritten:
+            report.add(
+                DRIFT_CHECK,
+                Severity.ERROR,
+                "(undeclared)",
+                f"connection {name!r} is {status!r} in Airbyte, no unit declares it, "
+                f"and it syncs {len(rewritten)} retired table(s): {', '.join(rewritten)}",
+                "retired.yml records that these tables stopped loading, so "
+                "Airbyte is writing (or recreating) them against the inventory. "
+                "Disable the connection, or declare it and un-retire the tables.",
+            )
             continue
         report.add(
             DRIFT_CHECK,

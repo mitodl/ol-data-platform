@@ -148,6 +148,34 @@ class TestConnectionDrift:
         snapshot["connections"].append({"name": "Something Someone Made In The UI", "configurations": {}})
         assert "no unit declares it" in _messages(_run(snapshot, units), Severity.WARNING)[0]
 
+    def test_an_undeclared_connection_syncing_a_retired_table_is_an_error(self, units: list[Any]) -> None:
+        # A retired connection someone resumed, or one left active after its
+        # unit moved to dlt. With no unit to key on, the raw table decides.
+        snapshot = live()
+        snapshot["connections"].append(
+            {
+                "name": "S3 Retired → S3 Data Lake",
+                "status": "active",
+                "prefix": "raw__old__",
+                "configurations": {"streams": [{"name": "things"}, {"name": "other_things"}]},
+            }
+        )
+        report = _run(snapshot, units, retired={("old/s3", "raw__old__things")})
+        assert "syncs 1 retired table(s): raw__old__things" in _messages(report, Severity.ERROR)[0]
+        assert _messages(report, Severity.WARNING) == []
+
+    def test_a_disabled_connection_syncing_a_retired_table_is_silent(self, units: list[Any]) -> None:
+        snapshot = live()
+        snapshot["connections"].append(
+            {
+                "name": "S3 Retired → S3 Data Lake",
+                "status": "inactive",
+                "prefix": "raw__old__",
+                "configurations": {"streams": [{"name": "things"}]},
+            }
+        )
+        assert _run(snapshot, units, retired={("old/s3", "raw__old__things")}).issues == []
+
     def test_a_paused_connection_is_reported(self, units: list[Any]) -> None:
         report = _run(live(status="inactive"), units)
         assert "'inactive' in Airbyte but declared 'active'" in _messages(report, Severity.ERROR)[0]
