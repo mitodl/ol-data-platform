@@ -66,6 +66,18 @@ is NULL over all-NULL input on all three and otherwise matches `bool_or` (true s
 after false). `tfact_enrollment` compares its stored booleans this way. Inside a
 `case when` or a `where`, NULL and false behave the same, so `bool_or` is safe there.
 
+## StarRocks session variables for one model
+
+A model that needs StarRocks settings for its own query (e.g. a lower `pipeline_dop`)
+puts `{{ session_variables_hint({'pipeline_dop': 2}) }}` on its own line right after its
+outermost `select` (on the same line as a column, `ol-dbt validate` reads the call as
+that column's alias). On StarRocks that renders a `/*+ SET_VAR(...) */` hint, which also
+applies to the CTAS or INSERT that the materialization wraps around the query; on Trino
+and DuckDB it renders nothing. Prefer it to a `set` pre-hook: a session variable set
+that way lasts as long as the connection, so it can leak into later models that reuse
+it. `tfact_problem_events` uses it because its incremental's memory grows with the dop,
+and at the default dop it exceeded a 6 GiB query limit while reading Iceberg pages.
+
 ## Examples
 
 These were the first macros written, and each is applied across the models:
