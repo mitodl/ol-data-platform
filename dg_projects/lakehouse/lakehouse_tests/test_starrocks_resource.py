@@ -395,3 +395,22 @@ def test_probes_time_out_and_ordinary_connections_do_not(
     *probes, ordinary = calls
     assert {(c["read_timeout"], c["write_timeout"]) for c in probes} == {(10, 10)}
     assert (ordinary["read_timeout"], ordinary["write_timeout"]) == (None, None)
+
+
+def test_wait_for_login_does_not_pass_when_no_fe_is_reachable_directly(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    """Pod names that never resolve from here would otherwise skip every FE."""
+    _frontends_refusing_until(
+        monkeypatch, {"fe-0.fe-search": 10_000, "fe-1.fe-search": 10_000}, code=2003
+    )
+    now = [0.0]
+    monkeypatch.setattr(starrocks_module.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(
+        starrocks_module.time, "sleep", lambda s: now.__setitem__(0, now[0] + s)
+    )
+
+    with pytest.raises(starrocks_module.LoginNotPropagatedError) as raised:
+        resource.wait_for_login("v-user", "pw")
+
+    assert list(raised.value.refusing) == ["starrocks"]

@@ -56,6 +56,8 @@ _LOGIN_POLL_INTERVAL_SECONDS = 2
 # Read/write timeout on each readiness probe, so an FE that stalls mid-handshake
 # or mid-query can't hold the wait past its deadline.
 _LOGIN_PROBE_TIMEOUT_SECONDS = 10
+# What `_fe_refusal` returns for an FE it couldn't connect to at all.
+_UNREACHABLE = "unreachable"
 
 
 class LoginNotPropagatedError(Exception):
@@ -222,12 +224,23 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         if isinstance(frontends, str):
             return {self.host: frontends}
         refusing: dict[str, str] = {}
+        verified = 0
         for host, port in frontends:
             fe = f"{host}:{port}"
             if time.monotonic() >= deadline:
                 refusing[fe] = "not checked before the deadline"
-            elif reason := self._fe_refusal(host, port, username, password):
+            elif (reason := self._fe_refusal(host, port, username, password)) is None:
+                verified += 1
+            elif reason != _UNREACHABLE:
                 refusing[fe] = reason
+        if not verified and not refusing:
+            # Every FE was skipped as unreachable, yet the service answered. The
+            # FE names (from the headless fe-search service, which publishes
+            # not-ready pods) don't resolve or connect from here, so nothing has
+            # been checked. Fail rather than pass without verifying anything.
+            refusing[self.host] = (
+                "no FE listed by SHOW FRONTENDS was reachable directly"
+            )
         return refusing
 
     def _live_frontends(
@@ -259,7 +272,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
     def _fe_refusal(
         self, host: str, port: int, username: str, password: str
     ) -> str | None:
-        """Why one FE isn't ready for the login, or None when it is or is down."""
+        """Why one FE isn't ready for the login, None when it is, or _UNREACHABLE."""
         try:
             conn = self._probe(host, port, username, password)
             try:
@@ -272,7 +285,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
             if exc.args[0] not in _RETRIABLE_ERRORS:
                 raise
             log.info("Skipping unreachable StarRocks FE %s:%s: %s", host, port, exc)
-            return None
+            return _UNREACHABLE
         return None if active else f"role {self.vault_role} is not active yet"
 
     def execute(self, sql: str, *, idempotent: bool = True) -> None:

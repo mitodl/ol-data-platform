@@ -157,6 +157,12 @@ def starrocks_credentials(
     The variables are left set afterwards. dagster-dbt's column-metadata and
     row-count fetches open adapter connections in this process after the spawn
     and read them from the environment.
+
+    Before exporting anything it waits, up to LOGIN_PROPAGATION_TIMEOUT_SECONDS
+    (lakehouse.resources.starrocks), for every FE to accept the new login (see
+    `StarRocksResource.wait_for_login`). So entering it can take that long and
+    can raise `LoginNotPropagatedError` before the spawn. A caller with a
+    retry loop should treat that like a failed build.
     """
     username, password = starrocks.generate_credentials()
     starrocks.wait_for_login(username, password)
