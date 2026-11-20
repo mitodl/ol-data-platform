@@ -347,8 +347,9 @@
 {#-
     Whether `missing` of `current` records is too many to lose in one run:
     all of them, or more than `limit` of them unless no more than `floor` and
-    fewer than half. Shared by raw_history_delete_guard (missing keys) and
-    raw_history_load_guard (the load's shortfall), so the two cannot disagree.
+    fewer than half. Shared by raw_history_delete_guard (keys missing from the
+    snapshot's input) and raw_history_load_guard (keys missing from the
+    load), so the two cannot disagree.
 -#}
 {% macro raw_history_guard_trips(missing, current, limit, floor) %}
     {%- set everything = current > 0 and missing == current -%}
