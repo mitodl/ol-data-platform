@@ -142,10 +142,10 @@ BUCKET_PATH = re.compile(r"(?:^|/)(courses/.+)$")
 # Raise it when resource_text_files names different files for data.json that
 # has not changed. 2: a video's transcript comes from
 # video_transcript_resources when it has one (mit-learn #4063), and a path is
-# split on "courses" only when it does not start with it. Left at 2 when every
-# transcript and the 3Play files came to be read: a course gets them at its
-# next change, and dbt reads either kind of set.
-TEXT_FILE_RULE = 2
+# split on "courses" only when it does not start with it. 3: every transcript
+# a video names gets a row of its own, the 3Play files are read, and a path is
+# keyed from its first courses/ segment.
+TEXT_FILE_RULE = 3
 
 # Site files Hugo generates beside a course's uploads. No resource points at
 # them, and a theme release can rewrite them without the course changing, so
