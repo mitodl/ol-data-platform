@@ -48,8 +48,10 @@ unit_tests:
   description: >
     Learn splits a path that does not start with "courses" on "courses" and keeps
     what lies between the first two, so it reads nothing from a file whose name
-    holds "courses". The resource is kept with no text, as in Learn. A transcript
-    list entry's path has its leading slashes stripped first, so it is not cut.
+    holds "courses". A cut key with no extension Learn reads is not read, and the
+    resource is kept with no text. A cut key with one is read and missing, so
+    Learn drops the resource. A transcript list entry's path has its leading
+    slashes stripped first, so it is not cut.
   model: integrations__learn__ocw_content_files
   given:
   - input: ref('int__ocw__content_files')
@@ -60,6 +62,9 @@ unit_tests:
     - {courserun_readable_id: run1, content_file_key: courses/a/resources/gone-courses/,
       content_type: pdf, content: null, extraction_status: missing, has_text_file: true,
       transcript_unreadable: false, is_3play_artifact: false, text_file_path: /courses/a/courses.pdf}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/prefix-pdf/,
+      content_type: pdf, content: Real text, extraction_status: extracted, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false, text_file_path: /courses/a/x.pdf/courses.pdf}
     - {courserun_readable_id: run1, content_file_key: courses/a/resources/video/,
       content_type: video, content: Intro to courses, extraction_status: extracted,
       has_text_file: true, transcript_unreadable: false, is_3play_artifact: false,
