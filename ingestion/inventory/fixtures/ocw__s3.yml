@@ -18,6 +18,8 @@ tables:
       extraction_status: string
       course_version: string
       course_retrieved_at: timestamp
+      transcript_index: long
+      transcript_language: string
       _dlt_load_id: string
     rows:
     # An older set of the first course. Staging keeps the newest set, so this

@@ -10,8 +10,14 @@ objects, so the warehouse holds what Learn would have extracted:
     courses/<slug>/data.json                -> content_kind = course
     courses/<slug>/pages/**/data.json       -> content_kind = page
     courses/<slug>/resources/**/data.json   -> content_kind = resource
-        + the text of the file the resource points at
+        + the text of the file a resource that is not a video points at
+        + for a video, one content_kind = transcript row per transcript file it
+          names, with its text, its language and its place in the list
     -> raw__ocw__s3__course_content
+
+Which transcript MIT Learn reads for a video (the first English one) is decided
+in dbt, from the transcript rows: this source keeps every file a resource
+names, including the 3Play caption and PDF files Learn leaves out.
 
 A course is read whole, and only when it changed. Its version is a digest of
 the ETags of the objects above and of the files under its own prefix, and of
@@ -58,6 +64,7 @@ Run standalone, as a sweep, or for the courses whose slugs follow it:
 import hashlib
 import json
 import logging
+import re
 import sys
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -97,8 +104,8 @@ SOURCE_NAME = "ocw_content_ingest"
 PIPELINE_SOURCE = "ocw"
 
 # The extensions MIT Learn extracts text for: VALID_FILE_TYPES in mit-learn's
-# learning_resources/constants.py. A resource whose file has any other
-# extension still gets a row, with no text.
+# learning_resources/constants.py. A file with any other extension is not read;
+# its resource still gets a row.
 VALID_FILE_TYPES = frozenset(
     {
         ".csv",
@@ -126,15 +133,19 @@ VALID_FILE_TYPES = frozenset(
         ".xml",
     }
 )
-# Learn drops these resources, so their text is never read.
-SKIPPED_TITLES = frozenset({"3play caption file", "3play pdf file"})
+
+# Where a data.json path names a key in the bucket: from its first "courses/"
+# segment on, whatever comes before (a leading slash, an OCW URL).
+BUCKET_PATH = re.compile(r"(?:^|/)(courses/.+)$")
 
 # Part of every course version, so that changing it reads every course again.
-# Raise it when text_file_key picks a different file for data.json that has
-# not changed. 2: a video's transcript comes from video_transcript_resources
-# when it has one (mit-learn #4063), and a path is split on "courses" only when
-# it does not start with it.
-TEXT_FILE_RULE = 2
+# Raise it when resource_text_files names different files for data.json that
+# has not changed. 2: a video's transcript comes from
+# video_transcript_resources when it has one (mit-learn #4063), and a path is
+# split on "courses" only when it does not start with it. 3: every transcript
+# a video names gets a row of its own, the 3Play files are read, and a path is
+# keyed from its first courses/ segment.
+TEXT_FILE_RULE = 3
 
 # Site files Hugo generates beside a course's uploads. No resource points at
 # them, and a theme release can rewrite them without the course changing, so
@@ -171,6 +182,7 @@ MAX_FILE_BYTES = 256 * 1024**2
 KIND_COURSE = "course"
 KIND_PAGE = "page"
 KIND_RESOURCE = "resource"
+KIND_TRANSCRIPT = "transcript"
 KIND_UNPUBLISHED = "unpublished"
 
 # State of a known course whose prefix was last seen with no data.json, with
@@ -191,6 +203,8 @@ SCHEMA = pa.schema(
         pa.field("extraction_status", pa.string()),
         pa.field("course_version", pa.string()),
         pa.field("course_retrieved_at", pa.timestamp("us", tz="UTC")),
+        pa.field("transcript_index", pa.int64()),
+        pa.field("transcript_language", pa.string()),
     ]
 )
 
@@ -223,76 +237,92 @@ class CourseRecord:
     external: dict[str, str] = field(default_factory=dict)
 
 
-def video_transcript_path(video_files: dict[str, Any]) -> str | None:
-    """Return the path of a video's transcript, as Learn passes it on.
+@dataclass(frozen=True)
+class Transcript:
+    """A transcript file a video resource names.
 
-    Follows ``get_video_transcript_path`` in mit-learn: a republished course
-    lists one transcript per language under ``video_transcript_resources``, and
-    the first English one that names a file wins, else the first that names a
-    file, with its leading slashes stripped. Older data has the single
-    ``video_transcript_file``, passed on as it is.
-
-    :param video_files: The ``video_files`` object of a video resource.
-    :returns: The path, or None when the video has no transcript or Learn raises
-        reading the list, which drops the resource.
+    :param key: The file's S3 key.
+    :param index: Its 1-based place in ``video_transcript_resources``, or None
+        for the single file older data names.
+    :param language: The language the entry gives, when it gives a string.
     """
-    resources = video_files.get("video_transcript_resources") or []
-    # Learn calls .get on every entry and .lower on the language of every entry
-    # that names a file, so a value that is not a list, an entry that is not an
-    # object, or a language that is not a string raises.
-    if not isinstance(resources, list) or not all(
-        isinstance(entry, dict) for entry in resources
-    ):
+
+    key: str
+    index: int | None = None
+    language: str | None = None
+
+
+def bucket_key(path: object) -> str | None:
+    """Return the S3 key a path in a data.json names, if it is a file to read.
+
+    OCW writes paths as ``/courses/<slug>/<file>``, and sometimes as a URL on
+    an OCW host. The key runs from the first ``courses/`` segment to the end,
+    so a file whose own name holds "courses" keeps it. A path with "courses"
+    only inside a segment is keyed as Learn keys it, from that "courses" up to
+    the next.
+
+    :param path: The value of a ``file`` field.
+    :returns: The key, or None when the value names no file in the bucket (not
+        a string, no "courses" in it) or a file whose type is not read.
+    """
+    if not isinstance(path, str) or "courses" not in path:
         return None
-    transcripts = [entry for entry in resources if entry.get("file")]
-    if any(
-        entry.get("language") and not isinstance(entry["language"], str)
-        for entry in transcripts
-    ):
-        return None
-    if transcripts:
-        english = [
-            entry
-            for entry in transcripts
-            if (entry.get("language") or "").lower().startswith("en")
-        ]
-        path = (english or transcripts)[0]["file"]
-        # Learn's .lstrip raises on a file that is not a string.
-        return path.lstrip("/") if isinstance(path, str) else None
-    return video_files.get("video_transcript_file")
+    match = BUCKET_PATH.search(path)
+    key = unquote(match.group(1) if match else "courses" + path.split("courses")[1])
+    return key if PurePosixPath(key).suffix.lower() in VALID_FILE_TYPES else None
 
 
-def text_file_key(resource: dict[str, Any]) -> str | None:
-    """Return the S3 key of the file Learn extracts text from for a resource.
+def video_transcripts(video_files: object) -> list[Transcript]:
+    """Return every transcript file a current-format video names.
 
-    Follows ``transform_contentfile`` and ``transform_contentfile_legacy`` in
-    mit-learn: a video's text is its transcript, anything else's is its file.
+    A republished course lists one transcript per language under
+    ``video_transcript_resources``; older data has the single
+    ``video_transcript_file``. Both are kept. An entry that is not an object, or
+    whose file is not one to read, is passed over and the rest are kept: which
+    one MIT Learn reads, and when Learn's code would raise on the list instead,
+    is decided in dbt (int__ocw__content_files).
+
+    :param video_files: The ``video_files`` value of a video resource.
+    """
+    if not isinstance(video_files, dict):
+        return []
+    transcripts = []
+    entries = video_files.get("video_transcript_resources")
+    for index, entry in enumerate(entries if isinstance(entries, list) else [], 1):
+        if (
+            not isinstance(entry, dict)
+            or (key := bucket_key(entry.get("file"))) is None
+        ):
+            continue
+        language = entry.get("language")
+        transcripts.append(
+            Transcript(key, index, language if isinstance(language, str) else None)
+        )
+    if key := bucket_key(video_files.get("video_transcript_file")):
+        transcripts.append(Transcript(key))
+    return transcripts
+
+
+def resource_text_files(
+    resource: dict[str, Any],
+) -> tuple[str | None, list[Transcript]]:
+    """Return the files whose text a resource's rows carry.
+
+    A video's text is in its transcripts, anything else's in its own file
+    (``transform_contentfile`` and ``transform_contentfile_legacy`` in
+    mit-learn).
 
     :param resource: A parsed ``resources/**/data.json``.
-    :returns: The key, or None when Learn would read no text.
+    :returns: The key of the resource's own file to read, and its transcripts.
     """
     if resource.get("resourcetype"):
         if resource["resourcetype"] == "Video":
-            path = video_transcript_path(resource.get("video_files") or {})
-        else:
-            path = resource.get("file")
-    elif resource.get("resource_type") == "Video":
-        path = resource.get("transcript_file")
-    else:
-        path = resource.get("file")
-
-    if not isinstance(path, str) or resource.get("title") in SKIPPED_TITLES:
-        return None
-    # Learn's own split, for a path not already starting with "courses": a path
-    # with no "courses" raises there, and one naming "courses" twice keeps only
-    # what lies between the first two. The extension is the split path's.
-    if not path.startswith("courses"):
-        if "courses" not in path:
-            return None
-        path = "courses" + path.split("courses")[1]
-    if PurePosixPath(path).suffix.lower() not in VALID_FILE_TYPES:
-        return None
-    return unquote(path)
+            return None, video_transcripts(resource.get("video_files"))
+        return bucket_key(resource.get("file")), []
+    if resource.get("resource_type") == "Video":
+        key = bucket_key(resource.get("transcript_file"))
+        return None, [Transcript(key)] if key else []
+    return bucket_key(resource.get("file")), []
 
 
 def content_kind(slug: str, key: str) -> str | None:
@@ -424,6 +454,9 @@ def read_course(  # noqa: PLR0913
 ) -> tuple[list[dict[str, Any]], int]:
     """Read one course's ``data.json`` files and the text of its resource files.
 
+    A file two rows name (a transcript also listed as the single file) is read
+    once.
+
     :returns: The course's rows and how many source bytes they were read from.
     :raises TikaUnavailableError: Tika is down.
     """
@@ -435,24 +468,35 @@ def read_course(  # noqa: PLR0913
     for key, body in zip(json_keys, bodies, strict=True):
         data_json = body.decode("utf-8", errors="replace")
         kind = content_kind(slug, key)
-        file_key = None
+        file_key: str | None = None
+        transcripts: list[Transcript] = []
         if kind == KIND_RESOURCE:
             try:
-                file_key = text_file_key(json.loads(data_json))
+                resource = json.loads(data_json)
             except json.JSONDecodeError:
                 logger.warning("%s is not valid JSON", key)
-        rows.append(
+            else:
+                if isinstance(resource, dict):
+                    file_key, transcripts = resource_text_files(resource)
+        row = {
+            **dict.fromkeys(SCHEMA.names),
+            "course_slug": slug,
+            "content_kind": kind,
+            "s3_key": key,
+            "s3_etag": _etag(objects[key]),
+            "course_version": version,
+            "course_retrieved_at": retrieved_at,
+        }
+        rows.append({**row, "data_json": data_json, "file_key": file_key})
+        rows.extend(
             {
-                **dict.fromkeys(SCHEMA.names),
-                "course_slug": slug,
-                "content_kind": kind,
-                "s3_key": key,
-                "s3_etag": _etag(objects[key]),
-                "data_json": data_json,
-                "file_key": file_key,
-                "course_version": version,
-                "course_retrieved_at": retrieved_at,
+                **row,
+                "content_kind": KIND_TRANSCRIPT,
+                "file_key": transcript.key,
+                "transcript_index": transcript.index,
+                "transcript_language": transcript.language,
             }
+            for transcript in transcripts
         )
     # A resource can point at a file under another course, which this course's
     # listing does not cover. Learn reads any key in the bucket.

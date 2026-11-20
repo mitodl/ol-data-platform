@@ -295,8 +295,18 @@ models:
 
 - name: stg__ocw__s3__course_content
   description: The current data.json of every OCW course, course page and course resource
-    in the OCW live bucket, with the text extracted from each resource's file. One
-    row per data.json, from each course's newest load.
+    in the OCW live bucket, with the text extracted from each resource's file, and
+    one transcript row per transcript file a video names. One row per data.json and
+    per transcript, from each course's newest load. A course loaded before transcript
+    rows existed has none, and its video's resource row has the text of the transcript
+    MIT Learn reads.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - coursecontent_s3_key
+        - coursecontent_kind
+        - coursecontent_transcript_index
   columns:
   - name: course_slug
     description: str, the course's directory under courses/ in the bucket, which is
@@ -304,17 +314,18 @@ models:
     tests:
     - not_null
   - name: coursecontent_kind
-    description: str, course, page or resource
+    description: str, course, page or resource for a data.json; transcript for a transcript
+      file of a video resource
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: [course, page, resource]
+          values: [course, page, resource, transcript]
   - name: coursecontent_s3_key
-    description: str, key of the data.json in the bucket
+    description: str, key of the data.json in the bucket; for a transcript row, its
+      video's
     tests:
     - not_null
-    - unique
   - name: coursecontent_title
     description: str, title of the page or resource
   - name: coursecontent_description
@@ -353,8 +364,15 @@ models:
   - name: course_data_json
     description: str, the course's data.json as published; set on the course row only
   - name: coursecontent_text_file_key
-    description: str, key of the file text was extracted from; null where MIT Learn
-      would extract none
+    description: str, key of the file text was extracted from, a resource's own file
+      or a transcript; null where there is none of a type that is read. A video's
+      resource row has none, since its text is on its transcript rows.
+  - name: coursecontent_transcript_index
+    description: int, a transcript row's 1-based place in the video's video_files.video_transcript_resources;
+      null for the single video_transcript_file (or a legacy transcript_file) and
+      for every other kind of row
+  - name: coursecontent_transcript_language
+    description: str, the language a transcript list entry gives, when it is a string
   - name: coursecontent_text
     description: str, the text Tika extracted from that file
   - name: coursecontent_text_extraction_status

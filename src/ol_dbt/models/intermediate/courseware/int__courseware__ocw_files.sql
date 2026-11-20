@@ -23,6 +23,21 @@ with ocw_courses as (
         and course_slug in {{ courseware_ocw_course_filter() }}
 )
 
+-- A 3Play caption or PDF file repeats its video's transcript, so it is not read.
+, ocw_content_files as (
+    select
+        courserun_readable_id
+        , course_slug
+        , content_file_key
+        , content_type
+        , title
+        , description
+        , file_extension
+        , content_tags
+        , case when is_3play_artifact then null else content end as content
+    from {{ ref('int__ocw__content_files') }}
+)
+
 , ocw_named_files as (
     select
         files.courserun_readable_id
@@ -42,7 +57,7 @@ with ocw_courses as (
             else {{ courseware_text_head('files.content') }}
         end as text_head
         , {{ courseware_answer_markers('files.content') }} as answer_markers
-    from {{ ref('int__ocw__content_files') }} as files
+    from ocw_content_files as files
     inner join ocw_courses
         on files.course_slug = ocw_courses.course_slug
 )
