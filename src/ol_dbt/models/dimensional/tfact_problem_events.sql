@@ -32,7 +32,8 @@
     against the watermark still decides each row.
 -#}
 {%- set source_date_floor = {} -%}
-{%- if execute -%}
+{#- A unit test's {{ this }} is a fixture CTE, not a table run_query can read. -#}
+{%- if execute and model.resource_type != 'unit_test' -%}
     {%- for row in run_query('select platform, max(event_timestamp) from ' ~ this ~ ' group by platform') -%}
         {%- if row[1] is not none -%}
             {%- do source_date_floor.update({
