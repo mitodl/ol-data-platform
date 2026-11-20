@@ -207,8 +207,10 @@ retired:
         live["configurations"]["streams"].append(
             {"name": "auth_group", "syncMode": "incremental_append"}
         )
-        with pytest.raises(Failure, match="no longer describes"):
+        with pytest.raises(Failure, match="no longer describes") as failure:
             _materialise(FakeClient([live], [SOURCE]))
+        findings = str(failure.value.metadata["findings"].value)
+        assert f"still syncs retired table '{PREFIX}auth_group'" in findings
 
     @pytest.mark.usefixtures("inventory")
     def test_a_warning_alone_does_not_fail(self) -> None:
