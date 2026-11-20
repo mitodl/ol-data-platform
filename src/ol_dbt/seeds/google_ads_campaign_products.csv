@@ -1,0 +1,9 @@
+product_readable_id,campaign_name_pattern,campaign_id
+program-v1:UAI+B2C,Program - UAI - %,
+program-v1:MITx+DEDP-Public-Policy,Program - mmDEDP - %Public Policy%,
+program-v1:MITx+DEDP,Program - mmDEDP - %Internat%,
+program-v1:xPRO+SysEngx,Program - SysEng - %,
+program-v1:xPRO+QCF,Program - Quantum Computing - %,
+program-v1:xPRO+MLx,Program - MLx - %,
+course-v1:xPRO+DAI,Course - DAI - %,
+course-v1:xPRO+LASERxE1,Course - System Thinking - %,

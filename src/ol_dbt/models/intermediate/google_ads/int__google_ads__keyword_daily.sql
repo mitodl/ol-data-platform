@@ -1,13 +1,14 @@
 -- ad_opt_v2's keyword-day panel: the pull (reports/kw-day-panel.csv) after clean_kw_day_panel.
-with courses as (
+with products as (
     select
-        google_ads_courses.course
-        , google_ads_courses.account_id
-        , google_ads_courses.min_date
+        campaign_products.product_readable_id
+        , campaign_products.account_id
+        , campaign_products.campaign_id
+        , campaign_products.min_date
         , networks.setting_value as ad_network
-    from {{ ref('google_ads_courses') }} as google_ads_courses
-    left join {{ ref('google_ads_course_settings') }} as networks
-        on google_ads_courses.course = networks.course and networks.setting = 'ad_network'
+    from {{ ref('int__google_ads__campaign_products') }} as campaign_products
+    left join {{ ref('google_ads_product_settings') }} as networks
+        on campaign_products.product_readable_id = networks.product_readable_id and networks.setting = 'ad_network'
 )
 
 -- Every row under its campaign's latest name, as ad_opt_v2's pulls see it.
@@ -18,15 +19,15 @@ with courses as (
 )
 
 , conversion_actions as (
-    select course, setting_value as conversion_action_name
-    from {{ ref('google_ads_course_settings') }}
+    select product_readable_id, setting_value as conversion_action_name
+    from {{ ref('google_ads_product_settings') }}
     where setting = 'conversion_action'
 )
 
--- The pull's row: one ad group keyword per day, over the course's networks, with clicks.
+-- The pull's row: one ad group keyword per day, over the product's networks, with clicks.
 , keyword_rows as (
     select
-        courses.course
+        products.product_readable_id
         , keyword_daily.report_date
         , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name)) as campaign_name
         , keyword_daily.ad_group_id
@@ -38,18 +39,19 @@ with courses as (
         , max(keyword_daily.currency_code) as currency_code
         , max(keyword_daily.keyword_first_page_cpc) as keyword_first_page_cpc
     from {{ ref('stg__google_ads__api__keyword_daily') }} as keyword_daily
-    inner join courses
+    inner join products
         on
-            keyword_daily.account_id = courses.account_id
-            and keyword_daily.report_date >= courses.min_date
+            keyword_daily.account_id = products.account_id
+            and keyword_daily.campaign_id = products.campaign_id
+            and keyword_daily.report_date >= products.min_date
     left join current_names
         on keyword_daily.account_id = current_names.account_id and keyword_daily.campaign_id = current_names.campaign_id
     where
         {{ google_ads_is_search_campaign('keyword_daily.campaign_name', 'keyword_daily.campaign_channel_type') }}
         and keyword_daily.keyword_match_type in ('EXACT', 'PHRASE', 'BROAD')
-        and (courses.ad_network is null or keyword_daily.ad_network_type = courses.ad_network)
+        and (products.ad_network is null or keyword_daily.ad_network_type = products.ad_network)
     group by
-        courses.course
+        products.product_readable_id
         , keyword_daily.report_date
         , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name))
         , keyword_daily.ad_group_id
@@ -63,7 +65,7 @@ with courses as (
 -- ad group's row; this adds the ad groups up, since that order is arbitrary.
 , keyword_totals as (
     select
-        course
+        product_readable_id
         , report_date
         , campaign_name
         , keyword_text
@@ -73,35 +75,36 @@ with courses as (
         , max(currency_code) as currency_code
         , max(keyword_first_page_cpc) as keyword_first_page_cpc
     from keyword_rows
-    group by course, report_date, campaign_name, keyword_text, keyword_match_type
+    group by product_readable_id, report_date, campaign_name, keyword_text, keyword_match_type
 )
 
 , conversion_totals as (
     select
-        courses.course
+        products.product_readable_id
         , conversions.report_date
         , coalesce(current_names.latest_name, trim(conversions.campaign_name)) as campaign_name
         , {{ google_ads_clean_keyword('conversions.keyword_text') }} as keyword_text
         , conversions.keyword_match_type
         , sum(conversions.all_conversions) as all_conversions
     from {{ ref('stg__google_ads__api__keyword_conversions_daily') }} as conversions
-    inner join courses
+    inner join products
         on
-            conversions.account_id = courses.account_id
-            and conversions.report_date >= courses.min_date
+            conversions.account_id = products.account_id
+            and conversions.campaign_id = products.campaign_id
+            and conversions.report_date >= products.min_date
     left join current_names
         on conversions.account_id = current_names.account_id and conversions.campaign_id = current_names.campaign_id
     inner join conversion_actions
         on
-            courses.course = conversion_actions.course
+            products.product_readable_id = conversion_actions.product_readable_id
             and conversions.conversion_action_name = conversion_actions.conversion_action_name
     where
         {{ google_ads_is_search_campaign('conversions.campaign_name', 'conversions.campaign_channel_type') }}
         and conversions.keyword_match_type in ('EXACT', 'PHRASE', 'BROAD')
         and conversions.all_conversions > 0
-        and (courses.ad_network is null or conversions.ad_network_type = courses.ad_network)
+        and (products.ad_network is null or conversions.ad_network_type = products.ad_network)
     group by
-        courses.course
+        products.product_readable_id
         , conversions.report_date
         , coalesce(current_names.latest_name, trim(conversions.campaign_name))
         , {{ google_ads_clean_keyword('conversions.keyword_text') }}
@@ -109,7 +112,7 @@ with courses as (
 )
 
 select
-    coalesce(keyword_totals.course, conversion_totals.course) as course
+    coalesce(keyword_totals.product_readable_id, conversion_totals.product_readable_id) as product_readable_id
     , coalesce(keyword_totals.report_date, conversion_totals.report_date) as report_date
     , coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name) as campaign_name
     , {{ google_ads_campaign_region('coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name)') }}
@@ -128,7 +131,7 @@ select
 from keyword_totals
 full outer join conversion_totals
     on
-        keyword_totals.course = conversion_totals.course
+        keyword_totals.product_readable_id = conversion_totals.product_readable_id
         and keyword_totals.report_date = conversion_totals.report_date
         and keyword_totals.campaign_name = conversion_totals.campaign_name
         and keyword_totals.keyword_text = conversion_totals.keyword_text

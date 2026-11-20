@@ -2,7 +2,7 @@
 -- per click for each region and match-type set. A day with no region is left out, as pandas'
 -- groupby drops it.
 select
-    course
+    product_readable_id
     , campaign_region
     , match_types
     , sum(clicks) as segment_clicks
@@ -10,4 +10,4 @@ select
     , case when sum(clicks) > 0 then sum(all_conversions) / sum(clicks) end as conversions_per_click
 from {{ ref('int__google_ads__campaign_day_panel') }}
 where campaign_region is not null
-group by course, campaign_region, match_types
+group by product_readable_id, campaign_region, match_types

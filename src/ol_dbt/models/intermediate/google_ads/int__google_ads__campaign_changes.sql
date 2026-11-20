@@ -9,13 +9,16 @@
 {%- set keyword_detail_re = "'^-?(?:\\[([^\\]]+)\\]|\"([^\"]+)\"|([^:]+))'" %}
 {%- set schedule_date_re = "'[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4}'" %}
 
-with courses as (
-    select course, account_id from {{ ref('google_ads_courses') }}
+-- history_folder is ad_opt_v2's course folder its history files came from; the API takes over
+-- after a folder's history ends, in that folder's account. Each change's product comes from its
+-- campaign at the end.
+with history_accounts as (
+    select history_folder, account_id from {{ ref('google_ads_history_accounts') }}
 )
 
 , report_lines as (
     select
-        report.change_course as course
+        report.change_course as history_folder
         , report.change_row_number as row_key
         , report.change_at
         , trim(report.campaign_name) as campaign_name
@@ -30,7 +33,7 @@ with courses as (
 -- A header line is unindented; the indented lines under it are its details.
 , report_grouped as (
     select
-        course
+        history_folder
         , row_key
         , change_at
         , campaign_name
@@ -38,24 +41,28 @@ with courses as (
         , line
         , line_number
         , sum(case when line not like ' %' and trim(line) != '' then 1 else 0 end) over (
-            partition by course, row_key order by line_number nulls last rows unbounded preceding
+            partition by history_folder, row_key order by line_number nulls last rows unbounded preceding
         ) as group_number
     from report_lines
 )
 
 , report_details as (
     select
-        details.course
+        details.history_folder
         , 'report' as change_source
         , details.change_at
         , details.campaign_name
         , details.ad_group_name
         , trim(headers.line) as change_header
         , trim(details.line) as change_detail
+        -- The report lists rows newest first; same-second changes apply bottom row first.
+        , -details.row_key as sort_1
+        , details.group_number as sort_2
+        , details.line_number as sort_3
     from report_grouped as details
     inner join report_grouped as headers
         on
-            details.course = headers.course
+            details.history_folder = headers.history_folder
             and details.row_key = headers.row_key
             and details.group_number = headers.group_number
             and headers.line not like ' %'
@@ -63,14 +70,14 @@ with courses as (
 )
 
 , report_ends as (
-    select change_course as course, max(change_at) as last_change_at
+    select change_course as history_folder, max(change_at) as last_change_at
     from {{ ref('stg__google_ads__s3__change_history_report') }}
     group by change_course
 )
 
 , jsonl_details as (
     select
-        jsonl.change_course as course
+        jsonl.change_course as history_folder
         , 'jsonl' as change_source
         , jsonl.change_at
         , trim(jsonl.campaign_name) as campaign_name
@@ -78,6 +85,9 @@ with courses as (
         , trim(jsonl.change_header) as change_header
         , trim({{ element_at_array(json_extract_varchar_array('jsonl.change_details', "'$'"), 'details.detail_number') }})
         as change_detail
+        , cast(jsonl.change_line_number as bigint) as sort_1
+        , cast(details.detail_number as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from {{ ref('stg__google_ads__s3__change_history_api') }} as jsonl
     cross join
         {{ unnest_sequence(
@@ -85,7 +95,7 @@ with courses as (
             , 'details'
             , 'detail_number'
         ) }}
-    left join report_ends on jsonl.change_course = report_ends.course
+    left join report_ends on jsonl.change_course = report_ends.history_folder
     where report_ends.last_change_at is null or jsonl.change_at > report_ends.last_change_at
 )
 
@@ -97,7 +107,7 @@ with courses as (
 
 , history_changes as (
     select
-        course
+        history_folder
         , change_source
         , change_at
         , regexp_extract(change_detail, {{ budget_re }}, 1) as campaign_name
@@ -108,13 +118,16 @@ with courses as (
         , cast(null as varchar) as keyword_match_type
         , replace(regexp_extract(change_detail, {{ budget_re }}, 2), ',', '') as previous_value
         , replace(regexp_extract(change_detail, {{ budget_re }}, 3), ',', '') as new_value
+        , sort_1
+        , sort_2
+        , sort_3
     from history_details
     where {{ regexp_like('change_detail', budget_re) }}
 
     union all
 
     select
-        course
+        history_folder
         , change_source
         , change_at
         , campaign_name
@@ -125,6 +138,9 @@ with courses as (
         , null as keyword_match_type
         , lower(nullif(regexp_extract(change_detail, {{ status_re }}, 1), '')) as previous_value
         , lower(regexp_extract(change_detail, {{ status_re }}, 2)) as new_value
+        , sort_1
+        , sort_2
+        , sort_3
     from history_details
     where
         {{ regexp_like('change_header', campaign_header_re) }}
@@ -133,7 +149,7 @@ with courses as (
     union all
 
     select
-        course
+        history_folder
         , change_source
         , change_at
         , campaign_name
@@ -150,6 +166,9 @@ with courses as (
             "nullif(regexp_extract(regexp_extract(change_detail, " ~ schedule_re ~ ", 3), " ~ schedule_date_re ~ "), '')"
             , "'%b %d, %Y'"
         ) }} as date) as varchar) as new_value
+        , sort_1
+        , sort_2
+        , sort_3
     from history_details
     where
         {{ regexp_like('change_header', campaign_header_re) }}
@@ -158,7 +177,7 @@ with courses as (
     union all
 
     select
-        course
+        history_folder
         , change_source
         , change_at
         , campaign_name
@@ -176,13 +195,16 @@ with courses as (
         , upper(regexp_extract(change_header, {{ keyword_header_re }}, 2)) as keyword_match_type
         , null as previous_value
         , null as new_value
+        , sort_1
+        , sort_2
+        , sort_3
     from history_details
     where {{ regexp_like('change_header', keyword_header_re) }}
 
     union all
 
     select
-        course
+        history_folder
         , change_source
         , change_at
         , campaign_name
@@ -193,6 +215,9 @@ with courses as (
         , null as keyword_match_type
         , lower(nullif(regexp_extract(change_detail, {{ status_re }}, 1), '')) as previous_value
         , lower(regexp_extract(change_detail, {{ status_re }}, 2)) as new_value
+        , sort_1
+        , sort_2
+        , sort_3
     from history_details
     where
         {{ regexp_like('change_header', ad_group_header_re) }}
@@ -262,14 +287,14 @@ with courses as (
 )
 
 , history_ends as (
-    select course, max(change_at) as last_change_at
+    select history_folder, max(change_at) as last_change_at
     from history_details
-    group by course
+    group by history_folder
 )
 
 , api_events as (
     select
-        courses.course
+        history_accounts.history_folder
         , events.change_event_at as change_at
         , events.change_resource_type
         , events.change_operation
@@ -279,15 +304,23 @@ with courses as (
         , nullif(events.ad_group_resource_name, '') as ad_group_resource_name
         , events.change_old_resource as old_resource
         , events.change_new_resource as new_resource
+        , row_number() over (
+            partition by events.account_id
+            order by
+                events.change_event_at nulls last
+                , events.change_resource_name nulls last
+                , events.change_operation nulls last
+                , events.change_changed_fields nulls last
+        ) as event_order
     from {{ ref('stg__google_ads__api__change_events') }} as events
-    inner join courses on events.account_id = courses.account_id
-    left join history_ends on courses.course = history_ends.course
+    left join history_accounts on events.account_id = history_accounts.account_id
+    left join history_ends on history_accounts.history_folder = history_ends.history_folder
     where history_ends.last_change_at is null or events.change_event_at > history_ends.last_change_at
 )
 
 , api_changes as (
     select
-        api_events.course
+        api_events.history_folder
         , 'api' as change_source
         , api_events.change_at
         , coalesce(campaign_names.campaign_name, {{ json_query_string('api_events.new_resource', "'$.campaign.name'") }})
@@ -299,6 +332,9 @@ with courses as (
         , null as keyword_match_type
         , lower({{ json_query_string('api_events.old_resource', "'$.campaign.status'") }}) as previous_value
         , lower({{ json_query_string('api_events.new_resource', "'$.campaign.status'") }}) as new_value
+        , api_events.event_order as sort_1
+        , cast(0 as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from api_events
     left join campaign_names on api_events.campaign_resource_name = campaign_names.campaign_resource_name
     where
@@ -308,7 +344,7 @@ with courses as (
     union all
 
     select
-        api_events.course
+        api_events.history_folder
         , 'api' as change_source
         , api_events.change_at
         , coalesce(campaign_names.campaign_name, {{ json_query_string('api_events.new_resource', "'$.campaign.name'") }})
@@ -323,6 +359,9 @@ with courses as (
         as previous_value
         , substr(nullif({{ json_query_string('api_events.new_resource', "'$.campaign.end_date_time'") }}, ''), 1, 10)
         as new_value
+        , api_events.event_order as sort_1
+        , cast(0 as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from api_events
     left join campaign_names on api_events.campaign_resource_name = campaign_names.campaign_resource_name
     where
@@ -333,7 +372,7 @@ with courses as (
 
     -- A shared budget's event has no campaign; it applies to every campaign using the budget.
     select
-        api_events.course
+        api_events.history_folder
         , 'api' as change_source
         , api_events.change_at
         , campaign_names.campaign_name
@@ -350,6 +389,9 @@ with courses as (
             {{ google_ads_micros(json_query_string('api_events.new_resource', "'$.campaign_budget.amount_micros'")) }}
             as varchar
         ) as new_value
+        , api_events.event_order as sort_1
+        , cast(0 as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from api_events
     left join budget_campaigns
         on
@@ -365,7 +407,7 @@ with courses as (
     union all
 
     select
-        api_events.course
+        api_events.history_folder
         , 'api' as change_source
         , api_events.change_at
         , campaign_names.campaign_name
@@ -378,6 +420,9 @@ with courses as (
         , null as keyword_match_type
         , lower({{ json_query_string('api_events.old_resource', "'$.ad_group.status'") }}) as previous_value
         , lower({{ json_query_string('api_events.new_resource', "'$.ad_group.status'") }}) as new_value
+        , api_events.event_order as sort_1
+        , cast(0 as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from api_events
     left join campaign_names on api_events.campaign_resource_name = campaign_names.campaign_resource_name
     left join ad_group_names on api_events.change_resource_name = ad_group_names.ad_group_resource_name
@@ -388,11 +433,12 @@ with courses as (
 
 , api_criteria as (
     select
-        api_events.course
+        api_events.history_folder
         , api_events.change_at
         , api_events.change_resource_type
         , api_events.change_operation
         , api_events.changed_fields
+        , api_events.event_order
         , campaign_names.campaign_name
         , case
             when api_events.change_resource_type = 'AD_GROUP_CRITERION'
@@ -426,7 +472,7 @@ with courses as (
 
 , api_keyword_changes as (
     select
-        course
+        history_folder
         , 'api' as change_source
         , change_at
         , campaign_name
@@ -443,9 +489,14 @@ with courses as (
             when raw_match_type in ('EXACT', 'PHRASE', 'BROAD') then raw_match_type
             when raw_keyword_text like '[%]' then 'EXACT'
             when raw_keyword_text like '"%"' then 'PHRASE'
+            -- Without either, it is Broad: every such keyword with a snapshot is.
+            when raw_match_type is null then 'BROAD'
         end as keyword_match_type
         , null as previous_value
         , null as new_value
+        , event_order as sort_1
+        , cast(0 as bigint) as sort_2
+        , cast(0 as bigint) as sort_3
     from api_criteria
     where nullif(raw_keyword_text, '') is not null
 )
@@ -459,19 +510,25 @@ with courses as (
 )
 
 -- Report and JSONL names are as of their download; a later rename maps them to the current
--- name (current_names). A name two campaigns had is left as it is.
+-- name (current_names). A name two campaigns in one account had is left as it is.
 , name_map as (
-    select courses.course, names.name, max(names.latest_name) as latest_name
+    select names.account_id, names.name, max(names.latest_name) as latest_name
     from {{ ref('int__google_ads__campaign_names') }} as names
-    inner join courses on names.account_id = courses.account_id
-    group by courses.course, names.name
+    group by names.account_id, names.name
     having count(distinct names.latest_name) = 1
+)
+
+-- History rows name their campaign but not its id, so products are matched by latest name.
+, name_products as (
+    select campaign_name, max(product_readable_id) as product_readable_id
+    from {{ ref('int__google_ads__campaign_products') }}
+    group by campaign_name
+    having count(distinct product_readable_id) = 1
 )
 
 , current_changes as (
     select
-        all_changes.course
-        , all_changes.change_source
+        all_changes.change_source
         , all_changes.change_at
         , coalesce(name_map.latest_name, all_changes.campaign_name) as campaign_name
         , all_changes.ad_group_name
@@ -481,27 +538,49 @@ with courses as (
         , all_changes.keyword_match_type
         , all_changes.previous_value
         , all_changes.new_value
+        , all_changes.sort_1
+        , all_changes.sort_2
+        , all_changes.sort_3
     from all_changes
-    left join name_map on all_changes.course = name_map.course and all_changes.campaign_name = name_map.name
+    left join history_accounts on all_changes.history_folder = history_accounts.history_folder
+    left join name_map
+        on history_accounts.account_id = name_map.account_id and all_changes.campaign_name = name_map.name
 )
 
 select
-    course
-    , change_source
-    , change_at
-    , campaign_name
-    , nullif(ad_group_name, '') as ad_group_name
-    , change_type
-    , keyword_action
-    , keyword_text
-    , case when keyword_match_type is not null
-        then concat(upper(substr(keyword_match_type, 1, 1)), lower(substr(keyword_match_type, 2)))
+    name_products.product_readable_id
+    , current_changes.change_source
+    , current_changes.change_at
+    , current_changes.campaign_name
+    , nullif(current_changes.ad_group_name, '') as ad_group_name
+    , current_changes.change_type
+    , current_changes.keyword_action
+    , current_changes.keyword_text
+    , case when current_changes.keyword_match_type is not null
+        then concat(
+            upper(substr(current_changes.keyword_match_type, 1, 1))
+            , lower(substr(current_changes.keyword_match_type, 2))
+        )
     end as keyword_match_type
-    , previous_value
-    , new_value
+    , current_changes.previous_value
+    , current_changes.new_value
+    -- Same-second changes keep their source order, as ad_opt_v2's stable sort does.
+    , row_number() over (
+        partition by name_products.product_readable_id
+        order by
+            current_changes.change_at nulls last
+            , current_changes.sort_1 nulls last
+            , current_changes.sort_2 nulls last
+            , current_changes.sort_3 nulls last
+    ) as change_order
 from current_changes
+inner join name_products on current_changes.campaign_name = name_products.campaign_name
 -- parse_change_history's Search campaigns: the name says Search and not Experiment.
 where
-    campaign_name like '%Search%'
-    and campaign_name not like '%Experiment%'
-    and (keyword_action is null or keyword_action in ('added', 'removed', 'paused', 'enabled'))
+    current_changes.campaign_name like '%Search%'
+    and current_changes.campaign_name not like '%Experiment%'
+    -- A keyword update that is not a status change (a bid, a URL) changes no list.
+    and (
+        current_changes.change_type not in ('keyword', 'negative_keyword')
+        or current_changes.keyword_action in ('added', 'removed', 'paused', 'enabled')
+    )

@@ -100,12 +100,12 @@
 
 
 {% macro google_ads_excluded_campaigns(source_relation) -%}
-    {#- Campaigns whose name holds one of the course's excluded_campaign_patterns, ignoring case. -#}
-    select distinct named.course, named.campaign_name
+    {#- Campaigns whose name holds one of the product's excluded_campaign_patterns, ignoring case. -#}
+    select distinct named.product_readable_id, named.campaign_name
     from {{ source_relation }} as named
-    inner join {{ ref('google_ads_course_settings') }} as excluded
+    inner join {{ ref('google_ads_product_settings') }} as excluded
         on
-            named.course = excluded.course
+            named.product_readable_id = excluded.product_readable_id
             and excluded.setting = 'excluded_campaign_pattern'
             and lower(named.campaign_name) like concat('%', lower(excluded.setting_value), '%')
 {%- endmacro %}

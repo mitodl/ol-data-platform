@@ -366,66 +366,85 @@ seeds:
         config:
           error_if: ">0"
 
-- name: google_ads_courses
-  description: The Google Ads account and first report date of each course the ad_opt_v2
-    optimizer plans, from its CUSTOMER_IDS and each course.yaml's min_date. One account
-    per course until marketing merges them.
+- name: google_ads_campaign_products
+  description: The product each Google Ads campaign advertises, for the optimizer.
+    A row maps one campaign by campaign_id, or every campaign whose name matches campaign_name_pattern.
+    Marketing names campaigns "<Program | Course> - <code> - ...", in every account,
+    so one row per product maps new campaigns without a change here. A campaign that
+    matches no row is left out; add a row when a product launches.
   config:
     column_types:
-      course: varchar
-      account_id: varchar
-      min_date: date
+      product_readable_id: varchar
+      campaign_name_pattern: varchar
+      campaign_id: bigint
   columns:
-  - name: course
-    description: str, ad_opt_v2's course folder name, e.g. systems_engineering
+  - name: product_readable_id
+    description: str, the course_readable_id (dim_course) or program_readable_id (dim_program)
+      the campaigns advertise; the course, not a course run
     tests:
     - not_null
-    - unique
-  - name: account_id
-    description: str, the course's Google Ads account id
-    tests:
-    - not_null
-    - unique
-  - name: min_date
-    description: date, the first day ad_opt_v2 pulls reports for
-    tests:
-    - not_null
+  - name: campaign_name_pattern
+    description: str, a SQL like pattern for the campaign names, e.g. "Program - UAI
+      - %"; null on a campaign_id row
+  - name: campaign_id
+    description: bigint, one campaign this row maps, for a name that does not follow
+      the convention; it wins over every pattern
 
-- name: google_ads_course_settings
-  description: ad_opt_v2's per-course report filters, from config/default.yaml and
-    each course.yaml. conversion_action names the conversions that count; a course
-    without one counts none. excluded_campaign_pattern marks campaigns the optimizer
-    leaves out (a case-insensitive substring). ad_network keeps only that network;
-    a course without one keeps every network.
+- name: google_ads_product_settings
+  description: Each product's report settings, from ad_opt_v2's config/default.yaml
+    and course.yaml files. min_date is the first report day. conversion_action names
+    the conversions that count; a product without one counts none. excluded_campaign_pattern
+    marks campaigns the optimizer leaves out (a case-insensitive substring). ad_network
+    keeps only that network; a product without one keeps every network.
   config:
     column_types:
-      course: varchar
+      product_readable_id: varchar
       setting: varchar
       setting_value: varchar
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - course
+        - product_readable_id
         - setting
         - setting_value
   columns:
-  - name: course
-    description: str, ad_opt_v2's course folder name
+  - name: product_readable_id
+    description: str, a product in google_ads_campaign_products
     tests:
     - not_null
     - relationships:
         arguments:
-          to: ref('google_ads_courses')
-          field: course
+          to: ref('google_ads_campaign_products')
+          field: product_readable_id
   - name: setting
-    description: str, conversion_action, excluded_campaign_pattern or ad_network
+    description: str, min_date, conversion_action, excluded_campaign_pattern or ad_network
     tests:
     - accepted_values:
         arguments:
-          values: ['conversion_action', 'excluded_campaign_pattern', 'ad_network']
+          values: ['min_date', 'conversion_action', 'excluded_campaign_pattern', 'ad_network']
   - name: setting_value
-    description: str, the setting's value, e.g. HubSpot - Customers, Remarketing or
-      SEARCH
+    description: str, the setting's value, e.g. 2024-10-07, HubSpot - Customers, Remarketing
+      or SEARCH
     tests:
     - not_null
+
+- name: google_ads_history_accounts
+  description: The Google Ads account of each ad_opt_v2 course folder its change history
+    files came from. The history covers a folder's account up to the files' last change,
+    and API change events take over after it. Used for nothing else.
+  config:
+    column_types:
+      history_folder: varchar
+      account_id: varchar
+  columns:
+  - name: history_folder
+    description: str, ad_opt_v2's course folder name, e.g. systems_engineering
+    tests:
+    - not_null
+    - unique
+  - name: account_id
+    description: str, the folder's Google Ads account id
+    tests:
+    - not_null
+    - unique

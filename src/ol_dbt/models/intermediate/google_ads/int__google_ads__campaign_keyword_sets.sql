@@ -1,6 +1,6 @@
 -- ad_opt_v2's campaign-keyword-sets.csv: one row per distinct set of keyword lists.
 select
-    course
+    product_readable_id
     , keyword_set_id
     , max(broad_keywords) as broad_keywords
     , max(phrase_keywords) as phrase_keywords
@@ -15,4 +15,4 @@ select
         , '; '
     ) }} as used_by_campaign_versions
 from {{ ref('int__google_ads__campaign_versions') }}
-group by course, keyword_set_id
+group by product_readable_id, keyword_set_id

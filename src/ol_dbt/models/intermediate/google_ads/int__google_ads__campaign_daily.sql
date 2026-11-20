@@ -1,6 +1,6 @@
 -- ad_opt_v2's campaign-day report (reports/campaign-day-report.csv).
-with courses as (
-    select course, account_id, min_date from {{ ref('google_ads_courses') }}
+with products as (
+    select product_readable_id, account_id, campaign_id, min_date from {{ ref('int__google_ads__campaign_products') }}
 )
 
 -- Every row under its campaign's latest name, as ad_opt_v2's pulls see it.
@@ -11,7 +11,7 @@ with courses as (
 )
 
 select
-    courses.course
+    products.product_readable_id
     , campaign_daily.report_date
     , campaign_daily.campaign_id
     , coalesce(current_names.latest_name, trim(campaign_daily.campaign_name)) as campaign_name
@@ -20,10 +20,11 @@ select
     , campaign_daily.search_budget_lost_impression_share
     , campaign_daily.search_rank_lost_impression_share
 from {{ ref('stg__google_ads__api__campaign_daily') }} as campaign_daily
-inner join courses
+inner join products
     on
-        campaign_daily.account_id = courses.account_id
-        and campaign_daily.report_date >= courses.min_date
+        campaign_daily.account_id = products.account_id
+        and campaign_daily.campaign_id = products.campaign_id
+        and campaign_daily.report_date >= products.min_date
 left join current_names
     on campaign_daily.account_id = current_names.account_id and campaign_daily.campaign_id = current_names.campaign_id
 where
