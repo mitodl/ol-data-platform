@@ -1279,10 +1279,16 @@ class _VaultLogins:
 
     def __init__(self) -> None:
         self.issued = 0
+        self.waited: list[tuple[str, str]] = []
 
     def generate_credentials(self) -> tuple[str, str]:
         self.issued += 1
         return f"v-user-{self.issued}", f"v-login-{self.issued}"
+
+    def wait_for_login(self, username: str, password: str) -> None:
+        # The login is exported only after every FE accepts it.
+        assert os.environ["DBT_STARROCKS_USERNAME"] != username
+        self.waited.append((username, password))
 
 
 _CREDENTIAL_VARS = ("DBT_STARROCKS_USERNAME", "DBT_STARROCKS_PASSWORD")
@@ -1307,6 +1313,7 @@ class TestStarRocksCredentials:
         assert first == ["v-user-1", "v-login-1"]
         assert second == ["v-user-2", "v-login-2"]
         assert host == "fe.example"
+        assert logins.waited == [("v-user-1", "v-login-1"), ("v-user-2", "v-login-2")]
 
     def test_the_login_outlives_the_spawn(self):
         """dagster-dbt's column-metadata fetch connects after the spawn."""
