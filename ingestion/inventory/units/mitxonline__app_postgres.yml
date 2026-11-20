@@ -30,6 +30,7 @@ table_prefix: raw__mitxonline__app__postgres__
 # decision once its history for this unit goes live. Local is left out until a
 # local keyset run is confirmed.
 history:
+  live: true
   keyset_lakes: [qa]
 # Loads QA and the local lake. Production is still the Airbyte connection below.
 dlt:

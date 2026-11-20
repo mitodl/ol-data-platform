@@ -9,7 +9,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__b2b_contractpage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -17,7 +17,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__b2b_contractprogramitem',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -25,7 +25,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__b2b_organizationpage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -33,7 +33,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__b2b_userb2bcontract',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -41,7 +41,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__b2b_userorganization',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -49,7 +49,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_coursepage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -57,7 +57,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_coursepage_topics',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -65,7 +65,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_instructorpage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -73,7 +73,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_instructorpagelink',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -81,7 +81,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_productpagefaq',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -89,7 +89,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_programpage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -97,7 +97,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__cms_signatorypage',
     unique_key='page_ptr_id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -105,7 +105,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_blockedcountry',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -113,7 +113,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_course',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -121,7 +121,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_course_departments',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -129,7 +129,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserun',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -137,7 +137,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserun_b2b_contracts',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -145,7 +145,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserun_enrollment_modes',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -153,7 +153,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courseruncertificate',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -161,7 +161,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserunenrollment',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -169,7 +169,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserunenrollmentaudit',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -177,7 +177,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_courserungrade',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -185,7 +185,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_coursestopic',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -193,7 +193,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_department',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -201,7 +201,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_enrollmentmode',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -209,7 +209,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_paidcourserun',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -217,7 +217,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_program',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -225,7 +225,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_program_departments',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -233,7 +233,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_program_enrollment_modes',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -241,7 +241,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_programcertificate',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -249,7 +249,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_programenrollment',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -257,7 +257,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_programenrollmentaudit',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -265,7 +265,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_programrequirement',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -273,7 +273,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__courses_programrun',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -281,7 +281,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__django_content_type',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -289,7 +289,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_basket',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -297,7 +297,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_basketdiscount',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -305,7 +305,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_basketitem',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -313,7 +313,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_discount',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -321,7 +321,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_discountproduct',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -329,7 +329,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_discountredemption',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -337,7 +337,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_line',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -345,7 +345,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_order',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -353,7 +353,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_product',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -361,7 +361,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_transaction',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -369,7 +369,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__ecommerce_userdiscount',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -377,7 +377,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -385,7 +385,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -393,7 +393,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__flexiblepricing_flexibleprice',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -401,7 +401,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -409,7 +409,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__openedx_openedxuser',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -417,7 +417,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__reversion_revision',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -425,7 +425,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__reversion_version',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -433,7 +433,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__users_legaladdress',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -441,7 +441,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__users_user',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -449,7 +449,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__users_userprofile',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -457,7 +457,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__variants_supportedvariant',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -465,7 +465,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__wagtailcore_page',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -473,7 +473,7 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__wagtailcore_revision',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
 
@@ -481,6 +481,6 @@
 {{ raw_history_snapshot(
     'raw__mitxonline__app__postgres__wagtailimages_image',
     unique_key='id',
-    live=false
+    live=true
 ) }}
 {% endsnapshot %}
