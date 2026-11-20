@@ -1673,8 +1673,8 @@ def check_drift(
 
     The exception is a stream whose table `retired.yml` records: the inventory
     says it stopped loading, so a live connection still syncing it, declared
-    or not, is the inventory being wrong (§7.2), and Airbyte keeps recreating
-    a table we dropped. That is an ERROR.
+    or not, is the inventory being wrong (§7.2), and Airbyte keeps writing a
+    table we stopped tracking. That is an ERROR.
 
     :param retired: `(unit_key, raw_table)` pairs from
         `retired_pairs(load_retired(...))`.
@@ -1730,7 +1730,7 @@ def check_drift(
                 f"connection {name!r} is {status!r} in Airbyte, no unit declares it, "
                 f"and it syncs {len(rewritten)} retired table(s): {', '.join(rewritten)}",
                 "retired.yml records that these tables stopped loading, so "
-                "Airbyte is writing (or recreating) them against the inventory. "
+                "Airbyte is writing them against the inventory. "
                 "Disable the connection, or declare it and un-retire the tables.",
             )
             continue
@@ -1896,9 +1896,8 @@ def _compare_connection(  # noqa: PLR0913
                 key,
                 f"connection {name!r} still syncs retired table {landed!r}",
                 "retired.yml records that this table stopped loading, but the "
-                "stream is still selected, so Airbyte keeps writing it (and "
-                "recreates it if it was dropped). Deselect the stream, or "
-                "un-retire the table.",
+                "stream is still selected, so Airbyte keeps writing it. "
+                "Deselect the stream, or un-retire the table.",
             )
             continue
         report.add(

@@ -304,8 +304,8 @@ class TestStreamDrift:
     def test_a_retired_stream_still_selected_is_an_error(self, units: list[Any]) -> None:
         # The unit no longer declares it because it was moved to retired.yml,
         # so without this it read as an ordinary undeclared stream: a warning
-        # that never fails the scheduled job, while Airbyte kept recreating the
-        # table we dropped.
+        # that never fails the scheduled job, while Airbyte kept writing the
+        # table.
         snapshot = live()
         snapshot["connections"][0]["configurations"]["streams"].append(
             {"name": "auth_group", "syncMode": "incremental_append"}

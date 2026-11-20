@@ -523,7 +523,7 @@ connection is `inactive`. Resuming one brings the warning back.
 A live stream that lands in a table `retired.yml` records (§7.2) is an `ERROR`, not the
 warning an undeclared stream gets, whether or not a unit declares its connection. The
 inventory says that table stopped loading, so a stream still selected means Airbyte keeps
-writing it, and recreates it if we dropped it. On a declared connection the match is on the
+writing it. On a declared connection the match is on the
 unit and raw table; on an undeclared one, which has no unit, on the raw table alone.
 
 ---
