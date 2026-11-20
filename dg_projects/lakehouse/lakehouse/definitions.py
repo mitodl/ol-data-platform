@@ -829,7 +829,7 @@ resources_dict = {
         vault=vault,
     ),
     "starrocks": starrocks,
-    # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
+    # Separate from "dbt" (pinned to DBT_TARGET) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,
 }
 

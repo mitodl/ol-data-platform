@@ -168,10 +168,10 @@ open_learning:
     # a location before it starts dbt.
     #
     # starrocks_qa_lake is the QA lakehouse code location's target
-    # (DBT_TARGET_MAP in lakehouse.lib.dbt_environment), so its host defaults to
-    # the in-cluster FE like ci's; `ol-dbt starrocks` always sets
-    # DBT_STARROCKS_HOST. The canonical production layer schemas are the ones
-    # the Trino build writes until the cutover.
+    # (DBT_TARGET_MAP in lakehouse.lib.dbt_environment). Dagster and `ol-dbt
+    # starrocks` both set DBT_STARROCKS_HOST, so the default only documents the
+    # FE it reaches, as ci's does. The canonical production layer schemas are
+    # the ones the Trino build writes until the cutover.
     starrocks_qa_lake:
       type: starrocks
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")

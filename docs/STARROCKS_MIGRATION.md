@@ -21,10 +21,10 @@ Trino any more.
 StarRocks already runs in CI, QA and production, and several consumers read from it:
 Superset, ol-analytics-api, MIT Learn's warehouse pull and the `b2b_analytics`
 materialized views. It reads the lake through its Glue-backed Iceberg external
-catalogs (`ol_data_lake_qa`, `ol_data_lake_production`). The only dbt models it
-builds on a schedule are the `tag:starrocks` ones (the `b2b_analytics` and
-`b2b_learner_records` models), in production, from the StarRocks-targeted dbt
-assets in `dg_projects/lakehouse/lakehouse/assets/lakehouse/dbt_starrocks.py`.
+catalogs (`ol_data_lake_qa`, `ol_data_lake_production`). Besides the QA warehouse
+above, it builds the `tag:starrocks` models (the `b2b_analytics` and
+`b2b_learner_records` models) on a schedule in production, from the StarRocks-targeted
+dbt assets in `dg_projects/lakehouse/lakehouse/assets/lakehouse/dbt_starrocks.py`.
 
 Locally, `ol-dbt starrocks build --env dev` builds the layered warehouse into the
 Iceberg catalog of the local-dev StarRocks cluster. See [LOCAL_LAKE.md](LOCAL_LAKE.md).

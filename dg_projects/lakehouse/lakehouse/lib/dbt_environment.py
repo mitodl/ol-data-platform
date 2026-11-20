@@ -29,8 +29,11 @@ ol-infrastructure's local-dev stack (``data-platform`` in ``enabled_apps``),
 with its own object store and Iceberg catalog, and a root login that needs no
 Vault credentials. A developer who wants the QA cluster runs with
 ``DAGSTER_ENVIRONMENT=qa``, as docker-compose.yaml does for this code location.
-The Trino map has not followed: ``dev`` there is still the production Galaxy
-cluster.
+The b2b project then works through a port-forward, but the main project's qa
+target is starrocks_qa_lake, which writes the canonical QA warehouse through
+STARROCKS_HOST_MAP's in-cluster FE name, so dbt assets don't build from a
+laptop in qa. The Trino map has not followed: ``dev`` there is still the
+production Galaxy cluster.
 
 Adding an environment
 ---------------------
@@ -317,8 +320,8 @@ DATA_LAKE_ENV = resolve_for_environment(
 
 # Which engine compacts and analyzes the dbt-built Iceberg tables in
 # iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
-# (ol-infrastructure ADR 0012), against the same Glue tables Trino still
-# builds there, so the StarRocks path is proven before production needs it.
+# (ol-infrastructure ADR 0012), against the Glue tables StarRocks builds
+# there, so the StarRocks path is proven before production needs it.
 # The nightly schedule is production-only (lib/scheduled_automation.py), so in
 # qa the asset runs when materialized by hand.
 # Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE

@@ -314,7 +314,7 @@ def upload_build_artifacts(
     project and queries every relation, which is far too expensive to repeat on
     each incremental subset build. That work lives in the dedicated
     `dbt_docs_artifacts_job`, which runs on a daily schedule and uploads the
-    Trino manifest.json with it.
+    DBT_TARGET manifest.json with it.
     """
     if DAGSTER_ENV == "dev":
         return
@@ -368,8 +368,8 @@ def upload_build_artifacts_best_effort(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
     # Complementary partition with dbt_starrocks.py's starrocks_dbt_assets: tag a
-    # model `starrocks` to move it from this Trino-scoped asset set into that
-    # StarRocks-scoped one without touching either Python asset definition.
+    # model `starrocks` to move it from this DBT_TARGET asset set into that
+    # default_catalog one without touching either Python asset definition.
     exclude="tag:starrocks",
     dagster_dbt_translator=DbtAutomationTranslator(
         settings=DagsterDbtTranslatorSettings(enable_code_references=True)
