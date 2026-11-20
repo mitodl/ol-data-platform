@@ -36,6 +36,7 @@ domains:
 - b2b
 - feedback
 - engagement
+- marketing
 
 rules:
   # Shared reference data with no single owning business area.
@@ -50,6 +51,23 @@ rules:
   - "*wagtailcore_*"
   - "*wagtailimages_*"
   - "*wagtail_page"
+
+  # HubSpot CRM and Google Ads. They sit ahead of the broad patterns, which
+  # would otherwise send HubSpot engagements to engagement, its marketing emails
+  # to learners-identity and its products, like the Google Ads product mapping,
+  # to commerce. The unprefixed contacts and deals tables and the raw_hubspot_
+  # ones are an older HubSpot load. The xPRO and Bootcamps apps' own HubSpot sync
+  # bookkeeping tables (hubspot_api_hubspotobject and the like) are app state,
+  # not marketing data, so they belong to no domain.
+- domain:
+  match:
+  - "*__postgres__hubspot_*"
+- domain: marketing
+  match:
+  - "*hubspot*"
+  - "*google_ads*"
+  - contacts
+  - deals
 
   # Courseware knowledge: concepts, claims and the concept graph extracted from
   # course content, with the Learn views that publish them. It sits ahead of the
@@ -287,13 +305,6 @@ rules:
   # Lake tables the rules above leave unmatched and that belong in no domain.
   # They come last so that they only take names nothing above places.
   #
-  # HubSpot marketing CRM data, which no domain covers. The unprefixed and
-  # raw_hubspot_ tables are an older HubSpot load.
-- domain:
-  match:
-  - "*hubspot*"
-  - contacts
-  - deals
   # Unprefixed Zendesk Support streams no model reads. The tickets dbt does read
   # come from raw__thirdparty__zendesk_support__*, which "*zendesk*" places.
 - domain:
