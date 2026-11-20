@@ -273,7 +273,7 @@ def _transcript_rows(
     )
     source = youtube.youtube_source(api_key="k", **source_kwargs)
     rows = list(source.resources["raw__youtube__api__transcripts"])
-    return rows, calls
+    return rows, calls, snippet_requests
 
 
 def _summary(rows):
@@ -291,7 +291,7 @@ def _summary(rows):
 
 
 def test_transcripts_land_every_language_uploaded_and_generated(monkeypatch):
-    rows, _calls = _transcript_rows(
+    rows, _calls, _snippets = _transcript_rows(
         monkeypatch,
         ["vid1"],
         {
@@ -315,7 +315,7 @@ def test_transcripts_land_every_language_uploaded_and_generated(monkeypatch):
 
 
 def test_a_video_without_transcripts_has_a_status_row_saying_why(monkeypatch):
-    rows, _calls = _transcript_rows(
+    rows, _calls, _snippets = _transcript_rows(
         monkeypatch,
         ["disabled", "gone", "broken", "empty"],
         {
@@ -336,7 +336,7 @@ def test_a_video_without_transcripts_has_a_status_row_saying_why(monkeypatch):
 
 def test_a_transcript_that_fails_writes_no_row_of_its_own(monkeypatch):
     """So a failed fetch never overwrites the text an earlier run landed."""
-    rows, _calls = _transcript_rows(
+    rows, _calls, _snippets = _transcript_rows(
         monkeypatch,
         ["bad-es"],
         {"bad-es": [("en", False, "hello"), ("es", False, ValueError("bad"))]},
@@ -356,7 +356,7 @@ def test_once_youtube_blocks_the_run_no_more_requests_are_made(monkeypatch, bloc
         if blocked_by == "list"
         else [("en", False, block), ("es", False, "hola")]
     }
-    rows, calls = _transcript_rows(
+    rows, calls, _snippets = _transcript_rows(
         monkeypatch, ["ok", "blocked", "later1", "later2"], listings
     )
 
@@ -390,12 +390,23 @@ def _fetched(rows):
 def test_native_tracks_are_the_uploaded_ones_and_the_auto_track_in_the_videos_language(
     monkeypatch,
 ):
-    rows, _calls = _transcript_rows(
+    rows, _calls, snippets = _transcript_rows(
         monkeypatch,
-        ["dubbed", "spanish", "no-language", "nothing-known"],
+        [
+            "dubbed",
+            "spanish",
+            "no-language",
+            "nothing-known",
+            "mislabeled",
+            "hebrew",
+            "title-only",
+        ],
         {
             "dubbed": DUBBED,
             "spanish": [("es", True, "hola"), ("en", True, "hello auto")],
+            "mislabeled": [("es", True, "hola")],
+            "hebrew": [("iw", True, "shalom"), ("en", True, "x")],
+            "title-only": [("fr", True, "bonjour"), ("en", True, "x")],
             "no-language": [
                 ("de", False, "hallo"),
                 ("de", True, "x"),
@@ -407,9 +418,13 @@ def test_native_tracks_are_the_uploaded_ones_and_the_auto_track_in_the_videos_la
             "spanish": {"defaultAudioLanguage": "es-419"},
             "no-language": {},
             "nothing-known": {},
+            "hebrew": {"defaultAudioLanguage": "he"},
+            "title-only": {"defaultLanguage": "fr"},
         },
     )
 
+    # One videos.list request per 50 videos, for their languages.
+    assert snippets == ["snippet"]
     by_video: dict[str, list[tuple[str, bool]]] = {}
     for row in rows:
         if row["language_code"]:
@@ -423,6 +438,10 @@ def test_native_tracks_are_the_uploaded_ones_and_the_auto_track_in_the_videos_la
         "no-language": [("de", False), ("de", True)],
         # Nothing to go on: every auto-generated track is kept.
         "nothing-known": [("ja", True), ("ko", True)],
+        # Labelled English but only Spanish is listed: the label is wrong.
+        "mislabeled": [("es", True)],
+        "hebrew": [("iw", True)],
+        "title-only": [("fr", True)],
     }
     status = next(
         row for row in rows if row["video_id"] == "dubbed" and not row["language_code"]
@@ -434,10 +453,11 @@ def test_native_tracks_are_the_uploaded_ones_and_the_auto_track_in_the_videos_la
 
 
 def test_all_tracks_fetches_every_listed_track(monkeypatch):
-    rows, _calls = _transcript_rows(
+    rows, _calls, snippets = _transcript_rows(
         monkeypatch, ["dubbed"], {"dubbed": DUBBED}, transcript_tracks="all"
     )
 
+    assert snippets == []
     assert _fetched(rows) == [
         ("en", False),
         ("ar", True),

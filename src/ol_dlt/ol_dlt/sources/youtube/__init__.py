@@ -77,9 +77,14 @@ class TranscriptTracks(StrEnum):
     ALL = "all"
 
 
+# Legacy codes YouTube still uses beside their current ones.
+_LANGUAGE_ALIASES = {"iw": "he", "in": "id", "ji": "yi", "tl": "fil"}
+
+
 def _language(code: str | None) -> str:
-    """Return the primary subtag of a language code: en-US -> en."""
-    return (code or "").split("-")[0].lower()
+    """Return the primary subtag of a language code: en-US -> en, iw -> he."""
+    language = (code or "").split("-")[0].lower()
+    return _LANGUAGE_ALIASES.get(language, language)
 
 
 def tracks_to_fetch(
@@ -93,15 +98,18 @@ def tracks_to_fetch(
         the video (defaultAudioLanguage, defaultLanguage); may be empty.
     :returns: The tracks to fetch, uploaded first. For ``NATIVE``, a video the
         API gives no language for takes its uploaded tracks' languages as its
-        own, and one with neither keeps every auto-generated track.
+        own. A video with no uploaded track and no auto-generated track in its
+        language keeps every auto-generated track: its metadata language can
+        be the channel's default rather than the one spoken.
     """
     uploaded = [track for track in transcripts if not track.is_generated]
     generated = [track for track in transcripts if track.is_generated]
     if tracks is TranscriptTracks.ALL:
         return uploaded + generated
     native = video_languages or {_language(t.language_code) for t in uploaded}
-    if native:
-        generated = [t for t in generated if _language(t.language_code) in native]
+    in_native = [t for t in generated if _language(t.language_code) in native]
+    if in_native or uploaded:
+        generated = in_native
     return uploaded + generated
 
 
@@ -633,6 +641,7 @@ def youtube_source(  # noqa: C901
                 continue
 
             errors = []
+            fetched_any = False
             for transcript in tracks_to_fetch(
                 transcripts, tracks, video_languages.get(video_id, set())
             ):
@@ -660,12 +669,13 @@ def youtube_source(  # noqa: C901
                     transcript=formatter.format_transcript(fetched),
                     segments=fetched.to_raw_data(),
                 )
+                fetched_any = True
             if blocked:
                 status = TRANSCRIPT_BLOCKED
             elif errors:
                 status = TRANSCRIPT_FAILED
             else:
-                status = TRANSCRIPT_FETCHED if transcripts else TRANSCRIPT_NONE
+                status = TRANSCRIPT_FETCHED if fetched_any else TRANSCRIPT_NONE
             yield row(
                 video_id,
                 fetch_status=status,
