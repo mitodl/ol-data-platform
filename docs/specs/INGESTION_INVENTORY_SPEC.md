@@ -520,6 +520,16 @@ Retiring a connection disables it in Airbyte rather than deleting it, as a produ
 does (§10.1), so the check stays silent about a connection no unit declares while that
 connection is `inactive`. Resuming one brings the warning back.
 
+A live stream that lands in a table `retired.yml` records (§7.2) is an `ERROR`, not the
+warning an undeclared stream gets, whether or not a unit declares its connection. The
+inventory says that table stopped loading, so a stream still selected means Airbyte keeps
+writing it. On a declared connection the match is on the
+unit and raw table; on an undeclared one, which has no unit, on the raw table alone. A
+disabled (`inactive` or `deprecated`) connection writes nothing, so a retired stream it
+still has selected stays a warning on a declared connection and silent on an undeclared
+one. An undeclared connection that is not disabled and whose snapshot holds no stream configuration is an `ERROR`
+while `retired.yml` lists any table, because the check could not see what it writes.
+
 ---
 
 ## 5. What the inventory generates
@@ -795,8 +805,9 @@ entry, and in the description of the dbt sources block that declares the tables.
 `reconcile` reads the flag in both directions. A frozen table that dbt declares is expected,
 not a model going stale, so it is not reported. A frozen table dbt no longer declares, or the
 warehouse no longer holds, is a `WARNING`: the first means the reason to keep the data has
-gone, the second that history nothing can reload has. `drift` needs no exception, because a
-graveyard entry declares no connection.
+gone, the second that history nothing can reload has. `drift` needs no exception: it reads
+the graveyard only to fail a live connection that still syncs a retired table, and a frozen
+table is still retired, so nothing should be loading it.
 
 Iceberg maintenance needs none either. Snapshot expiry keeps the current snapshot and every
 ref head whatever their age, except stale `airbyte_staging*` branches, which it removes. The

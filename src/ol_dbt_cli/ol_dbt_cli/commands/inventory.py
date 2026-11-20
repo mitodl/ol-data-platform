@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, cast
 
+import yaml
 from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
@@ -620,7 +621,8 @@ def drift(
     Takes a dump rather than reading the API, so the credentialed step stays
     separate and a drift report can be re-derived offline from a saved
     snapshot. Exits non-zero when the inventory is wrong about something it
-    declares; a live connection or stream the inventory merely does not cover
+    declares, or when a live connection still syncs a table retired.yml records
+    as retired; a live connection or stream the inventory merely does not cover
     is a warning.
     """
     units = load_units(inventory_dir)
@@ -634,8 +636,8 @@ def drift(
     report = ValidationReport()
     try:
         workspace = json.loads(snapshot.read_text())
-        check_drift(workspace, units, report)
-    except (json.JSONDecodeError, RenderError) as error:
+        check_drift(workspace, units, report, retired=retired_pairs(load_retired(inventory_dir)))
+    except (json.JSONDecodeError, yaml.YAMLError, RenderError) as error:
         err_console.print(f"[bold red]{escape(str(error))}")
         sys.exit(1)
 
