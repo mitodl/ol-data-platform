@@ -53,6 +53,9 @@ _LOGIN_NOT_REPLAYED: frozenset[int] = frozenset({1044, 1045})
 # propagation resolves well inside 30s (lib/starrocks_dbt.py's retry notes).
 LOGIN_PROPAGATION_TIMEOUT_SECONDS = 120
 _LOGIN_POLL_INTERVAL_SECONDS = 2
+# Read/write timeout on each readiness probe, so an FE that stalls mid-handshake
+# or mid-query can't hold the wait past its deadline.
+_LOGIN_PROBE_TIMEOUT_SECONDS = 10
 
 
 class LoginNotPropagatedError(Exception):
@@ -129,7 +132,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
             self.host, self.port, username, password, database=self.database
         )
 
-    def _connect_as(
+    def _connect_as(  # noqa: PLR0913
         self,
         host: str,
         port: int,
@@ -137,6 +140,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         password: str,
         *,
         database: str | None = None,
+        timeout: int | None = None,
     ) -> Connection[DictCursor]:
         return connect(
             host=host,
@@ -148,6 +152,10 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
             # An explicit context makes pymysql refuse a server without TLS,
             # which the static login must not require.
             ssl=None if self.static_username is not None else _make_ssl_context(),
+            # pymysql's own defaults: a 10s connect timeout, no read/write one.
+            connect_timeout=timeout or 10,
+            read_timeout=timeout,
+            write_timeout=timeout,
         )
 
     def wait_for_login(self, username: str, password: str) -> None:
@@ -159,12 +167,20 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         that into a short wait before the spawn, not a failed node mid-build.
         The static login exists on every FE already and is not checked.
 
+        Vault creates the login in separate statements (CREATE USER, GRANT
+        <role>, ALTER USER ... DEFAULT ROLE <role>), and a follower replays
+        them in order, so it can accept the password before the role is
+        active. An FE is ready only once ``is_role_in_session(vault_role)`` is
+        true there; every Vault role grants the StarRocks role of the same name
+        as its default.
+
         The FE list is read again on every poll. An FE that refuses the
-        connection itself (2003 and the other connection errors) is skipped:
-        the service routes only to Ready FEs, so dbt can't land there either,
-        and during a rolling restart an FE that is down must not hold the wait
-        open past its deadline. Only 1044/1045 from a reachable FE means the
-        login hasn't replayed there yet. Any other error is raised.
+        connection itself (2003 and the other connection errors, including a
+        probe that times out) is skipped: the service routes only to Ready FEs,
+        so dbt can't land there either, and during a rolling restart an FE that
+        is down must not hold the wait open past its deadline. 1044/1045 or an
+        inactive role on a reachable FE means the login hasn't replayed there
+        yet. Any other error is raised.
 
         :raises LoginNotPropagatedError: when some reachable FE still refuses the
             login, or SHOW FRONTENDS still can't be read, after
@@ -174,18 +190,56 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
             return
         deadline = time.monotonic() + LOGIN_PROPAGATION_TIMEOUT_SECONDS
         while True:
-            refusing = self._login_refusals(username, password)
+            refusing = self._login_refusals(username, password, deadline)
             if not refusing:
                 return
-            if time.monotonic() >= deadline:
+            # Every poll starts before the deadline, so a probe is skipped only
+            # when the ones before it in the same poll ran past it.
+            if time.monotonic() + _LOGIN_POLL_INTERVAL_SECONDS >= deadline:
                 raise LoginNotPropagatedError(username, refusing)
             time.sleep(_LOGIN_POLL_INTERVAL_SECONDS)
 
-    def _login_refusals(self, username: str, password: str) -> dict[str, str]:
-        """Map each FE (or the service) refusing the login right now to why."""
+    def _probe(
+        self, host: str, port: int, username: str, password: str
+    ) -> Connection[DictCursor]:
+        return self._connect_as(
+            host, port, username, password, timeout=_LOGIN_PROBE_TIMEOUT_SECONDS
+        )
+
+    def _role_active(self, conn: Connection[DictCursor]) -> bool:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT is_role_in_session(%s) AS active", (self.vault_role,)
+            )
+            rows = cursor.fetchall()
+        return bool(rows[0]["active"])
+
+    def _login_refusals(
+        self, username: str, password: str, deadline: float
+    ) -> dict[str, str]:
+        """Map each FE (or the service) not yet ready for the login to why."""
+        frontends = self._live_frontends(username, password)
+        if isinstance(frontends, str):
+            return {self.host: frontends}
+        refusing: dict[str, str] = {}
+        for host, port in frontends:
+            fe = f"{host}:{port}"
+            if time.monotonic() >= deadline:
+                refusing[fe] = "not checked before the deadline"
+            elif reason := self._fe_refusal(host, port, username, password):
+                refusing[fe] = reason
+        return refusing
+
+    def _live_frontends(
+        self, username: str, password: str
+    ) -> list[tuple[str, int]] | str:
+        """(host, query port) of every live FE, or why the service can't say yet."""
         try:
-            conn = self._connect_as(self.host, self.port, username, password)
+            conn = self._probe(self.host, self.port, username, password)
             try:
+                # SHOW FRONTENDS needs the role's privileges, so check it first.
+                if not self._role_active(conn):
+                    return f"role {self.vault_role} is not active yet"
                 with conn.cursor() as cursor:
                     cursor.execute("SHOW FRONTENDS")
                     rows = cursor.fetchall()
@@ -194,28 +248,32 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         except OperationalError as exc:
             if exc.args[0] not in _RETRIABLE_ERRORS:
                 raise
-            return {self.host: str(exc)}
+            return str(exc)
         frontends = [
             (row["IP"], int(row["QueryPort"])) for row in rows if row["Alive"] == "true"
         ]
-        if not frontends:
-            # The service answered, so some FE is up. An empty list means the
-            # columns changed shape, and the check would otherwise pass vacuously.
-            return {self.host: "SHOW FRONTENDS listed no live FE"}
-        refusing: dict[str, str] = {}
-        for host, port in frontends:
+        # The service answered, so some FE is up. An empty list means the
+        # columns changed shape, and the check would otherwise pass vacuously.
+        return frontends or "SHOW FRONTENDS listed no live FE"
+
+    def _fe_refusal(
+        self, host: str, port: int, username: str, password: str
+    ) -> str | None:
+        """Why one FE isn't ready for the login, or None when it is or is down."""
+        try:
+            conn = self._probe(host, port, username, password)
             try:
-                self._connect_as(host, port, username, password).close()
-            except OperationalError as exc:
-                if exc.args[0] in _LOGIN_NOT_REPLAYED:
-                    refusing[f"{host}:{port}"] = str(exc)
-                elif exc.args[0] not in _RETRIABLE_ERRORS:
-                    raise
-                else:
-                    log.info(
-                        "Skipping unreachable StarRocks FE %s:%s: %s", host, port, exc
-                    )
-        return refusing
+                active = self._role_active(conn)
+            finally:
+                conn.close()
+        except OperationalError as exc:
+            if exc.args[0] in _LOGIN_NOT_REPLAYED:
+                return str(exc)
+            if exc.args[0] not in _RETRIABLE_ERRORS:
+                raise
+            log.info("Skipping unreachable StarRocks FE %s:%s: %s", host, port, exc)
+            return None
+        return None if active else f"role {self.vault_role} is not active yet"
 
     def execute(self, sql: str, *, idempotent: bool = True) -> None:
         """Run *sql*, retrying with fresh credentials on a transient error.
