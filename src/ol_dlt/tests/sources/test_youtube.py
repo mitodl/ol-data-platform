@@ -1,6 +1,7 @@
 """Unit + materialization tests for the YouTube source."""
 
 import base64
+import json
 import sys
 import types
 from pathlib import Path
@@ -239,8 +240,27 @@ def _install_fake_transcript_api(monkeypatch, listings=None):
     return calls
 
 
-def _transcript_rows(monkeypatch, video_ids, listings=None):
+def _transcript_rows(
+    monkeypatch, video_ids, listings=None, languages=None, **source_kwargs
+):
+    """Run the transcripts resource over fakes.
+
+    ``languages`` maps a video id to the snippet language fields the Data API
+    gives it; a video it does not name is spoken in English.
+    """
     calls = _install_fake_transcript_api(monkeypatch, listings)
+    languages = languages or {}
+    snippet_requests: list[str] = []
+
+    def _fake_videos(ids, part, _key):
+        snippet_requests.append(part)
+        for video_id in ids:
+            yield {
+                "id": video_id,
+                "snippet": languages.get(video_id, {"defaultAudioLanguage": "en"}),
+            }
+
+    monkeypatch.setattr(youtube, "_videos", _fake_videos)
     monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
     monkeypatch.setattr(
         youtube, "_fetch_channel_configs", lambda **_kw: [{"channel_id": "c"}]
@@ -251,7 +271,7 @@ def _transcript_rows(monkeypatch, video_ids, listings=None):
     monkeypatch.setattr(
         youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(video_ids)
     )
-    source = youtube.youtube_source(api_key="k")
+    source = youtube.youtube_source(api_key="k", **source_kwargs)
     rows = list(source.resources["raw__youtube__api__transcripts"])
     return rows, calls
 
@@ -285,12 +305,12 @@ def test_transcripts_land_every_language_uploaded_and_generated(monkeypatch):
 
     assert _summary(rows) == [
         ("vid1", "en", False, "fetched", "hello", None),
-        ("vid1", "en", True, "fetched", "hello auto", None),
         ("vid1", "es", False, "fetched", "hola", None),
+        ("vid1", "en", True, "fetched", "hello auto", None),
         ("vid1", "", False, "fetched", None, None),
     ]
     assert rows[0]["language"] == "Language en"
-    assert rows[2]["segments"] == [{"text": "hola", "start": 0.0, "duration": 1.0}]
+    assert rows[1]["segments"] == [{"text": "hola", "start": 0.0, "duration": 1.0}]
     assert len({row["fetched_at"] for row in rows}) == 1
 
 
@@ -349,6 +369,86 @@ def test_once_youtube_blocks_the_run_no_more_requests_are_made(monkeypatch, bloc
         ("later1", "", False, "blocked", None, None),
         ("later2", "", False, "blocked", None, None),
     ]
+
+
+DUBBED = [
+    ("en", False, "hello"),
+    ("ar", True, "auto ar"),
+    ("en", True, "hello auto"),
+    ("fr-FR", True, "auto fr"),
+]
+
+
+def _fetched(rows):
+    return [
+        (row["language_code"], row["is_generated"])
+        for row in rows
+        if row["language_code"]
+    ]
+
+
+def test_native_tracks_are_the_uploaded_ones_and_the_auto_track_in_the_videos_language(
+    monkeypatch,
+):
+    rows, _calls = _transcript_rows(
+        monkeypatch,
+        ["dubbed", "spanish", "no-language", "nothing-known"],
+        {
+            "dubbed": DUBBED,
+            "spanish": [("es", True, "hola"), ("en", True, "hello auto")],
+            "no-language": [
+                ("de", False, "hallo"),
+                ("de", True, "x"),
+                ("en", True, "y"),
+            ],
+            "nothing-known": [("ja", True, "a"), ("ko", True, "b")],
+        },
+        {
+            "spanish": {"defaultAudioLanguage": "es-419"},
+            "no-language": {},
+            "nothing-known": {},
+        },
+    )
+
+    by_video: dict[str, list[tuple[str, bool]]] = {}
+    for row in rows:
+        if row["language_code"]:
+            by_video.setdefault(row["video_id"], []).append(
+                (row["language_code"], row["is_generated"])
+            )
+    assert by_video == {
+        "dubbed": [("en", False), ("en", True)],
+        "spanish": [("es", True)],
+        # No language from the API: the uploaded track's language is the video's.
+        "no-language": [("de", False), ("de", True)],
+        # Nothing to go on: every auto-generated track is kept.
+        "nothing-known": [("ja", True), ("ko", True)],
+    }
+    status = next(
+        row for row in rows if row["video_id"] == "dubbed" and not row["language_code"]
+    )
+    assert json.loads(status["listed_tracks"]) == [
+        {"language_code": code, "is_generated": generated}
+        for code, generated, _text in DUBBED
+    ]
+
+
+def test_all_tracks_fetches_every_listed_track(monkeypatch):
+    rows, _calls = _transcript_rows(
+        monkeypatch, ["dubbed"], {"dubbed": DUBBED}, transcript_tracks="all"
+    )
+
+    assert _fetched(rows) == [
+        ("en", False),
+        ("ar", True),
+        ("en", True),
+        ("fr-FR", True),
+    ]
+
+
+def test_an_unknown_track_choice_is_refused():
+    with pytest.raises(ValueError, match="everything"):
+        youtube.youtube_source(api_key="k", transcript_tracks="everything")
 
 
 def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch):
