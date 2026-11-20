@@ -188,17 +188,19 @@ models:
         - change_order
 
 - name: int__google_ads__campaign_state
-  description: Each course's Search campaigns that are not removed, from the account's
-    latest daily snapshot, with budget, status, schedule and keyword, negative and
-    location counts, as ad_opt_v2's account-state snapshot.
+  description: Each account's Search campaigns that are not removed, from its latest
+    daily snapshot, with budget, status, schedule and keyword, negative and location
+    counts, as ad_opt_v2's account-state snapshot. int__google_ads__campaign_courses
+    gives a campaign's course.
   config:
     meta:
       # Both Google Ads units are omitted from QA.
       qa_buildable: false
   columns:
-  - name: course
-    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
-      null for a campaign no google_ads_campaign_courses row maps
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
   - name: snapshot_date
     description: date, the snapshot the state comes from
     tests:
@@ -253,7 +255,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns:
-        - course
+        - account_id
         - campaign_id
 
 - name: int__google_ads__campaign_names

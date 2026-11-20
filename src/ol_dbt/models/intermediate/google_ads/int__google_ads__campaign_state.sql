@@ -1,10 +1,6 @@
 -- ad_opt_v2's account-state snapshot, from each account's latest daily snapshot.
--- A campaign no google_ads_campaign_courses row maps is kept, with no course.
-with courses as (
-    select account_id, campaign_id, course from {{ ref('int__google_ads__campaign_courses') }}
-)
-
-, latest_snapshots as (
+-- int__google_ads__campaign_courses gives a campaign's course.
+with latest_snapshots as (
     -- From fetch_log: a successful fetch of no campaigns has no rows of its own.
     select account_id, max(fetch_window_end) as snapshot_date
     from {{ ref('stg__google_ads__api__fetch_log') }}
@@ -14,8 +10,7 @@ with courses as (
 
 , campaigns as (
     select
-        courses.course
-        , campaign_snapshots.account_id
+        campaign_snapshots.account_id
         , campaign_snapshots.snapshot_date
         , campaign_snapshots.campaign_resource_name
         , campaign_snapshots.campaign_id
@@ -31,10 +26,6 @@ with courses as (
         on
             campaign_snapshots.account_id = latest_snapshots.account_id
             and campaign_snapshots.snapshot_date = latest_snapshots.snapshot_date
-    left join courses
-        on
-            campaign_snapshots.account_id = courses.account_id
-            and campaign_snapshots.campaign_id = courses.campaign_id
     where
         {{ google_ads_is_search_campaign('campaign_snapshots.campaign_name', 'campaign_snapshots.campaign_channel_type') }}
         and campaign_snapshots.campaign_status != 'REMOVED'
@@ -101,7 +92,7 @@ with courses as (
 )
 
 select
-    campaigns.course
+    campaigns.account_id
     , campaigns.snapshot_date
     , campaigns.campaign_id
     , campaigns.campaign_name
