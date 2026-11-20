@@ -1,6 +1,6 @@
 [project]
 name = "delivery"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.15,<3.16"
 version = "0.1.0"
 dependencies = [
     "dagster>=1.12.10",
