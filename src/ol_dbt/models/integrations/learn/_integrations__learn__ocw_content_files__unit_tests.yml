@@ -44,3 +44,28 @@ unit_tests:
     - {run_readable_id: run1, key: courses/a/resources/notes/, extraction_status: extracted}
     - {run_readable_id: run1, key: courses/a/resources/figure/, extraction_status: null}
     - {run_readable_id: run1, key: courses/a/resources/scan/, extraction_status: failed}
+- name: test_integrations__learn__ocw_content_files_has_no_text_where_learn_cuts_the_path
+  description: >
+    Learn splits a path that does not start with "courses" on "courses" and keeps
+    what lies between the first two, so it reads nothing from a file whose name
+    holds "courses". The resource is kept with no text, as in Learn. A transcript
+    list entry's path has its leading slashes stripped first, so it is not cut.
+  model: integrations__learn__ocw_content_files
+  given:
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/discourses/,
+      content_type: pdf, content: Discourses, extraction_status: extracted, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false, text_file_path: /courses/a/x_Discourses.pdf}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/gone-courses/,
+      content_type: pdf, content: null, extraction_status: missing, has_text_file: true,
+      transcript_unreadable: false, is_3play_artifact: false, text_file_path: /courses/a/courses.pdf}
+    - {courserun_readable_id: run1, content_file_key: courses/a/resources/video/,
+      content_type: video, content: Intro to courses, extraction_status: extracted,
+      has_text_file: true, transcript_unreadable: false, is_3play_artifact: false,
+      text_file_path: courses/a/intro_courses.srt}
+  expect:
+    rows:
+    - {key: courses/a/resources/discourses/, content: null, extraction_status: null}
+    - {key: courses/a/resources/gone-courses/, content: null, extraction_status: null}
+    - {key: courses/a/resources/video/, content: Intro to courses, extraction_status: extracted}

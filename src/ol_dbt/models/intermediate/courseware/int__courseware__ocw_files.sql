@@ -32,7 +32,8 @@ with ocw_courses as (
         , files.title
         , files.description
         , files.file_extension
-        , files.content
+        -- A 3Play caption or PDF file repeats its video's transcript.
+        , case when files.is_3play_artifact then null else files.content end as content
         , coalesce(files.content_tags, '') as content_tags
         , lower(coalesce(files.title, '')) as title_lower
         , {{ courseware_ocw_resource_name('files.content_file_key') }} as file_name

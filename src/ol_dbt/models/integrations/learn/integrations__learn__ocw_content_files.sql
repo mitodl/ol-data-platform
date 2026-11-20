@@ -14,10 +14,49 @@
   with neither uid, and keeps a resource only when its text file is a path in
   the bucket (has_text_file, false for a video whose transcript list Learn
   cannot read) and the file is there, and never a 3Play caption or PDF file.
+
+  Learn makes the key it reads by splitting a path that does not start with
+  "courses" on "courses" and keeping what lies between the first two, so a
+  file whose name holds "courses" is cut short. The platform reads the whole
+  path. Here such a resource has no text, as in Learn, where the cut key has no
+  extension it reads (the one production case on 2026-11-20, a 24.908 PDF
+  named ..._Discourses.pdf).
 #}
 
-with content_files as (
-    select * from {{ ref('int__ocw__content_files') }}
+with int_content_files as (
+    select
+        *
+        , coalesce(
+            text_file_path not like 'courses%'
+            and length(text_file_path) - length(replace(text_file_path, 'courses', '')) >= 2 * length('courses')
+            , false
+        ) as learn_cuts_path
+    from {{ ref('int__ocw__content_files') }}
+)
+
+, content_files as (
+    select
+        courserun_readable_id
+        , content_file_key
+        , title
+        , description
+        , url
+        , file_type
+        , case when not learn_cuts_path then content end as content
+        , content_type
+        , image_src
+        , file_extension
+        , case when not learn_cuts_path then extraction_status end as extraction_status
+        , retrieved_on
+        , content_tags
+        , youtube_id
+        , has_text_file
+        , is_3play_artifact
+    from int_content_files
+)
+
+, learn_content_files as (
+    select * from content_files
     where
         courserun_readable_id is not null
         and (
@@ -54,4 +93,4 @@ select
     , retrieved_on as last_modified
     , content_tags
     , youtube_id
-from content_files
+from learn_content_files
