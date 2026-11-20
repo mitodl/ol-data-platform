@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, cast
 
+import yaml
 from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
@@ -636,7 +637,7 @@ def drift(
     try:
         workspace = json.loads(snapshot.read_text())
         check_drift(workspace, units, report, retired=retired_pairs(load_retired(inventory_dir)))
-    except (json.JSONDecodeError, RenderError) as error:
+    except (json.JSONDecodeError, yaml.YAMLError, RenderError) as error:
         err_console.print(f"[bold red]{escape(str(error))}")
         sys.exit(1)
 
