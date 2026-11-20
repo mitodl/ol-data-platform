@@ -173,36 +173,76 @@ def test_resources_share_one_playlist_listing(monkeypatch, tmp_path):
     assert len(config_fetches) == 1
 
 
-def _install_fake_transcript_api(monkeypatch):
-    """Inject a fake youtube-transcript-api matching the 1.x fetch() interface."""
+class _FakeTranscriptErrors:
+    NoTranscriptFound = type("NoTranscriptFound", (Exception,), {})
+    TranscriptsDisabled = type("TranscriptsDisabled", (Exception,), {})
+    VideoUnavailable = type("VideoUnavailable", (Exception,), {})
+    RequestBlocked = type("RequestBlocked", (Exception,), {})
+    IpBlocked = type("IpBlocked", (RequestBlocked,), {})
+
+
+def _install_fake_transcript_api(monkeypatch, listings=None):
+    """Inject a fake youtube-transcript-api matching the 1.x list() interface.
+
+    ``listings`` maps a video id to the transcripts list() returns, as
+    (language_code, is_generated, text or exception) tuples, or to an exception
+    list() raises. A video it does not name has one English transcript.
+    """
+    listings = listings or {}
+    calls: list[str] = []
 
     class _Fetched:
+        def __init__(self, text):
+            self.text = text
+
         def to_raw_data(self):
-            return [{"text": "hello", "start": 0.0, "duration": 1.0}]
+            return [{"text": self.text, "start": 0.0, "duration": 1.0}]
+
+    class _Transcript:
+        def __init__(self, language_code, is_generated, text):
+            self.language_code = language_code
+            self.language = f"Language {language_code}"
+            self.is_generated = is_generated
+            self._text = text
+
+        def fetch(self):
+            if isinstance(self._text, Exception):
+                raise self._text
+            return _Fetched(self._text)
 
     class _Api:
-        def fetch(self, _video_id):
-            return _Fetched()
+        def list(self, video_id):
+            calls.append(video_id)
+            listing = listings.get(video_id, [("en", False, "hello")])
+            if isinstance(listing, Exception):
+                raise listing
+            return [_Transcript(*transcript) for transcript in listing]
 
     fake: Any = types.ModuleType("youtube_transcript_api")
     fake.YouTubeTranscriptApi = _Api
-    fake.NoTranscriptFound = type("NoTranscriptFound", (Exception,), {})
-    fake.TranscriptsDisabled = type("TranscriptsDisabled", (Exception,), {})
-    fake.VideoUnavailable = type("VideoUnavailable", (Exception,), {})
+    for name in (
+        "NoTranscriptFound",
+        "TranscriptsDisabled",
+        "VideoUnavailable",
+        "RequestBlocked",
+        "IpBlocked",
+    ):
+        setattr(fake, name, getattr(_FakeTranscriptErrors, name))
 
     fmt_mod: Any = types.ModuleType("youtube_transcript_api.formatters")
 
     class _TextFormatter:
-        def format_transcript(self, _fetched):
-            return "hello"
+        def format_transcript(self, fetched):
+            return fetched.text
 
     fmt_mod.TextFormatter = _TextFormatter
     monkeypatch.setitem(sys.modules, "youtube_transcript_api", fake)
     monkeypatch.setitem(sys.modules, "youtube_transcript_api.formatters", fmt_mod)
+    return calls
 
 
-def test_transcripts_resource_yields_formatted_text(monkeypatch):
-    _install_fake_transcript_api(monkeypatch)
+def _transcript_rows(monkeypatch, video_ids, listings=None):
+    calls = _install_fake_transcript_api(monkeypatch, listings)
     monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
     monkeypatch.setattr(
         youtube, "_fetch_channel_configs", lambda **_kw: [{"channel_id": "c"}]
@@ -211,18 +251,88 @@ def test_transcripts_resource_yields_formatted_text(monkeypatch):
         youtube, "_playlist_ids_for_config", lambda _config, _key: iter(["pl"])
     )
     monkeypatch.setattr(
-        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(["vid1"])
+        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(video_ids)
     )
-
     source = youtube.youtube_source(api_key="k")
     rows = list(source.resources["raw__youtube__api__transcripts"])
-    assert rows == [
+    return rows, calls
+
+
+def _summary(rows):
+    return [
+        (
+            row["video_id"],
+            row["language_code"],
+            row["is_generated"],
+            row["fetch_status"],
+            row["transcript"],
+            row["error"],
+        )
+        for row in rows
+    ]
+
+
+def test_transcripts_land_every_language_uploaded_and_generated(monkeypatch):
+    rows, _calls = _transcript_rows(
+        monkeypatch,
+        ["vid1"],
         {
-            "video_id": "vid1",
-            "etl_source": "youtube",
-            "transcript": "hello",
-            "segments": [{"text": "hello", "start": 0.0, "duration": 1.0}],
-        }
+            "vid1": [
+                ("en", False, "hello"),
+                ("en", True, "hello auto"),
+                ("es", False, "hola"),
+            ]
+        },
+    )
+
+    assert _summary(rows) == [
+        ("vid1", "en", False, "fetched", "hello", None),
+        ("vid1", "en", True, "fetched", "hello auto", None),
+        ("vid1", "es", False, "fetched", "hola", None),
+    ]
+    assert rows[0]["language"] == "Language en"
+    assert rows[2]["segments"] == [{"text": "hola", "start": 0.0, "duration": 1.0}]
+    assert len({row["fetched_at"] for row in rows}) == 1
+
+
+def test_a_video_without_transcripts_has_a_row_saying_why(monkeypatch):
+    rows, _calls = _transcript_rows(
+        monkeypatch,
+        ["none", "disabled", "gone", "broken", "empty", "bad-es"],
+        {
+            "none": _FakeTranscriptErrors.NoTranscriptFound(),
+            "disabled": _FakeTranscriptErrors.TranscriptsDisabled(),
+            "gone": _FakeTranscriptErrors.VideoUnavailable(),
+            "broken": ValueError("unparsable"),
+            "empty": [],
+            "bad-es": [("en", False, "hello"), ("es", False, ValueError("bad"))],
+        },
+    )
+
+    assert _summary(rows) == [
+        ("none", "", False, "none", None, None),
+        ("disabled", "", False, "none", None, None),
+        ("gone", "", False, "unavailable", None, None),
+        ("broken", "", False, "failed", None, "ValueError"),
+        ("empty", "", False, "none", None, None),
+        ("bad-es", "en", False, "fetched", "hello", None),
+        ("bad-es", "es", False, "failed", None, "ValueError"),
+    ]
+
+
+def test_once_youtube_blocks_the_run_no_more_requests_are_made(monkeypatch):
+    rows, calls = _transcript_rows(
+        monkeypatch,
+        ["ok", "blocked", "later1", "later2"],
+        {"blocked": _FakeTranscriptErrors.IpBlocked()},
+    )
+
+    assert calls == ["ok", "blocked"]
+    assert _summary(rows) == [
+        ("ok", "en", False, "fetched", "hello", None),
+        ("blocked", "", False, "blocked", None, "IpBlocked"),
+        ("later1", "", False, "blocked", None, None),
+        ("later2", "", False, "blocked", None, None),
     ]
 
 

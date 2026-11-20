@@ -31,7 +31,9 @@ GitHub (mitodl/open-video-data/youtube/*.yaml)
         → raw__youtube__api__playlist_items (one row per playlist + video)
         → raw__youtube__api__videos      (one row per video)
     → youtube-transcript-api
-        → raw__youtube__api__transcripts (one row per video with a transcript)
+        → raw__youtube__api__transcripts (one row per transcript of a video, keyed by
+  video_id, language_code and is_generated; a video whose transcripts could not be
+  fetched has one row with no language and the reason in fetch_status)
 ```
 
 All tables use `write_disposition="merge"` keyed on the entity id (playlist
