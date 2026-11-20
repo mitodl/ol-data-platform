@@ -50,12 +50,19 @@ from typing import Literal, cast, get_args
 import yaml
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
-# Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
-# code location was already configured for -- trino_host_map/trino_catalog_map
-# in definitions.py have pointed "qa" at the QA Starburst cluster and
-# ol_data_lake_qa all along. Only this map disagreed.
+# The main (layered warehouse) project's target. "dev" and "production" are
+# Trino until the production cutover (ol-infrastructure ADR 0012).
 #
-# "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
+# "qa" is StarRocks, ahead of production, so the QA builds find the StarRocks
+# porting bugs before production does: starrocks_qa_lake writes the canonical
+# ol_warehouse_qa_<layer> schemas in ol_data_lake_qa, through the QA cluster's
+# in-cluster FE with a Vault login per invocation (see dbt_credentials in
+# assets/lakehouse/dbt.py). Nothing builds QA on Trino any more, so the two
+# engines never write the same QA tables. The image's baked manifest is still
+# compiled against Trino production, so the QA asset graph can differ from what
+# the build runs by the few nodes gated on target.type.
+#
+# "ci" is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
 # `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
 # project under DAGSTER_ENVIRONMENT=ci yet. A target whose profile type is
@@ -66,7 +73,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "dev_production",
     "ci": "ci",
-    "qa": "qa",
+    "qa": "starrocks_qa_lake",
     "production": "production",
 }
 

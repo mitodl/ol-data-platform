@@ -69,9 +69,9 @@ dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
 
 # A deployed StarRocks target has no static login in the pod: every dbt
-# invocation this project spawns needs a Vault login first. ci builds on
-# StarRocks today; the other environments follow as DBT_TARGET_MAP moves them
-# off Trino. In dev the `starrocks` resource is the local root login, so a
+# invocation this project spawns needs a Vault login first. ci and qa build on
+# StarRocks; dev and production follow when DBT_TARGET_MAP moves them off
+# Trino. In dev the `starrocks` resource is the local root login, so a
 # developer pointing DAGSTER_DBT_TARGET at a deployed profile keeps the
 # DBT_STARROCKS_* they exported (bin/starrocks-auth) rather than having it
 # replaced.

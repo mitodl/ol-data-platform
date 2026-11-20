@@ -12,8 +12,11 @@ does not restate either beyond what a model author needs.
 Trino on Starburst Galaxy still builds the production warehouse. Dagster's `dbt`
 assets in the lakehouse code location run dbt-trino against the `production`
 profile and write each layer as Iceberg tables (and Trino views) registered in AWS
-Glue. In QA, Dagster builds only the staging models and the `qa_scheduled` MIT
-Learn integration models, against the `qa` profile.
+Glue. In QA, Dagster builds on StarRocks instead: the `starrocks_qa_lake` profile
+writes the canonical `ol_warehouse_qa_<layer>` schemas through the QA cluster, so
+the QA runs (the staging models and the `qa_scheduled` MIT Learn integration models)
+surface StarRocks build failures before production moves. Nothing builds QA on
+Trino any more.
 
 StarRocks already runs in CI, QA and production, and several consumers read from it:
 Superset, ol-analytics-api, MIT Learn's warehouse pull and the `b2b_analytics`
@@ -61,11 +64,11 @@ In most of these macros the Trino body is `default__`. A few (e.g.
 `json_query_string`, `date_parse`) define `trino__` and have `default__` call it.
 [DBT_DIALECT_COMPATIBILITY.md](DBT_DIALECT_COMPATIBILITY.md) has the details.
 
-`delete+insert` incremental models build only on Trino for now. dbt-starrocks
-1.12 ships no `delete+insert` (or `merge`) strategy for external catalogs. DELETE
-itself works on Glue Iceberg through StarRocks, so a project-side `delete+insert`
-implementation is being added
-(`tk-port-the-21-delete-insert-incremental-models-11--c9c109`). `INSERT OVERWRITE`
+dbt-starrocks 1.12 ships no `delete+insert` (or `merge`) strategy for external
+catalogs, so the project implements `delete+insert` itself
+(`macros/starrocks_incremental_delete_insert.sql`, #3189): a correlated DELETE on
+`unique_key`, then an INSERT. DELETE works on Glue Iceberg through StarRocks and
+writes position deletes. `INSERT OVERWRITE`
 on Iceberg replaces only the partitions it writes and never truncates the table,
 so don't use `insert_overwrite` expecting a full replace.
 
