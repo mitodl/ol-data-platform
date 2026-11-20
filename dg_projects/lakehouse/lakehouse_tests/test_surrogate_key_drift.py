@@ -11,9 +11,7 @@ repairing, or a state file written when the repair failed.
 
 import ast
 import io
-from pathlib import Path
 
-import lakehouse
 import pytest
 from botocore.exceptions import ClientError
 from lakehouse.lib.surrogate_key_drift import (
@@ -23,6 +21,8 @@ from lakehouse.lib.surrogate_key_drift import (
 )
 from lakehouse.resources import dbt_s3_artifacts
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
+
+from lakehouse_tests.asset_source import parse_asset_module
 
 # One re-keyed dimension (dim_thing.thing_pk) and one incremental fact that
 # stores it, declared the way dbt records a `relationships` test.
@@ -166,8 +166,7 @@ def test_full_refresh_carries_the_build_vars_through():
 
 @pytest.fixture(scope="module")
 def dbt_asset_module() -> ast.Module:
-    source = Path(lakehouse.__file__).parent / "assets" / "lakehouse" / "dbt.py"
-    return ast.parse(source.read_text())
+    return parse_asset_module("dbt.py")
 
 
 def _function(module: ast.Module, name: str) -> ast.FunctionDef:

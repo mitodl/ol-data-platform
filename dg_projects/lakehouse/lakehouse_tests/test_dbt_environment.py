@@ -19,8 +19,10 @@ from lakehouse.lib.dbt_environment import (
     DBT_TARGET_MAP,
     ICEBERG_MAINTENANCE_ENGINE_MAP,
     STARROCKS_DBT_TARGET_MAP,
+    STARROCKS_HOST_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
+    dbt_target_reads_vault_login,
     iceberg_maintenance_engine,
     resolve_for_environment,
     starrocks_is_local,
@@ -40,6 +42,7 @@ ALL_MAPS = pytest.mark.parametrize(
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
         ("ICEBERG_MAINTENANCE_ENGINE_MAP", ICEBERG_MAINTENANCE_ENGINE_MAP),
+        ("STARROCKS_HOST_MAP", STARROCKS_HOST_MAP),
     ],
 )
 
@@ -279,3 +282,51 @@ def test_an_override_naming_no_engine_raises():
     """A typo in DAGSTER_ICEBERG_MAINTENANCE_ENGINE fails at load, not at 02:00."""
     with pytest.raises(ValueError, match="starocks"):
         iceberg_maintenance_engine("starocks")
+
+
+@pytest.mark.parametrize("environment", ENVIRONMENTS)
+def test_every_main_target_names_a_profile_output(environment):
+    """The code location reads the target's profile at import to decide on a login.
+
+    A target missing from profiles.yml would fail the whole code location's
+    load, not just its dbt build.
+    """
+    dbt_target_reads_vault_login(PROFILES_PATH, DBT_TARGET_MAP[environment])
+
+
+@pytest.mark.parametrize(
+    ("target", "reads_vault_login"),
+    [
+        # ci writes ol_data_lake_ci through StarRocks with a Vault login.
+        ("ci", True),
+        ("starrocks_qa_lake", True),
+        ("starrocks_production", True),
+        ("production", False),  # Trino
+        ("starrocks_qa", False),  # OIDC token file
+        ("starrocks_local", False),  # passwordless root
+        ("starrocks_local_b2b", False),
+    ],
+)
+def test_only_vault_login_profiles_get_one(target, reads_vault_login):
+    """Exporting a login to a profile that ignores it only overwrites its host."""
+    assert dbt_target_reads_vault_login(PROFILES_PATH, target) is reads_vault_login
+
+
+def test_an_unknown_target_raises():
+    with pytest.raises(KeyError, match="no_such_target"):
+        dbt_target_reads_vault_login(PROFILES_PATH, "no_such_target")
+
+
+@pytest.mark.parametrize("environment", DEPLOYED_ENVIRONMENTS)
+def test_a_starrocks_target_gets_its_own_clusters_host(environment):
+    """The exported host overrides the profile's, so it must be the profile's FE.
+
+    ci pointed at QA's FE while its `ci` target writes ol_data_lake_ci, which
+    only the CI cluster registers, and its Vault issues logins for the CI
+    cluster only.
+    """
+    target = DBT_TARGET_MAP[environment]
+    if not dbt_target_reads_vault_login(PROFILES_PATH, target):
+        pytest.skip(f"{environment}'s target gets no exported login")
+    profile = yaml.safe_load(PROFILES_PATH.read_text())["open_learning"]["outputs"]
+    assert STARROCKS_HOST_MAP[environment] in profile[target]["host"]

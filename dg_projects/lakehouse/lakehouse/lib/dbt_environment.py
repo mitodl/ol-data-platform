@@ -44,8 +44,10 @@ materialize dbt models unattended. Deciding it should is a separate, later act.
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal, cast, get_args
 
+import yaml
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
 # Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
@@ -56,9 +58,9 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
 # `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
-# project under DAGSTER_ENVIRONMENT=ci yet. Two things come before the first run
-# there: the "dbt" resource fetches no StarRocks credentials of its own (only
-# the StarRocks project's does), and ol_warehouse_ci does not exist in Glue.
+# project under DAGSTER_ENVIRONMENT=ci yet. A target whose profile type is
+# starrocks gets Vault credentials for each dbt invocation (see
+# dbt_target_type), but ol_warehouse_ci does not exist in Glue yet.
 # `ol-dbt starrocks` creates it with a location; dbt run from here would create
 # it bare (see the profile's comment), and seeds would then fail.
 DBT_TARGET_MAP: Mapping[str, str] = {
@@ -84,6 +86,25 @@ STARROCKS_LOCAL_TARGET = "starrocks_local_b2b"
 STARROCKS_LOCAL_TARGETS: frozenset[str] = frozenset(
     {"starrocks_local", STARROCKS_LOCAL_TARGET}
 )
+
+# The FE each environment's `starrocks` resource connects to, and so the host
+# exported to every StarRocks dbt invocation. Dagster runs in the same EKS
+# cluster as that environment's StarRocks (data-ci, data-qa, data-production),
+# so each reaches its FE through the in-cluster service; from a QA pod the
+# external name lakehouse.qa.starrocks.ol.mit.edu times out. ci's own cluster
+# registers ol_data_lake_ci read/write and ol_data_lake_qa read-only
+# (ol-infrastructure Pulumi.lakehouse.CI.yaml), so it serves both the `ci` lake
+# target and the b2b views that read QA, and its Vault (vault-ci) issues logins
+# for it and not for QA's FE. dev is the local-dev cluster, which Tilt forwards
+# to this port on the host.
+STARROCKS_IN_CLUSTER_FE = "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local"
+
+STARROCKS_HOST_MAP: Mapping[str, str] = {
+    "dev": "127.0.0.1",
+    "ci": STARROCKS_IN_CLUSTER_FE,
+    "qa": STARROCKS_IN_CLUSTER_FE,
+    "production": STARROCKS_IN_CLUSTER_FE,
+}
 
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": STARROCKS_LOCAL_TARGET,
@@ -213,6 +234,29 @@ DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_TARGET",
     what="dbt target",
 )
+
+DBT_PROFILE_NAME = "open_learning"
+
+
+VAULT_LOGIN_VARIABLE = "DBT_STARROCKS_USERNAME"
+
+
+def dbt_target_reads_vault_login(profiles_path: Path, target: str) -> bool:
+    """Return whether *target* logs in with the DBT_STARROCKS_* variables.
+
+    Those are the profiles a Vault dynamic login has to be exported for. Trino
+    profiles, the local profiles (a passwordless root) and starrocks_qa (an
+    OIDC token file) don't read them, and exporting one would only overwrite
+    the host they connect to. Read from the profile rather than declared in
+    another map, so it cannot disagree with how dbt connects, including under
+    a DAGSTER_DBT_TARGET override.
+
+    :raises KeyError: when profiles.yml has no output named *target*.
+    """
+    profiles = yaml.safe_load(profiles_path.read_text())
+    output = profiles[DBT_PROFILE_NAME]["outputs"][target]
+    return output["type"] == "starrocks" and VAULT_LOGIN_VARIABLE in output["username"]
+
 
 STARROCKS_DBT_TARGET = resolve_for_environment(
     STARROCKS_DBT_TARGET_MAP,

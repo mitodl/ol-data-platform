@@ -8,11 +8,21 @@ or dbt.
 """
 
 import logging
+import os
 import re
+import threading
 import time
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
+from collections.abc import (
+    Callable,
+    Collection,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+)
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from jinja2 import Environment
 
@@ -103,6 +113,51 @@ def retry_delay(attempt: int) -> int:
     if attempt < 1:
         return 0
     return RETRY_BASE_DELAY * (2 ** (attempt - 1))
+
+
+class StarRocksCredentialSource(Protocol):
+    """What `starrocks_credentials` needs of `StarRocksResource`."""
+
+    host: str
+
+    def generate_credentials(self) -> tuple[str, str]:
+        """Return a (username, password) login for the cluster at `host`."""
+        ...
+
+
+# Serializes credential injection and the dbt subprocess spawn, so two dbt
+# invocations started in the same process (a manual run overlapping a schedule,
+# or the main project and the b2b project in one run) can't clobber each other's
+# DBT_STARROCKS_* between the assignment and the spawn.
+_CREDENTIALS_LOCK = threading.Lock()
+
+
+@contextmanager
+def starrocks_credentials(
+    starrocks: StarRocksCredentialSource,
+) -> Generator[None]:
+    """Export fresh StarRocks credentials for a dbt subprocess spawned inside.
+
+    Deployed StarRocks profiles read DBT_STARROCKS_USERNAME/PASSWORD/HOST, and
+    the pod has no static login to put there: the credentials come from Vault's
+    database secrets engine and are generated here for each invocation. The
+    local profiles name their own root login and ignore the two credential
+    variables.
+
+    Hold it only around ``DbtCliResource.cli()``, which spawns the subprocess
+    synchronously, and stream or wait outside it. Holding it across a build
+    blocks every other invocation from starting until that build ends.
+
+    The variables are left set afterwards. dagster-dbt's column-metadata and
+    row-count fetches open adapter connections in this process after the spawn
+    and read them from the environment.
+    """
+    username, password = starrocks.generate_credentials()
+    with _CREDENTIALS_LOCK:
+        os.environ["DBT_STARROCKS_USERNAME"] = username
+        os.environ["DBT_STARROCKS_PASSWORD"] = password
+        os.environ["DBT_STARROCKS_HOST"] = starrocks.host
+        yield
 
 
 def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:

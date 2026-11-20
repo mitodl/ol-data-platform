@@ -1,6 +1,7 @@
 import json
 import os
 from collections.abc import Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,8 @@ from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     DBT_TARGET,
     SKIP_UNIT_TESTS_ARGS,
+    STARROCKS_IS_LOCAL,
+    dbt_target_reads_vault_login,
 )
 from lakehouse.lib.keyset_snapshots import (
     dbt_automation_condition,
@@ -42,6 +45,7 @@ from lakehouse.lib.stale_descendant_tests import (
     stale_descendant_test_names,
     unselected_model_test_names,
 )
+from lakehouse.lib.starrocks_dbt import starrocks_credentials
 from lakehouse.lib.surrogate_key_drift import (
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
@@ -49,6 +53,7 @@ from lakehouse.lib.surrogate_key_drift import (
     full_refresh_build_args,
 )
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
+from lakehouse.resources.starrocks import StarRocksResource
 
 DBT_REPO_DIR = (
     Path(__file__).parents[5].joinpath("src/ol_dbt")
@@ -62,6 +67,33 @@ OPENMETADATA_DOMAIN_RULES_ARTIFACT = "openmetadata_domains.json"
 
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
+
+# A deployed StarRocks target has no static login in the pod: every dbt
+# invocation this project spawns needs a Vault login first. ci builds on
+# StarRocks today; the other environments follow as DBT_TARGET_MAP moves them
+# off Trino. In dev the `starrocks` resource is the local root login, so a
+# developer pointing DAGSTER_DBT_TARGET at a deployed profile keeps the
+# DBT_STARROCKS_* they exported (bin/starrocks-auth) rather than having it
+# replaced.
+DBT_TARGET_NEEDS_VAULT_LOGIN = not STARROCKS_IS_LOCAL and dbt_target_reads_vault_login(
+    DBT_REPO_DIR / "profiles.yml", DBT_TARGET
+)
+
+
+def dbt_credentials(starrocks: StarRocksResource) -> AbstractContextManager[None]:
+    """Wrap the spawn of a dbt invocation that may need StarRocks credentials.
+
+    Exports a fresh Vault login when the target reads one and does nothing
+    otherwise (Trino, whose profile reads a static login from the pod, or a
+    profile with its own login). Wrap only the ``.cli()`` call; see
+    `starrocks_credentials`.
+    """
+    return (
+        starrocks_credentials(starrocks)
+        if DBT_TARGET_NEEDS_VAULT_LOGIN
+        else nullcontext()
+    )
+
 
 # Built once and reused rather than reconstructed for every dbt node. None
 # outside DBT_AUTOMATION_ENVIRONMENTS -- see that declaration for why the
@@ -186,9 +218,10 @@ def _models_built_by(invocation: DbtCliInvocation) -> set[str]:
     }
 
 
-def _repair_surrogate_key_drift(
+def _repair_surrogate_key_drift(  # noqa: PLR0913
     context: AssetExecutionContext,
     dbt: DbtCliResource,
+    starrocks: StarRocksResource,
     drift: SurrogateKeyDrift,
     built: set[str],
     build_vars: list[str],
@@ -217,7 +250,11 @@ def _repair_surrogate_key_drift(
             "regenerated dimension: %s",
             drift.describe(),
         )
-        dbt.cli(full_refresh_build_args(models, build_vars), raise_on_error=True).wait()
+        with dbt_credentials(starrocks):
+            repair = dbt.cli(
+                full_refresh_build_args(models, build_vars), raise_on_error=True
+            )
+        repair.wait()
     if not complete:
         context.log.warning(
             "This run did not build every model the surrogate-key drift touches, so "
@@ -342,6 +379,7 @@ def full_dbt_project(
     context: AssetExecutionContext,
     dbt: DbtCliResource,
     dbt_s3_artifacts: DbtS3ArtifactsResource,
+    starrocks: StarRocksResource,
 ):
     build_vars: list[str] = []
     if DAGSTER_ENV == "dev":
@@ -350,15 +388,16 @@ def full_dbt_project(
 
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 
-    build_invocation = dbt.cli(
-        [
-            "build",
-            *SKIP_UNIT_TESTS_ARGS,
-            *_stale_descendant_test_args(context),
-            *build_vars,
-        ],
-        context=context,
-    )
+    with dbt_credentials(starrocks):
+        build_invocation = dbt.cli(
+            [
+                "build",
+                *SKIP_UNIT_TESTS_ARGS,
+                *_stale_descendant_test_args(context),
+                *build_vars,
+            ],
+            context=context,
+        )
     # stream() raises once dbt exits non-zero, so the upload has to happen on
     # the failure path too: a build with a failing test is the one whose results
     # OpenMetadata most needs, and it never reaches the line after the try.
@@ -368,7 +407,12 @@ def full_dbt_project(
         )
 
         if drift is not None and _repair_surrogate_key_drift(
-            context, dbt, drift, _models_built_by(build_invocation), build_vars
+            context,
+            dbt,
+            starrocks,
+            drift,
+            _models_built_by(build_invocation),
+            build_vars,
         ):
             dbt_s3_artifacts.write_json_artifact(
                 SURROGATE_KEY_STATE_ARTIFACT, drift.current_state, context
@@ -384,6 +428,7 @@ def generate_dbt_docs_artifacts(
     context: OpExecutionContext,
     dbt: DbtCliResource,
     dbt_s3_artifacts: DbtS3ArtifactsResource,
+    starrocks: StarRocksResource,
 ) -> None:
     if not dbt_s3_artifacts.s3_bucket:
         context.log.warning(
@@ -394,7 +439,8 @@ def generate_dbt_docs_artifacts(
 
     # Run without a Dagster context so it covers the full project (not just a
     # selected subset) and doesn't emit redundant asset materialization events.
-    docs_invocation = dbt.cli(["docs", "generate"], raise_on_error=False)
+    with dbt_credentials(starrocks):
+        docs_invocation = dbt.cli(["docs", "generate"], raise_on_error=False)
     docs_invocation.wait()
 
     # manifest.json and catalog.json are deduplicated by content hash, so they are
@@ -461,11 +507,13 @@ def check_dbt_source_freshness(
     context: OpExecutionContext,
     dbt: DbtCliResource,
     dbt_s3_artifacts: DbtS3ArtifactsResource,
+    starrocks: StarRocksResource,
 ) -> None:
     # `source freshness` emits warn/error states per source; don't fail the Dagster
     # run on a stale source (raise_on_error=False) so the schedule keeps producing
     # the signal. sources.json carries the per-source status for OpenMetadata.
-    freshness_invocation = dbt.cli(["source", "freshness"], raise_on_error=False)
+    with dbt_credentials(starrocks):
+        freshness_invocation = dbt.cli(["source", "freshness"], raise_on_error=False)
     freshness_invocation.wait()
 
     if not dbt_s3_artifacts.s3_bucket:

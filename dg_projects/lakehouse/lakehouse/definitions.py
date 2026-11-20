@@ -98,6 +98,7 @@ from lakehouse.lib.contract_freshness import (
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     ICEBERG_MAINTENANCE_ENGINE,
+    STARROCKS_HOST_MAP,
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
@@ -140,18 +141,6 @@ trino_catalog_map = {
     "ci": "ol_data_lake_qa",
     "qa": "ol_data_lake_qa",
     "production": "ol_data_lake_production",
-}
-
-# qa and production run Dagster in the same EKS cluster as their StarRocks, so
-# they reach the FE through its in-cluster service. From a QA pod the external
-# name lakehouse.qa.starrocks.ol.mit.edu times out. ci falls back to the QA FE
-# for schema parity. dev is the local-dev cluster, which Tilt forwards to this
-# port on the host.
-starrocks_host_map = {
-    "dev": "127.0.0.1",
-    "ci": "lakehouse.qa.starrocks.ol.mit.edu",
-    "qa": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
-    "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
 # QA and Production each run their own, entirely separate Vault deployment, so
@@ -786,7 +775,7 @@ DBT_ARTIFACTS_S3_PREFIX = os.environ.get(
 starrocks = StarRocksResource(
     vault=vault,
     vault_mount_point=STARROCKS_VAULT_MOUNT,
-    host=starrocks_host_map[DAGSTER_ENV],
+    host=STARROCKS_HOST_MAP[DAGSTER_ENV],
     database="b2b_analytics",
     static_username="root" if STARROCKS_IS_LOCAL else None,
 )
