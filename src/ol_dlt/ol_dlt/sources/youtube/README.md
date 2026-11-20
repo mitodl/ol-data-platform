@@ -37,7 +37,8 @@ GitHub (mitodl/open-video-data/youtube/*.yaml)
 ```
 
 All tables use `write_disposition="merge"` keyed on the entity id (playlist
-items on `playlist_id` + `video_id`) so reruns update in place. Merge never
+items on `playlist_id` + `video_id`, transcripts on `video_id` +
+`language_code` + `is_generated`) so reruns update in place. Merge never
 deletes, so a playlist, video or membership that disappears keeps its last
 `_dlt_load_id`; the dbt integrations models filter on load recency for that.
 
@@ -62,10 +63,16 @@ only through `all` takes the channel's.
 - The Data API is called directly over HTTP with `requests` (API-key auth via
   the `key` query param), not the `google-api-python-client` SDK, to stay
   consistent with the other ol_dlt sources.
-- Transcripts are **not** part of the Data API; they are fetched separately with
-  `youtube-transcript-api` (coded against its 1.x `fetch()` instance API).
-  Videos whose transcripts are disabled or unavailable are skipped (logged),
-  not raised.
+- Transcripts are **not** part of the Data API; they are listed and fetched
+  separately with `youtube-transcript-api` 1.x (`list()`, then each track's
+  `fetch()`). The `transcript_tracks` source option picks the tracks:
+  `native` (default) fetches every uploaded track and the auto-generated track
+  in the video's language (from a `videos.list` snippet call), `all` every
+  track listed. Each video gets a status row (empty `language_code`) with
+  `fetch_status`, any errors and `listed_tracks`; a disabled, unavailable or
+  failed video is a status row, not a raised error. Once YouTube blocks the run
+  (`RequestBlocked`), the remaining videos are marked `blocked` without another
+  request. Production's requests are blocked (IpBlocked) as of 2026-11-20.
 
 ## Configuration
 
