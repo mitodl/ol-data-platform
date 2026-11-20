@@ -62,6 +62,29 @@ def test_the_repo_rules_place_courseware_names(name, domain):
     assert rule.domain == domain
 
 
+@pytest.mark.parametrize(
+    ("name", "domain"),
+    [
+        # Each of these would match a broader pattern later in the file.
+        ("raw__xpro__hubspot__engagements_calls", "marketing"),
+        ("raw__xpro__hubspot__marketing_emails", "marketing"),
+        ("raw__mitxonline__hubspot__products", "marketing"),
+        ("raw__google_ads__api__change_events", "marketing"),
+        ("google_ads_campaign_products", "marketing"),
+        ("google_ads_courses", "marketing"),
+        ("stg__google_ads__api__campaign_daily", "marketing"),
+        ("contacts", "marketing"),
+        # The xPRO app's HubSpot sync bookkeeping is app state.
+        ("raw__xpro__app__postgres__hubspot_api_hubspotobject", None),
+    ],
+)
+def test_the_repo_rules_place_marketing_names(name, domain):
+    rule = load_domain_rules(RULES_PATH).rule_for(name)
+
+    assert rule is not None
+    assert rule.domain == domain
+
+
 def test_first_matching_rule_wins_and_keeps_owner_and_tier():
     node = _node(
         "tfact_user_order", openmetadata={"owner": "data-platform", "tier": "T2"}
