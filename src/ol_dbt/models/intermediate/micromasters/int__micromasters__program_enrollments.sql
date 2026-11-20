@@ -35,6 +35,7 @@ with micromasters_program_enrollments as (
 , mitxonline_dedp_records as (
     select
         '{{ var("mitxonline") }}' as platform_name
+        , mitxonline_programenrollments.user_id as user_mitxonline_id
         , mitx_users.user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitxonline_programenrollments.user_email
@@ -63,13 +64,20 @@ with micromasters_program_enrollments as (
 
 , mm_dedp_records as (
     select
-        mitx_users.user_edxorg_username
+        coalesce(mitx_users.user_micromasters_edxorg_username, mitx_users.user_edxorg_username)
+            as user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitx_users.user_micromasters_email as user_email
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
-        , mitx_users.user_edxorg_id
+        -- Follows the username above, so a MicroMasters login with no edX.org row keeps a null
+        -- id and doesn't pick up another account on this row.
+        , case
+            when mitx_users.user_micromasters_edxorg_username is not null
+                then mitx_users.user_micromasters_edxorg_id
+            else mitx_users.user_edxorg_id
+        end as user_edxorg_id
         , mitx_users.user_gender
         , mitx_users.user_address_country as user_country
         , mitx_users.user_address_city
@@ -81,19 +89,34 @@ with micromasters_program_enrollments as (
         , mitx_users.user_full_name
         , mitx_users.user_micromasters_id as micromasters_user_id
         , mitx_users.user_birth_year as user_year_of_birth
-        , if(mitx_users.is_mitxonline_user = true, '{{ var("mitxonline") }}', '{{ var("edxorg") }}') as platform_name
+        -- marts__combined_program_enrollment_detail keeps only the edX.org rows here, and an
+        -- email link doesn't mean the enrollment reached MITx Online, so those learners stay.
+        , if(
+            mitx_users.is_mitxonline_user = true and mitx_users.is_micromasters_linked_by_email = false
+            , '{{ var("mitxonline") }}'
+            , '{{ var("edxorg") }}'
+        ) as platform_name
     from mm_program_enrollments
     inner join programs
         on mm_program_enrollments.program_id = programs.micromasters_program_id
     inner join mitx_users
         on mm_program_enrollments.user_id = mitx_users.user_micromasters_id
+    -- The account the email link took this id from can hold the MITx Online enrollment.
+    left join mitx_users as edxorg_account
+        on mitx_users.user_micromasters_edxorg_id = edxorg_account.user_edxorg_id
+    -- The email stays in the match because the account with it can be on another row, when
+    -- that account already holds a different MicroMasters id.
     left join mitxonline_dedp_records
         on
-            mitx_users.user_micromasters_email = mitxonline_dedp_records.user_email
-            and programs.program_title = mitxonline_dedp_records.program_title
+            programs.program_title = mitxonline_dedp_records.program_title
+            and (
+                mitxonline_dedp_records.user_mitxonline_id
+                in (mitx_users.user_mitxonline_id, edxorg_account.user_mitxonline_id)
+                or lower(mitx_users.user_micromasters_email) = lower(mitxonline_dedp_records.user_email)
+            )
     where
         programs.is_dedp_program = true
-        and mitxonline_dedp_records.user_email is null
+        and mitxonline_dedp_records.user_mitxonline_id is null
 )
 
 , non_dedp_records as (
