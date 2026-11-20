@@ -45,8 +45,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatchling.build.targets.wheel]
-packages = ["ol_dlt"]
+# ol_file_types is its own package so the Open edX code location can import it
+# without ol_dlt's import-time setup (PYICEBERG_HOME, the dlt patches).
+[tool.hatch.build.targets.wheel]
+packages = ["ol_dlt", "ol_file_types"]
 
 [tool.ruff]
 target-version = "py313"

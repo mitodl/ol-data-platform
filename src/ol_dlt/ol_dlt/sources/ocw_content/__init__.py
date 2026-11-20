@@ -91,9 +91,11 @@ from ol_dlt.extraction import (
     as_utc,
     collect,
     extract,
+    extract_notebook,
     needs_read,
     waited,
 )
+from ol_file_types import NOTEBOOK_EXTENSION, file_extension, is_text_file
 
 logger = logging.getLogger(__name__)
 
@@ -103,36 +105,6 @@ SOURCE_NAME = "ocw_content_ingest"
 # The bucket prefix the table lives under (config.destination_for).
 PIPELINE_SOURCE = "ocw"
 
-# The extensions MIT Learn extracts text for: VALID_FILE_TYPES in mit-learn's
-# learning_resources/constants.py. A file with any other extension is not read;
-# its resource still gets a row.
-VALID_FILE_TYPES = frozenset(
-    {
-        ".csv",
-        ".doc",
-        ".docx",
-        ".htm",
-        ".html",
-        ".json",
-        ".m",
-        ".mat",
-        ".md",
-        ".pdf",
-        ".ppt",
-        ".pptx",
-        ".ps",
-        ".py",
-        ".r",
-        ".rtf",
-        ".sjson",
-        ".srt",
-        ".txt",
-        ".vtt",
-        ".xls",
-        ".xlsx",
-        ".xml",
-    }
-)
 
 # Where a data.json path names a key in the bucket: from its first "courses/"
 # segment on, whatever comes before (a leading slash, an OCW URL).
@@ -144,8 +116,10 @@ BUCKET_PATH = re.compile(r"(?:^|/)(courses/.+)$")
 # video_transcript_resources when it has one (mit-learn #4063), and a path is
 # split on "courses" only when it does not start with it. 3: every transcript
 # a video names gets a row of its own, the 3Play files are read, and a path is
-# keyed from its first courses/ segment.
-TEXT_FILE_RULE = 3
+# keyed from its first courses/ segment. 4: the files read are the platform's
+# list (ol_file_types), which adds .epub, .ipynb, .tex and the types the Open
+# edX MIME gate read to Learn's.
+TEXT_FILE_RULE = 4
 
 # Site files Hugo generates beside a course's uploads. No resource points at
 # them, and a theme release can rewrite them without the course changing, so
@@ -269,7 +243,7 @@ def bucket_key(path: object) -> str | None:
         return None
     match = BUCKET_PATH.search(path)
     key = unquote(match.group(1) if match else "courses" + path.split("courses")[1])
-    return key if PurePosixPath(key).suffix.lower() in VALID_FILE_TYPES else None
+    return key if is_text_file(key) else None
 
 
 def video_transcripts(video_files: object) -> list[Transcript]:
@@ -348,7 +322,7 @@ def in_course_version(slug: str, key: str) -> bool:
     return (
         not key.startswith((f"{prefix}pages/", f"{prefix}resources/"))
         and path.name not in SITE_FILES
-        and path.suffix.lower() in VALID_FILE_TYPES
+        and is_text_file(key)
     )
 
 
@@ -428,6 +402,8 @@ def _extract_text(
         # same bytes come back the ETags will not show it, so the course is
         # read again.
         return None, STATUS_MISSING, True
+    if file_extension(key) == NOTEBOOK_EXTENSION:
+        return extract_notebook(body, key)
     return extract(client, body, key)
 
 

@@ -46,6 +46,10 @@ unit_tests:
       file_extension: .csv, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@grades.csv",
       content: "a,b", extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,
       is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/static/logo.png,
+      file_extension: .png, edx_module_id: "asset-v1:X+Y+R1+type@asset+block@logo.png",
+      content: null, extraction_status: skipped_unsupported, is_exclusion_checked: true,
+      is_text_current: true, is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", source_system: xpro, source_path: course/policies/assets.json,
       file_extension: .json, edx_module_id: "block-v1:X+Y+R1+type@policies+block@assets",
       content: "{}", extraction_status: extracted, is_exclusion_checked: true, is_text_current: true,

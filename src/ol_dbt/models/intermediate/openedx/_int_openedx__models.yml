@@ -51,8 +51,8 @@ models:
   - name: content
     description: str, the file's text; null for a failed or empty extraction
   - name: extraction_status
-    description: str, extracted, empty or failed for a static file; extracted for
-      a block
+    description: str, extracted, empty, failed or skipped_unsupported for a static
+      file; extracted for a block
     tests:
     - not_null
   - name: extracted_at
