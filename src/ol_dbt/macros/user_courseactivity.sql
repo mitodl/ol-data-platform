@@ -59,7 +59,7 @@ select{{ ' distinct' if distinct }}
     , useractivity_timestamp
     , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as useractivity_problem_name
     , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as useractivity_problem_id
-    , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as useractivity_problem_student_answers
+    , {{ json_query_object('useractivity_event_object', 'answers') }} as useractivity_problem_student_answers
     , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as useractivity_problem_attempts
     , {{ json_query_string('useractivity_event_object', "'$.success'") }} as useractivity_problem_success
     , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as useractivity_problem_current_grade
