@@ -1721,7 +1721,18 @@ def check_drift(
         # (a resumed retired connection, or one left active after its unit
         # moved to dlt).
         live_prefix = live[name].get("prefix") or ""
-        rewritten = sorted({f"{live_prefix}{stream}" for stream in _live_streams(live[name]) or {}} & retired_tables)
+        live_streams = _live_streams(live[name])
+        if live_streams is None and retired_tables:
+            report.add(
+                DRIFT_CHECK,
+                Severity.ERROR,
+                "(undeclared)",
+                f"the snapshot holds no stream configuration for connection {name!r}",
+                "The dump could not read them, so whether it writes a retired "
+                "table went unchecked. Re-dump before trusting the report.",
+            )
+            continue
+        rewritten = sorted({f"{live_prefix}{stream}" for stream in live_streams or {}} & retired_tables)
         if rewritten:
             report.add(
                 DRIFT_CHECK,
@@ -1889,7 +1900,8 @@ def _compare_connection(  # noqa: PLR0913
 
     for stream in sorted(set(live_streams) - set(declared_streams)):
         landed = f"{live_prefix}{stream}"
-        if landed in retired_tables:
+        # A disabled connection writes nothing, whatever it still has selected.
+        if landed in retired_tables and live_status not in STOPPED_CONNECTION_STATUSES:
             report.add(
                 DRIFT_CHECK,
                 Severity.ERROR,

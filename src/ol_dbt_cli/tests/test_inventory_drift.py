@@ -176,6 +176,14 @@ class TestConnectionDrift:
         )
         assert _run(snapshot, units, retired={("old/s3", "raw__old__things")}).issues == []
 
+    def test_an_undeclared_connection_with_unread_streams_is_an_error(self, units: list[Any]) -> None:
+        # A failed dump leaves the streams absent, which would otherwise pass
+        # as "syncs no retired table".
+        snapshot = live()
+        snapshot["connections"].append({"name": "S3 Retired → S3 Data Lake", "status": "active", "configurations": {}})
+        report = _run(snapshot, units, retired={("old/s3", "raw__old__things")})
+        assert "holds no stream configuration" in _messages(report, Severity.ERROR)[0]
+
     def test_a_paused_connection_is_reported(self, units: list[Any]) -> None:
         report = _run(live(status="inactive"), units)
         assert "'inactive' in Airbyte but declared 'active'" in _messages(report, Severity.ERROR)[0]
@@ -321,6 +329,20 @@ class TestStreamDrift:
             {"name": "auth_group", "syncMode": "incremental_append"}
         )
         report = _run(snapshot, units, retired={("mitx/mysql", f"{PREFIX}auth_group")})
+        assert report.errors == []
+        assert "which the unit does not declare" in _messages(report, Severity.WARNING)[0]
+
+    @pytest.mark.parametrize("status", ["inactive", "deprecated"])
+    def test_a_retired_stream_on_a_disabled_connection_stays_a_warning(self, status: str) -> None:
+        # A disabled connection writes nothing, so its saved stream selection
+        # must not fail the run.
+        disabled = copy.deepcopy(UNIT)
+        disabled["airbyte"]["connections"][0]["status"] = status
+        snapshot = live(status=status)
+        snapshot["connections"][0]["configurations"]["streams"].append(
+            {"name": "auth_group", "syncMode": "incremental_append"}
+        )
+        report = _run(snapshot, [_unit(disabled)], retired={("mitxonline/mysql", f"{PREFIX}auth_group")})
         assert report.errors == []
         assert "which the unit does not declare" in _messages(report, Severity.WARNING)[0]
 

@@ -524,7 +524,11 @@ A live stream that lands in a table `retired.yml` records (§7.2) is an `ERROR`,
 warning an undeclared stream gets, whether or not a unit declares its connection. The
 inventory says that table stopped loading, so a stream still selected means Airbyte keeps
 writing it. On a declared connection the match is on the
-unit and raw table; on an undeclared one, which has no unit, on the raw table alone.
+unit and raw table; on an undeclared one, which has no unit, on the raw table alone. A
+disabled (`inactive` or `deprecated`) connection writes nothing, so a retired stream it
+still has selected stays a warning on a declared connection and silent on an undeclared
+one. An undeclared connection that is not disabled and whose snapshot holds no stream configuration is an `ERROR`
+while `retired.yml` lists any table, because the check could not see what it writes.
 
 ---
 
