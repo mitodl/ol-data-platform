@@ -20,6 +20,31 @@
 -- Precompute incremental watermarks once (1 scan instead of 8 correlated subqueries).
 -- Each source CTE receives the pre-fetched max timestamp for its platform.
 {% if is_incremental() %}
+{#-
+    The watermark join below filters after the scan, so on its own every historical
+    problem event in the four tracking-log tables is read with both JSON columns. On
+    StarRocks that ran a CN out of process memory (13.9 GB) while the query's tracked
+    memory stayed near 2 GB, so query_mem_limit could not stop it. A literal floor on
+    the ISO 8601 text is a scan predicate (StarRocks applies it to the Iceberg scan's
+    min/max pruning), so old files and row groups are skipped. It is a day before the
+    watermark's date because staging text written by Trino keeps the event's UTC
+    offset, so its date can be a day behind the UTC date. The exact comparison
+    against the watermark still decides each row.
+-#}
+{%- set source_date_floor = {} -%}
+{%- if execute -%}
+    {%- for row in run_query('select platform, max(event_timestamp) from ' ~ this ~ ' group by platform') -%}
+        {%- if row[1] is not none -%}
+            {%- do source_date_floor.update({
+                row[0]: (
+                    modules.datetime.date.fromisoformat((row[1] | string)[:10])
+                    - modules.datetime.timedelta(days=1)
+                ).isoformat()
+            }) -%}
+        {%- endif -%}
+    {%- endfor -%}
+{%- endif %}
+
 with watermarks as (
     select platform, max(event_timestamp) as max_ts
     from {{ this }}
@@ -51,6 +76,9 @@ with watermarks as (
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
+        {%- if 'mitxonline' in source_date_floor %}
+        and useractivity_timestamp >= '{{ source_date_floor['mitxonline'] }}'
+        {%- endif %}
         and (
             watermarks.max_ts is null
             or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
@@ -81,6 +109,9 @@ with watermarks as (
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
+        {%- if 'mitxpro' in source_date_floor %}
+        and useractivity_timestamp >= '{{ source_date_floor['mitxpro'] }}'
+        {%- endif %}
         and (
             watermarks.max_ts is null
             or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
@@ -111,6 +142,9 @@ with watermarks as (
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
+        {%- if 'residential' in source_date_floor %}
+        and useractivity_timestamp >= '{{ source_date_floor['residential'] }}'
+        {%- endif %}
         and (
             watermarks.max_ts is null
             or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
@@ -141,6 +175,9 @@ with watermarks as (
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
+        {%- if 'edxorg' in source_date_floor %}
+        and useractivity_timestamp >= '{{ source_date_floor['edxorg'] }}'
+        {%- endif %}
         and (
             watermarks.max_ts is null
             or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
@@ -266,54 +303,59 @@ with mitxonline_problem_events as (
 -- key -- the same hazard tfact_grade and tfact_certificate guard against with their
 -- stale_user_fk_lookup. delete+insert on event_id replaces the row in place, which
 -- only works because these rows keep their stored event_id (see batch below).
--- One CTE per platform because the dim_user join keys differ per platform; each
+-- Two CTEs per platform because the dim_user join keys differ per platform; each
 -- prunes to one partition (the model is partitioned by platform) and joins by
 -- equality rather than an OR across every platform's key pair.
 -- Restricted to rows at or below the watermark so an event the source CTEs also
 -- re-select cannot arrive twice and double-insert.
--- `users.user_pk is not null` matters: the join is a left join, so a learner who
--- no longer resolves (removed from dim_user, or a username change that moves the
--- join keys) would otherwise be "distinct from" the stored key and get re-inserted
--- with a null user_fk, replacing a good key with nothing. A row can be corrected
--- here, never nulled.
-, stale_key_mitxonline as (
+-- stale_tuples_* compares dim_user with the distinct stored (user id, username,
+-- user_fk) tuples, not with every stored event: about 700k tuples against 160M rows
+-- (measured 2026-11-20). Joining every event to dim_user ran StarRocks CNs out of
+-- memory: each platform's dim_user hash table was about 1 GB per CN at dop 1, and
+-- the edX.org join's memory grew with dop (4.23 GB at dop 4). stale_key_* then
+-- joins the stored events to the few stale tuples. The result is the same as the
+-- per-event join.
+-- The inner join (and `users.user_pk is not null`) keeps a learner who no longer
+-- resolves (removed from dim_user, or a username change that moves the join keys)
+-- out of the stale set; re-inserting them with a null user_fk would replace a good
+-- key with nothing. A row can be corrected here, never nulled. The platform id
+-- filter changes no result (a matched row has a non-null id), but keeps the users
+-- with no account on that platform out of the join.
+{%- set stale_key_platforms = ['mitxonline', 'mitxpro', 'residential', 'edxorg'] %}
+{%- for stale_platform in stale_key_platforms %}
+
+, stale_tuples_{{ stale_platform }} as (
     select
-        stored.event_id
-        , stored.platform
-        , users.user_pk as user_fk
-        , stored.openedx_user_id
-        , stored.user_username
-        , stored.courserun_readable_id
-        , stored.event_type
-        , stored.event_json
-        , stored.problem_block_fk as problem_block_id
-        , stored.answers
-        , stored.attempt
-        , stored.success
-        , stored.grade
-        , stored.max_grade
-        , stored.event_timestamp
-        , stored.event_timestamp_iso8601
-        , stored.time_fk
-        , stored.date_fk
-    from {{ this }} as stored
-    inner join watermarks on watermarks.platform = stored.platform
-    left join users
+        stored_keys.openedx_user_id
+        , stored_keys.user_username
+        , stored_keys.user_fk as stored_user_fk
+        , users.user_pk
+    from (
+        select distinct
+            stored.openedx_user_id
+            , stored.user_username
+            , stored.user_fk
+        from {{ this }} as stored
+        inner join watermarks on watermarks.platform = stored.platform
+        where
+            stored.platform = '{{ stale_platform }}'
+            and stored.event_timestamp <= watermarks.max_ts
+    ) as stored_keys
+    inner join users
         on
-            stored.openedx_user_id = users.mitxonline_openedx_user_id
-            and stored.user_username = users.user_mitxonline_username
+            stored_keys.openedx_user_id = users.{{ stale_platform }}_openedx_user_id
+            and stored_keys.user_username = users.user_{{ stale_platform }}_username
     where
-        stored.platform = 'mitxonline'
-        and stored.event_timestamp <= watermarks.max_ts
-        and users.user_pk is not null
-        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
+        users.user_pk is not null
+        and users.{{ stale_platform }}_openedx_user_id is not null
+        and {{ is_distinct_from('users.user_pk', 'stored_keys.user_fk') }}
 )
 
-, stale_key_mitxpro as (
+, stale_key_{{ stale_platform }} as (
     select
         stored.event_id
         , stored.platform
-        , users.user_pk as user_fk
+        , stale.user_pk as user_fk
         , stored.openedx_user_id
         , stored.user_username
         , stored.courserun_readable_id
@@ -331,82 +373,16 @@ with mitxonline_problem_events as (
         , stored.date_fk
     from {{ this }} as stored
     inner join watermarks on watermarks.platform = stored.platform
-    left join users
+    inner join stale_tuples_{{ stale_platform }} as stale
         on
-            stored.openedx_user_id = users.mitxpro_openedx_user_id
-            and stored.user_username = users.user_mitxpro_username
+            stored.openedx_user_id = stale.openedx_user_id
+            and stored.user_username = stale.user_username
+            and not ({{ is_distinct_from('stored.user_fk', 'stale.stored_user_fk') }})
     where
-        stored.platform = 'mitxpro'
+        stored.platform = '{{ stale_platform }}'
         and stored.event_timestamp <= watermarks.max_ts
-        and users.user_pk is not null
-        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
 )
-
-, stale_key_residential as (
-    select
-        stored.event_id
-        , stored.platform
-        , users.user_pk as user_fk
-        , stored.openedx_user_id
-        , stored.user_username
-        , stored.courserun_readable_id
-        , stored.event_type
-        , stored.event_json
-        , stored.problem_block_fk as problem_block_id
-        , stored.answers
-        , stored.attempt
-        , stored.success
-        , stored.grade
-        , stored.max_grade
-        , stored.event_timestamp
-        , stored.event_timestamp_iso8601
-        , stored.time_fk
-        , stored.date_fk
-    from {{ this }} as stored
-    inner join watermarks on watermarks.platform = stored.platform
-    left join users
-        on
-            stored.openedx_user_id = users.residential_openedx_user_id
-            and stored.user_username = users.user_residential_username
-    where
-        stored.platform = 'residential'
-        and stored.event_timestamp <= watermarks.max_ts
-        and users.user_pk is not null
-        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
-)
-
-, stale_key_edxorg as (
-    select
-        stored.event_id
-        , stored.platform
-        , users.user_pk as user_fk
-        , stored.openedx_user_id
-        , stored.user_username
-        , stored.courserun_readable_id
-        , stored.event_type
-        , stored.event_json
-        , stored.problem_block_fk as problem_block_id
-        , stored.answers
-        , stored.attempt
-        , stored.success
-        , stored.grade
-        , stored.max_grade
-        , stored.event_timestamp
-        , stored.event_timestamp_iso8601
-        , stored.time_fk
-        , stored.date_fk
-    from {{ this }} as stored
-    inner join watermarks on watermarks.platform = stored.platform
-    left join users
-        on
-            stored.openedx_user_id = users.edxorg_openedx_user_id
-            and stored.user_username = users.user_edxorg_username
-    where
-        stored.platform = 'edxorg'
-        and stored.event_timestamp <= watermarks.max_ts
-        and users.user_pk is not null
-        and {{ is_distinct_from('users.user_pk', 'stored.user_fk') }}
-)
+{%- endfor %}
 
 , stale_key_rows as (
     select * from stale_key_mitxonline
@@ -685,7 +661,12 @@ with mitxonline_problem_events as (
     {% endif %}
 )
 
+-- StarRocks: this query's memory grows with the pipeline dop. At the default dop (8
+-- here) it exceeded a 6 GiB query limit while reading and decompressing Iceberg
+-- pages; at dop 2 it peaked at 3.7 GB per CN and took 42s (measured 2026-11-20).
+-- A full refresh runs this same query, so it is held to dop 2 as well.
 select
+    {{ session_variables_hint({'pipeline_dop': 2}) }}
     batch.event_id
     , platform.platform_pk as platform_fk
     , batch.user_fk

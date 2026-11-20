@@ -881,6 +881,30 @@
 
 
 {#
+    session_variables_hint: StarRocks session variables for one query, as a
+    /*+ SET_VAR(...) */ hint. Call it on its own line right after the outermost
+    SELECT keyword; it applies to the whole statement, including a CTAS or INSERT
+    that wraps the query (checked on 4.1.7). Renders nothing on other engines.
+    `ol-dbt validate` renders a macro call as a placeholder token, and only drops one
+    that sits alone on its line; next to a column it reads as that column's alias.
+#}
+{% macro session_variables_hint(variables) -%}
+    {{ adapter.dispatch('session_variables_hint', 'open_learning')(variables) }}
+{%- endmacro %}
+
+{% macro default__session_variables_hint(variables) -%}
+{%- endmacro %}
+
+{% macro starrocks__session_variables_hint(variables) -%}
+    /*+ SET_VAR(
+    {%- for name, value in variables | dictsort -%}
+        {{ name }}={{ value }}{{ ", " if not loop.last }}
+    {%- endfor -%}
+    ) */
+{%- endmacro %}
+
+
+{#
     array_filter_nonempty: drop NULL and empty-string elements from a varchar array,
     keeping the order of the rest.
 #}
