@@ -29,7 +29,7 @@ OCW_LEARN_MODELS = (
 def ocw_learn_target(dbt_assets: AssetsDefinition) -> AssetSelection:
     """ocw_learn_automation_sensor's target.
 
-    :param dbt_assets: the Trino dbt project's assets.
+    :param dbt_assets: the main (layered warehouse) dbt project's assets.
     :returns: the OCW_LEARN_MODELS assets.
     :rtype: AssetSelection
     """
@@ -55,7 +55,7 @@ def dbt_automation_target(dbt_assets: AssetsDefinition) -> AssetSelection:
 
     The OCW Learn models are ocw_learn_automation_sensor's, so they are taken out.
 
-    :param dbt_assets: the Trino dbt project's assets.
+    :param dbt_assets: the main (layered warehouse) dbt project's assets.
     :returns: every non-staging dbt model outside OCW_LEARN_MODELS, and the
         Superset datasets.
     :rtype: AssetSelection

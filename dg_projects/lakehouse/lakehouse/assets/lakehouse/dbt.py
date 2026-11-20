@@ -69,9 +69,9 @@ dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
 
 # A deployed StarRocks target has no static login in the pod: every dbt
-# invocation this project spawns needs a Vault login first. ci builds on
-# StarRocks today; the other environments follow as DBT_TARGET_MAP moves them
-# off Trino. In dev the `starrocks` resource is the local root login, so a
+# invocation this project spawns needs a Vault login first. ci and qa build on
+# StarRocks; dev and production follow when DBT_TARGET_MAP moves them off
+# Trino. In dev the `starrocks` resource is the local root login, so a
 # developer pointing DAGSTER_DBT_TARGET at a deployed profile keeps the
 # DBT_STARROCKS_* they exported (bin/starrocks-auth) rather than having it
 # replaced.
@@ -314,7 +314,7 @@ def upload_build_artifacts(
     project and queries every relation, which is far too expensive to repeat on
     each incremental subset build. That work lives in the dedicated
     `dbt_docs_artifacts_job`, which runs on a daily schedule and uploads the
-    Trino manifest.json with it.
+    DBT_TARGET manifest.json with it.
     """
     if DAGSTER_ENV == "dev":
         return
@@ -368,8 +368,8 @@ def upload_build_artifacts_best_effort(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
     # Complementary partition with dbt_starrocks.py's starrocks_dbt_assets: tag a
-    # model `starrocks` to move it from this Trino-scoped asset set into that
-    # StarRocks-scoped one without touching either Python asset definition.
+    # model `starrocks` to move it from this DBT_TARGET asset set into that
+    # default_catalog one without touching either Python asset definition.
     exclude="tag:starrocks",
     dagster_dbt_translator=DbtAutomationTranslator(
         settings=DagsterDbtTranslatorSettings(enable_code_references=True)

@@ -70,9 +70,9 @@ starrocks_dbt_project.prepare_if_dev()
 # Passing a DbtProject to project_dir makes DbtCliResource pick up its target/
 # profiles_dir automatically (see dagster_dbt.core.resource.DbtCliResource).
 # This must be a SEPARATE resource from the shared "dbt" key used by
-# full_dbt_project, which is pinned to a Trino target -- reusing that one here
-# would silently run `dbt build --target production` and build nothing, since
-# b2b_analytics is disabled for any non-starrocks target.
+# full_dbt_project, which is pinned to DBT_TARGET (Trino, or a StarRocks lake
+# target in ci and qa) -- reusing that one here would build nothing, since
+# b2b_analytics is enabled only on StarRocks targets in default_catalog.
 starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
 
 # Retry knobs, the retriable-error classifier, and the column-drift comparison

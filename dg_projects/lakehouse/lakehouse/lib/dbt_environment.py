@@ -29,8 +29,11 @@ ol-infrastructure's local-dev stack (``data-platform`` in ``enabled_apps``),
 with its own object store and Iceberg catalog, and a root login that needs no
 Vault credentials. A developer who wants the QA cluster runs with
 ``DAGSTER_ENVIRONMENT=qa``, as docker-compose.yaml does for this code location.
-The Trino map has not followed: ``dev`` there is still the production Galaxy
-cluster.
+The b2b project then works through a port-forward, but the main project's qa
+target is starrocks_qa_lake, which writes the canonical QA warehouse through
+STARROCKS_HOST_MAP's in-cluster FE name, so dbt assets don't build from a
+laptop in qa. The Trino map has not followed: ``dev`` there is still the
+production Galaxy cluster.
 
 Adding an environment
 ---------------------
@@ -50,12 +53,24 @@ from typing import Literal, cast, get_args
 import yaml
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
-# Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
-# code location was already configured for -- trino_host_map/trino_catalog_map
-# in definitions.py have pointed "qa" at the QA Starburst cluster and
-# ol_data_lake_qa all along. Only this map disagreed.
+# The main (layered warehouse) project's target. "dev" and "production" are
+# Trino until the production cutover (ol-infrastructure ADR 0012).
 #
-# "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
+# "qa" is StarRocks, ahead of production, so the QA builds find the StarRocks
+# porting bugs before production does: starrocks_qa_lake writes the canonical
+# ol_warehouse_qa_<layer> schemas in ol_data_lake_qa, through the QA cluster's
+# in-cluster FE with a Vault login per invocation (see dbt_credentials in
+# assets/lakehouse/dbt.py). Nothing builds QA on Trino any more, so the two
+# engines never write the same QA tables. The image's baked manifest is still
+# compiled against Trino production, so in QA the asset graph and what the
+# build runs can disagree on whatever target.type decides. Node-wise that is
+# only the cohort3 unit test (excluded from builds anyway); the b2b models are
+# disabled on both targets. Config differs more: e.g. the graph's metadata has
+# the Trino-only +properties and lacks the StarRocks-only partition_by on
+# tfact_problem_events, while the build does the opposite. Asset keys are the
+# same.
+#
+# "ci" is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
 # `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
 # project under DAGSTER_ENVIRONMENT=ci yet. A target whose profile type is
@@ -66,7 +81,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "dev_production",
     "ci": "ci",
-    "qa": "qa",
+    "qa": "starrocks_qa_lake",
     "production": "production",
 }
 
@@ -310,8 +325,8 @@ DATA_LAKE_ENV = resolve_for_environment(
 
 # Which engine compacts and analyzes the dbt-built Iceberg tables in
 # iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
-# (ol-infrastructure ADR 0012), against the same Glue tables Trino still
-# builds there, so the StarRocks path is proven before production needs it.
+# (ol-infrastructure ADR 0012), against the Glue tables StarRocks builds
+# there, so the StarRocks path is proven before production needs it.
 # The nightly schedule is production-only (lib/scheduled_automation.py), so in
 # qa the asset runs when materialized by hand.
 # Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE
