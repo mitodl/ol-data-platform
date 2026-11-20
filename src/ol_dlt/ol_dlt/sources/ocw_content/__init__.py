@@ -257,15 +257,18 @@ def bucket_key(path: object) -> str | None:
 
     OCW writes paths as ``/courses/<slug>/<file>``, and sometimes as a URL on
     an OCW host. The key runs from the first ``courses/`` segment to the end,
-    so a file whose own name holds "courses" keeps it.
+    so a file whose own name holds "courses" keeps it. A path with "courses"
+    only inside a segment is keyed as Learn keys it, from that "courses" up to
+    the next.
 
     :param path: The value of a ``file`` field.
     :returns: The key, or None when the value names no file in the bucket (not
-        a string, a URL elsewhere) or a file whose type is not read.
+        a string, no "courses" in it) or a file whose type is not read.
     """
-    if not isinstance(path, str) or (match := BUCKET_PATH.search(path)) is None:
+    if not isinstance(path, str) or "courses" not in path:
         return None
-    key = unquote(match.group(1))
+    match = BUCKET_PATH.search(path)
+    key = unquote(match.group(1) if match else "courses" + path.split("courses")[1])
     return key if PurePosixPath(key).suffix.lower() in VALID_FILE_TYPES else None
 
 

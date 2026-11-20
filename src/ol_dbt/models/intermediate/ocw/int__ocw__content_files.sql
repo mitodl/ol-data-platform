@@ -215,8 +215,10 @@ with content as (
         end as extension_path
         -- A video's chosen transcript, or for a course loaded before transcript
         -- rows existed, the resource row's text.
-        , coalesce(transcript_texts.coursecontent_text_extraction_status, resource_transcripts.coursecontent_text_extraction_status)
-            as text_extraction_status
+        , coalesce(
+            transcript_texts.coursecontent_text_extraction_status
+            , resource_transcripts.coursecontent_text_extraction_status
+        ) as text_extraction_status
         , coalesce(transcript_texts.coursecontent_text, resource_transcripts.coursecontent_text) as text_content
     from resource_transcripts
     -- The list entry chosen, else the single file, which has no place in the list.

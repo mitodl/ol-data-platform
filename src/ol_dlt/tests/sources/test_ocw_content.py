@@ -297,8 +297,9 @@ T = ocw_content.Transcript
             },
             (None, [T("courses/a/intro_courses_t.pdf", 1, "en")]),
         ),
-        # "courses" has to be a whole segment.
-        ({"file": "/mycourses/a/x.pdf"}, (None, [])),
+        # "courses" inside a segment is keyed as Learn keys it.
+        ({"file": "https://ocw.mit.edu/mycourses/a/x.pdf"}, ("courses/a/x.pdf", [])),
+        ({"file": "/courses_x/a/x.pdf"}, ("courses_x/a/x.pdf", [])),
     ],
 )
 def test_resource_text_files(
