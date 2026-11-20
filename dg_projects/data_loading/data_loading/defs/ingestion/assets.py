@@ -216,8 +216,9 @@ def google_ads_assets(
             return
         # The merge writes silently, and it is most of a daily run.
         context.log.info(
-            "Lookback: re-pulling %s days before each account's cursor for %s "
-            "tables and merging them",
+            "Lookback: re-pulling %s days (%s for conversions) before each "
+            "account's cursor for %s tables and merging them",
+            google_ads.METRICS_LOOKBACK_DAYS,
             google_ads.DEFAULT_LOOKBACK_DAYS,
             len(daily),
         )
