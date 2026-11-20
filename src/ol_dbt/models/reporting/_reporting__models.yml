@@ -947,8 +947,9 @@ models:
     description: int, internal ID and foreign key to courserunenrollments on the corresponding
       platform. Null for enrollments on edX.org.
   - name: combined_orders_hash_id
-    description: int, primary key for this table. At the grain of order id, line id,
-      and platform.
+    description: str, hash of order id, line id and platform, as in marts__combined__orders.
+      Null for an enrollment with no order. Not unique, because one order can cover
+      several enrollments.
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
       Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
@@ -1056,7 +1057,7 @@ models:
         row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserunenrollment_id", "combined_orders_hash_id", "user_hashed_id"]
+        column_list: ["courserunenrollment_id", "user_hashed_id"]
         row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1064,7 +1065,7 @@ models:
         row_condition: "platform ='xPRO Global Alumni'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserunenrollment_id", "order_reference_number", "user_hashed_id"]
+        column_list: ["courserunenrollment_id", "user_hashed_id"]
         row_condition: "platform='Bootcamps'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
