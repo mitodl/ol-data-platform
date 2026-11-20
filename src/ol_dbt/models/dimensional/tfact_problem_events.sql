@@ -62,7 +62,7 @@ with watermarks as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -95,7 +95,7 @@ with watermarks as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -128,7 +128,7 @@ with watermarks as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -161,7 +161,7 @@ with watermarks as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -196,7 +196,7 @@ with mitxonline_problem_events as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -221,7 +221,7 @@ with mitxonline_problem_events as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -246,7 +246,7 @@ with mitxonline_problem_events as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -271,7 +271,7 @@ with mitxonline_problem_events as (
         , useractivity_event_object as event_json
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
         , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
@@ -613,7 +613,7 @@ with mitxonline_problem_events as (
             'deduped_combined.problem_block_id',
             'deduped_combined.attempt',
             'deduped_combined.event_type',
-            'deduped_combined.event_timestamp'
+            surrogate_key_timestamptz('deduped_combined.event_timestamp', 'deduped_combined.event_timestamp_iso8601')
         ]) }} as event_id
         , deduped_combined.platform
         , deduped_combined.user_fk
