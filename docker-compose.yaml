@@ -140,8 +140,14 @@ services:
       secrets:
       - dbt_trino_username
       - dbt_trino_password
-    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4003",
-      "--module-name", "lakehouse.definitions"]
+    # The src/ol_dbt mount below hides the image's baked manifests, and as qa
+    # the location loads target/starrocks_qa_lake/manifest.json, so parse it
+    # from the mounted project first. parse opens no connection, so the
+    # StarRocks login can be a dummy, as in the Dockerfile.
+    entrypoint: ["sh", "-c", "(cd /opt/dbt && dbt deps --quiet && DBT_STARROCKS_USERNAME=build\
+        \ DBT_STARROCKS_PASSWORD=build DBT_DATA_LAKE_ENV=qa dbt parse --quiet --target\
+        \ starrocks_qa_lake --target-path target/starrocks_qa_lake) && exec dagster\
+        \ code-server start -h 0.0.0.0 -p 4003 --module-name lakehouse.definitions"]
     ports:
     - "4003:4003"
     environment:
