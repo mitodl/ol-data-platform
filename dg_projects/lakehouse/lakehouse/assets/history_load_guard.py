@@ -1,4 +1,4 @@
-"""The load-side raw history guard: a blocking check on each guarded raw table.
+"""The load-side raw history guard: a check on each guarded raw table.
 
 See ``lakehouse.lib.history_load_guard`` for what is guarded and why. One
 multi-asset check per Airbyte group, so the group's ``sync_and_stage_*`` job,

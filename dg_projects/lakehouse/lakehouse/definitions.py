@@ -696,10 +696,10 @@ AWAITING_RAW_TABLE = {
     "stg__edxorg__discovery__api__programs",
 }
 
+non_airbyte_tables = non_airbyte_raw_tables(load_units(INVENTORY_DIR))
 non_airbyte_staging_models = sorted(
     staging_models_reading(
-        json.loads(dbt_project.manifest_path.read_text()),
-        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+        json.loads(dbt_project.manifest_path.read_text()), non_airbyte_tables
     )
     - {POSTHOG_STAGING_MODEL}
     - AWAITING_RAW_TABLE
@@ -846,16 +846,21 @@ openmetadata_table_fqns = table_fqns_by_asset_key(
     asset_keys=set(full_dbt_project.keys),
     service=TRINO_SERVICE,
 )
-# The load-side raw history guard (lakehouse.lib.history_load_guard): a blocking
-# check on each Airbyte-loaded raw table a live raw history snapshot reads. The
+# The load-side raw history guard (lakehouse.lib.history_load_guard): a check
+# on each Airbyte-loaded raw table a live raw history snapshot reads. The
 # sync_and_stage_* jobs select the checks on their group's assets, so it runs
 # after every scheduled sync, and the snapshot waits for it to pass.
+#
+# A table the inventory gives another loader is left out even when a paused
+# Airbyte connection still declares it. Its loads come from data_loading, which
+# would never run the check, so the snapshot would wait on it forever.
 history_load_guard_checks = build_history_load_guard_checks(
     guarded_tables(get_manifest_and_translator_from_dbt_assets([full_dbt_project])[0]),
     {
         key: group
         for assets_def in airbyte_assets
         for key, group in assets_def.group_names_by_key.items()
+        if key.path[-1] not in non_airbyte_tables
     },
 )
 
