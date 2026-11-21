@@ -38,6 +38,7 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
+from lakehouse.assets.history_load_guard import build_history_load_guard_checks
 from lakehouse.assets.iceberg_maintenance import (
     WAREHOUSE_ENV,
     iceberg_dbt_layer_maintenance,
@@ -102,6 +103,7 @@ from lakehouse.lib.dbt_environment import (
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
+from lakehouse.lib.history_load_guard import guarded_tables
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -694,10 +696,10 @@ AWAITING_RAW_TABLE = {
     "stg__edxorg__discovery__api__programs",
 }
 
+non_airbyte_tables = non_airbyte_raw_tables(load_units(INVENTORY_DIR))
 non_airbyte_staging_models = sorted(
     staging_models_reading(
-        json.loads(dbt_project.manifest_path.read_text()),
-        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+        json.loads(dbt_project.manifest_path.read_text()), non_airbyte_tables
     )
     - {POSTHOG_STAGING_MODEL}
     - AWAITING_RAW_TABLE
@@ -844,6 +846,24 @@ openmetadata_table_fqns = table_fqns_by_asset_key(
     asset_keys=set(full_dbt_project.keys),
     service=TRINO_SERVICE,
 )
+# The load-side raw history guard (lakehouse.lib.history_load_guard): a check
+# on each Airbyte-loaded raw table a live raw history snapshot reads. The
+# sync_and_stage_* jobs select the checks on their group's assets, so it runs
+# after every scheduled sync, and the snapshot waits for it to pass.
+#
+# A table the inventory gives another loader is left out even when a paused
+# Airbyte connection still declares it. Its loads come from data_loading, which
+# would never run the check, so the snapshot would wait on it forever.
+history_load_guard_checks = build_history_load_guard_checks(
+    guarded_tables(get_manifest_and_translator_from_dbt_assets([full_dbt_project])[0]),
+    {
+        key: group
+        for assets_def in airbyte_assets
+        for key, group in assets_def.group_names_by_key.items()
+        if key.path[-1] not in non_airbyte_tables
+    },
+)
+
 asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
     openmetadata_table_fqns
 )
@@ -879,6 +899,8 @@ defs = Definitions(
         # the Sentry hook the assets get. AssetChecksDefinition subclasses
         # AssetsDefinition, so with_failure_hooks attaches it.
         *with_failure_hooks(qa_mirror_checks),
+        # Runs dbt, so a failed invocation raises and needs the hook too.
+        *with_failure_hooks(history_load_guard_checks),
     ],
     resources=resources_dict,
     executor=executor_for_environment(

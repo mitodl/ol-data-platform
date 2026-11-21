@@ -1,4 +1,4 @@
-from dagster import AssetKey, AssetSelection, AutomationCondition
+from dagster import AssetCheckKey, AssetKey, AssetSelection, AutomationCondition
 
 # Midnight UTC. See dbt_upstream_or_code_changes for why the wait spans two ticks.
 PENDING_PARENT_EXPIRY_CRON = "0 0 * * *"
@@ -116,6 +116,7 @@ def dbt_upstream_or_code_changes() -> AutomationCondition:
 
 def keyset_snapshot_upstream_or_code_changes(
     keyset_key: AssetKey,
+    load_check: AssetCheckKey,
 ) -> AutomationCondition:
     """``dbt_upstream_or_code_changes`` for a raw history snapshot with a keyset.
 
@@ -152,7 +153,11 @@ def keyset_snapshot_upstream_or_code_changes(
     for the raw change on the same tick the keyset is, and again once the
     keyset lands.
 
+    The raw table's load guard holds it as it holds every raw history snapshot
+    (``raw_load_check_passed``).
+
     :param keyset_key: the asset key of the snapshot's keyset table.
+    :param load_check: the guard check on the snapshot's raw table.
     :returns: the condition for the snapshot's asset.
     :rtype: AutomationCondition
     """
@@ -176,7 +181,37 @@ def keyset_snapshot_upstream_or_code_changes(
             has_upstream_changes=keyset_changed | raw_changed_while_stale,
         )
         & ~_any_deps_code_change_pending()
+        & raw_load_check_passed(load_check)
     ).with_label("keyset_snapshot_upstream_or_code_changes")
+
+
+def raw_load_check_passed(load_check: AssetCheckKey) -> AutomationCondition:
+    """Hold a raw history snapshot until its raw table's load has passed its guard.
+
+    True while ``load_check`` has passed against its raw table's latest
+    materialization, so a short load holds the snapshot, and the snapshot's
+    latched upstream change starts it once a later load passes. Before the
+    check has run on a new load the snapshot waits too.
+
+    Named rather than ``all_deps_blocking_checks_passed``: a blocking check
+    that fails at ERROR severity also stops the raw table's staging model in
+    the load's run, and a multi-asset check fails as one step, so one short
+    table would hold back staging for its whole connection. No other check on
+    the parents (e.g. a freshness check) holds the snapshot. A key with no
+    check behind it (a raw table loaded where no guard is defined) passes.
+
+    Appended as the last operand of the snapshot's ``&``, which keeps every
+    other operand's index and so its cursor.
+
+    :param load_check: the guard check on the snapshot's raw table.
+    :returns: the gate condition.
+    :rtype: AutomationCondition
+    """
+    return AutomationCondition.all_deps_match(
+        AutomationCondition.all_checks_match(AutomationCondition.check_passed()).allow(
+            AssetSelection.checks(load_check)
+        )
+    ).with_label("raw_load_check_passed")
 
 
 def _own_code_change() -> AutomationCondition:
