@@ -65,14 +65,16 @@
     regexp_extract({{ json_col }}, '"{{ key }}"\\s*:\\s*(\\{(?:"(?:[^"\\\\]|\\\\.)*"|[^"{}]|\\{(?:"(?:[^"\\\\]|\\\\.)*"|[^"{}])*\\})*\\})', 1)
   {%- endset -%}
   {%- set parsed = json_extract_json(json_col, "'$." ~ key ~ "'") -%}
-  {# Use the compacted source text when it is the top-level value (the regexp can match the
-     same key nested earlier) and has no \u or \/ escapes, which Trino decodes. Otherwise
-     (those escapes, deeper nesting, or a top-level array) fall back to the parsed value:
-     same content, but StarRocks sorts object keys, so it can differ from Trino in key
-     order. #}
+  {# Use the compacted source text when it equals the top-level value and has no \u or \/
+     escapes, which Trino decodes (an escaped backslash before u or /, e.g. \\underline, is
+     not one). The regexp takes the key's first occurrence, so a nested object under the
+     same key that equals the top-level one would pass with its own key order; none of a
+     week of production events or studentmodule states repeats the key. Otherwise (those
+     escapes, deeper nesting, or a top-level array) fall back to the parsed value: same
+     content, but StarRocks sorts object keys, so it can differ from Trino in key order. #}
   case
     when {{ raw }} <> ''
-      and not regexp({{ raw }}, '\\\\[u/]')
+      and not regexp({{ raw }}, '(^|[^\\\\])(\\\\\\\\)*\\\\[u/]')
       and json_string(parse_json({{ raw }})) = json_string({{ parsed }})
       then {{ starrocks_compact_json_text(raw) }}
     when substr(json_string({{ parsed }}), 1, 1) in ('{', '[')
