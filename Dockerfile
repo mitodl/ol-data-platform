@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:debian-slim
+FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:debian-slim@sha256:9b7790faef7a3f2b9ba8f2f7c48b959c1359fe2bd51c44804b6ca61766fbacdf
 
 ENV UV_LINK_MODE=copy
 # Docker run launcher example
