@@ -140,8 +140,14 @@ services:
       secrets:
       - dbt_trino_username
       - dbt_trino_password
-    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4003",
-      "--module-name", "lakehouse.definitions"]
+    # The src/ol_dbt mount below hides the image's baked manifests, and as qa
+    # the location loads target/starrocks_qa_lake/manifest.json, so parse it
+    # from the mounted project first. parse opens no connection, so the
+    # StarRocks login can be a dummy, as in the Dockerfile.
+    entrypoint: ["sh", "-c", "(cd /opt/dbt && dbt deps --quiet && DBT_STARROCKS_USERNAME=build\
+        \ DBT_STARROCKS_PASSWORD=build DBT_DATA_LAKE_ENV=qa dbt parse --quiet --target\
+        \ starrocks_qa_lake --target-path target/starrocks_qa_lake) && exec dagster\
+        \ code-server start -h 0.0.0.0 -p 4003 --module-name lakehouse.definitions"]
     ports:
     - "4003:4003"
     environment:
@@ -162,10 +168,6 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
-    # Hides the image's baked manifests. As qa, the location loads
-    # target/starrocks_qa_lake/manifest.json, so parse it on the host first:
-    # `dbt parse --target starrocks_qa_lake --target-path target/starrocks_qa_lake`
-    # in src/ol_dbt (DBT_STARROCKS_USERNAME/PASSWORD may be dummies).
     - ./src/ol_dbt:/opt/dbt
 
   # Code location: delivery
