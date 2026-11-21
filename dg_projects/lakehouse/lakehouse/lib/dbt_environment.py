@@ -61,14 +61,8 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # ol_warehouse_qa_<layer> schemas in ol_data_lake_qa, through the QA cluster's
 # in-cluster FE with a Vault login per invocation (see dbt_credentials in
 # assets/lakehouse/dbt.py). Nothing builds QA on Trino any more, so the two
-# engines never write the same QA tables. The image's baked manifest is still
-# compiled against Trino production, so in QA the asset graph and what the
-# build runs can disagree on whatever target.type decides. Node-wise that is
-# only the cohort3 unit test (excluded from builds anyway); the b2b models are
-# disabled on both targets. Config differs more: e.g. the graph's metadata has
-# the Trino-only +properties and lacks the StarRocks-only partition_by on
-# tfact_problem_events, while the build does the opposite. Asset keys are the
-# same.
+# engines never write the same QA tables. The asset graph reads the manifest
+# the image bakes for this target (BAKED_MANIFEST_TARGET_PATHS).
 #
 # "ci" is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
@@ -249,6 +243,45 @@ DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_TARGET",
     what="dbt target",
 )
+
+# Where the image bakes the main project's manifest for each deployed target
+# (dg_projects/lakehouse/Dockerfile). The asset graph comes from it, and so do
+# dagster-dbt's per-event lookups during a build: each test or model the build
+# reports is looked up by unique_id, and each row count queries the node's
+# relation_name. A manifest parsed for another target breaks both. The QA
+# build on starrocks_qa_lake against the Trino production manifest failed on
+# a test whose id differs between adapters (a `quote: true` column's
+# test hashes the quoted name, "key" vs `key`), and its row counts queried
+# "ol_data_lake_production"."ol_warehouse_production_staging"... in Trino's
+# quoting.
+BAKED_MANIFEST_TARGET_PATHS: Mapping[str, str] = {
+    "production": "target",
+    "starrocks_qa_lake": "target/starrocks_qa_lake",
+}
+
+
+def dbt_manifest_target_path(target: str, dagster_env: str) -> str:
+    """Return the target path holding the manifest parsed for *target*.
+
+    dev parses its own manifest at load (prepare_if_dev), so it takes dbt's
+    default path whatever the target.
+
+    :raises KeyError: when a deployed environment's target has no baked
+        manifest, rather than loading one parsed for some other target.
+    """
+    if dagster_env == "dev":
+        return "target"
+    try:
+        return BAKED_MANIFEST_TARGET_PATHS[target]
+    except KeyError:
+        msg = (
+            f"The image bakes no manifest for dbt target {target!r} "
+            f"(DAGSTER_ENVIRONMENT={dagster_env!r}; baked: "
+            f"{sorted(BAKED_MANIFEST_TARGET_PATHS)}). Add a parse step for it to "
+            f"dg_projects/lakehouse/Dockerfile and an entry here."
+        )
+        raise KeyError(msg) from None
+
 
 DBT_PROFILE_NAME = "open_learning"
 
