@@ -34,6 +34,7 @@ from lakehouse.lib.dbt_environment import (
     DBT_TARGET,
     SKIP_UNIT_TESTS_ARGS,
     STARROCKS_IS_LOCAL,
+    dbt_manifest_target_path,
     dbt_target_reads_vault_login,
 )
 from lakehouse.lib.keyset_snapshots import (
@@ -65,7 +66,11 @@ OPENMETADATA_DOMAINS_PATH = DBT_REPO_DIR / "openmetadata_domains.yml"
 # ol-infrastructure's om-ingest-domains job reads this name.
 OPENMETADATA_DOMAIN_RULES_ARTIFACT = "openmetadata_domains.json"
 
-dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
+dbt_project = DbtProject(
+    project_dir=DBT_REPO_DIR,
+    target=DBT_TARGET,
+    target_path=dbt_manifest_target_path(DBT_TARGET, DAGSTER_ENV),
+)
 dbt_project.prepare_if_dev()
 
 # A deployed StarRocks target has no static login in the pod: every dbt
