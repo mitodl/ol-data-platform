@@ -30,10 +30,10 @@ GitHub (mitodl/open-video-data/youtube/*.yaml)
         → raw__youtube__api__playlists   (one row per ingested playlist)
         → raw__youtube__api__playlist_items (one row per playlist + video)
         → raw__youtube__api__videos      (one row per video)
-    → youtube-transcript-api
-        → raw__youtube__api__transcripts (one row per transcript of a video, keyed by
-  video_id, language_code and is_generated; a video whose transcripts could not be
-  fetched has one row with no language and the reason in fetch_status)
+    → YouTube Data API v3 captions (captions.list / captions.download, OAuth)
+        → raw__youtube__api__transcripts (one row per caption track of a video, keyed
+  by video_id, language_code and is_generated, and one status row per video with
+  no language saying how its listing went; only videos OCW has no transcript for)
 ```
 
 All tables use `write_disposition="merge"` keyed on the entity id (playlist
@@ -60,27 +60,56 @@ only through `all` takes the channel's.
   fails the run. Skipping it would load a short channel set that the dbt
   integrations models read as complete.
 
-- The Data API is called directly over HTTP with `requests` (API-key auth via
-  the `key` query param), not the `google-api-python-client` SDK, to stay
-  consistent with the other ol_dlt sources.
-- Transcripts are **not** part of the Data API; they are listed and fetched
-  separately with `youtube-transcript-api` 1.x (`list()`, then each track's
-  `fetch()`). The `transcript_tracks` source option picks the tracks:
-  `native` (default) fetches every uploaded track and the auto-generated track
-  in the video's language (from a `videos.list` snippet call), `all` every
-  track listed. Each video gets a status row (empty `language_code`) with
-  `fetch_status`, any errors and `listed_tracks`; a disabled, unavailable or
-  failed video is a status row, not a raised error. Once YouTube blocks the run
-  (`RequestBlocked`), the remaining videos are marked `blocked` without another
-  request. Production's requests are blocked (IpBlocked) as of 2026-11-20.
+- The Data API is called directly over HTTP with `requests`, not the
+  `google-api-python-client` SDK, to stay consistent with the other ol_dlt
+  sources. Channels, playlists and videos are public data, read with the API
+  key (the `key` query param).
+- Transcripts are caption tracks. `captions.list` and `captions.download` need
+  OAuth (scope `youtube.force-ssl`), and a download "requires the user to have
+  permission to edit the video", so they are read as a Google account the
+  channels add as a manager. A service account cannot do it: "YouTube does not
+  support Service Accounts" (the `youtubeSignupRequired` entry of the [Data API
+  errors](https://developers.google.com/youtube/v3/docs/errors)). A video on a
+  channel the account does not manage gets `fetch_status` `forbidden`.
+- `captions.list` costs 50 quota units and `captions.download` 200, so a run
+  spends at most `caption_quota_units` (default 9,000, under the 10,000 a day
+  a project gets by default) and covers a few dozen videos. It skips videos OCW
+  has transcript text for (`int__ocw__content_files`, read from the dbt build),
+  then lists videos never listed, those with uploaded captions
+  (`contentDetails.caption`) first, then those listed more than 90 days ago.
+  The resource state keeps when each video was listed and the `lastUpdated` of
+  each track downloaded, so an unchanged track is not downloaded again. When
+  the quota runs out (`quotaExceeded`), the run stops.
+- The `transcript_tracks` source option picks the tracks: `native` (default)
+  downloads every uploaded track and the auto-generated (ASR) track in the
+  video's language (from the `videos.list` snippet), `all` every serving,
+  non-draft track. Tracks are downloaded as SRT; `segments` holds the cues and
+  `transcript` their text. Each video listed gets a status row (empty
+  `language_code`) with `fetch_status` (`fetched`, `none`, `unavailable`,
+  `forbidden`, `failed`), any errors and `listed_tracks`. A failed download
+  writes no row of its own, so the last good text stays.
 
 ## Configuration
 
-- **Secret:** YouTube Data API v3 key, resolved lazily at run time. The `qa` and
-  `production` profiles read `developer_key` from Vault at
+- **API key:** YouTube Data API v3 key, resolved lazily at run time. The `qa`
+  and `production` profiles read `developer_key` from Vault at
   `secret-data/pipelines/youtube` (written by the dagster stack in
   ol-infrastructure from MIT Learn's SOPS secrets). Other profiles read
   `YOUTUBE_DEVELOPER_KEY` from the environment.
+- **Caption credentials:** an OAuth client id and secret and a refresh token,
+  as `captions_client_id`, `captions_client_secret` and
+  `captions_refresh_token` in the same Vault secret, or
+  `YOUTUBE_CAPTIONS_CLIENT_ID`, `YOUTUBE_CAPTIONS_CLIENT_SECRET` and
+  `YOUTUBE_CAPTIONS_REFRESH_TOKEN` outside the deployed profiles. Without them
+  the transcripts table is not loaded. The OAuth client is made by hand in
+  `mitol01` (Google has no API for OAuth clients; see ol-infrastructure's
+  `src/ol_infrastructure/infrastructure/gcp/README.md`). An External consent
+  screen in Testing status issues refresh tokens that expire in 7 days, so the
+  client's consent screen is Internal (an mit.edu account) or published. The
+  refresh token comes from one consent by the managing account with
+  `access_type=offline` (Google's [installed app
+  flow](https://developers.google.com/youtube/v3/guides/auth/installed-apps)),
+  and stops working if it goes unused for six months or the account revokes it.
 - **Destination:** built by `ol_dlt.config.pipeline_for("youtube")` from the
   active `DLT_PROFILE` (no per-source `.dlt/config.toml` block).
 

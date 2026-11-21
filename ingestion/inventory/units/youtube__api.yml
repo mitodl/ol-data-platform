@@ -43,11 +43,10 @@ tables:
   primary_key:
   - - video_id
   modeled: true
-# Upserted by key: a transcript stays until it is fetched again, and each video
-# has one status row (empty language_code) for the latest attempt. YouTube
-# refuses production's transcript requests (IpBlocked), so in production it
-# holds mostly blocked status rows until the official captions API replaces the
-# scraper.
+# Upserted by key: a caption track stays until it is downloaded again, and each
+# video has one status row (empty language_code) for its latest listing. Filled
+# a few dozen videos a day within the captions quota, and only for videos OCW
+# has no transcript text for, so it never holds every video.
 - name: raw__youtube__api__transcripts
   raw_table: raw__youtube__api__transcripts
   sync_mode: incremental_deduped_history
