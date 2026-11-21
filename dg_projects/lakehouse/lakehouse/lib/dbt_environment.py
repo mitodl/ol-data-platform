@@ -250,7 +250,7 @@ DBT_TARGET = resolve_for_environment(
 # reports is looked up by unique_id, and each row count queries the node's
 # relation_name. A manifest parsed for another target breaks both. The QA
 # build on starrocks_qa_lake against the Trino production manifest failed on
-# the first test whose id differs between adapters (a `quote: true` column's
+# a test whose id differs between adapters (a `quote: true` column's
 # test hashes the quoted name, "key" vs `key`), and its row counts queried
 # "ol_data_lake_production"."ol_warehouse_production_staging"... in Trino's
 # quoting.

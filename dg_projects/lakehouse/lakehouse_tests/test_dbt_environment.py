@@ -345,8 +345,8 @@ IMAGE_ENVIRONMENTS = ("qa", "production")
 def test_every_deployed_target_has_a_baked_manifest(environment):
     """The asset graph must come from a manifest parsed for the target it builds.
 
-    QA's first StarRocks build failed on a test id that only the Trino manifest
-    had a different hash for.
+    QA's first StarRocks build failed on a test whose id hashes differently on
+    Trino.
     """
     assert dbt_manifest_target_path(DBT_TARGET_MAP[environment], environment)
 

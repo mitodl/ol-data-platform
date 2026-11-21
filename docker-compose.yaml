@@ -162,6 +162,10 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
+    # Hides the image's baked manifests. As qa, the location loads
+    # target/starrocks_qa_lake/manifest.json, so parse it on the host first:
+    # `dbt parse --target starrocks_qa_lake --target-path target/starrocks_qa_lake`
+    # in src/ol_dbt (DBT_STARROCKS_USERNAME/PASSWORD may be dummies).
     - ./src/ol_dbt:/opt/dbt
 
   # Code location: delivery
