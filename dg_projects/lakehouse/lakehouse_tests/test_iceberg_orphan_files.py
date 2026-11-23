@@ -362,8 +362,10 @@ def _dbt_table(database: str, table: str, eligible_bytes: int) -> TableOrphanFil
     )
 
 
-def test_dbt_layer_pass_deletes_nowhere_yet():
-    assert frozenset() == module.ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS
+def test_dbt_layer_pass_deletes_only_in_qa():
+    assert (
+        frozenset({"qa"}) == module.ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS
+    )
 
 
 def test_dbt_layer_pass_covers_the_dbt_layers_of_its_own_warehouse():
@@ -406,6 +408,9 @@ def test_dbt_layers_match_the_dbt_project_schemas():
 def test_dbt_layer_delete_is_refused_where_it_is_not_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        module, "ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS", frozenset()
+    )
     calls = _by_database(monkeypatch, {})
 
     with pytest.raises(ValueError, match="Deletion is not enabled"):

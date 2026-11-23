@@ -523,8 +523,8 @@ iceberg_raw_orphan_files_schedule = ScheduleDefinition(
 
 # The same pass over the dbt-layer databases, after the raw one (its production
 # delete runs took up to two hours) and that night's 02:00 dbt-layer snapshot
-# expiry. Reports only until an environment is named in
-# ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS.
+# expiry. Deletes only in ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS and
+# reports elsewhere.
 iceberg_dbt_layer_orphan_files_schedule = ScheduleDefinition(
     name="iceberg_dbt_layer_orphan_files_weekly",
     job=define_asset_job(
