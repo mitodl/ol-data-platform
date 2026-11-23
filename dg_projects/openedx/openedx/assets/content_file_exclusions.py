@@ -29,6 +29,50 @@ url_name, not Learn's jump URL, whose LMS root dbt adds. It is kept as close to
 the original as the setting allows, so a change there can be diffed across; the
 differences are noted where they occur.
 
+Which rules are the platform's and which are Learn's. A rule is platform logic
+when it states a fact about the source that holds whatever the consumer, and
+Learn-parity output when it serves only Learn's loaders, keys or UI. Platform
+facts land as columns every model may read and none is dropped on their
+account here; excluded and exclusion_reason stay Learn's verdict (first rule
+wins, as Learn's set gives no reason), read only by integrations__learn__*.
+
+- staff_only (a visible_to_staff_only subtree, less what a reachable block also
+  links): platform. No learner can reach it. learner_visibility = staff_only.
+- unreachable_tab (a tab page hidden, staff-only or missing from the policy's
+  tab list): platform. learner_visibility = unreachable_tab.
+- about_page (about/ files the deployment doesn't serve: all but the
+  description pages on OLL, all of them elsewhere): platform, as a fact about
+  the deployment, not the text. learner_visibility = about_page_not_served. A
+  consumer that wants the course description anyway (the courseware context
+  scope) reads the page regardless.
+- non_content, course_settings, legacy_announcements: platform. The asset
+  manifests (policies/assets.json, assets/assets.xml) list every file rather
+  than describe one, updates.items.json is mostly deleted announcements (its
+  live ones are still read for references), policies/ is configuration, and
+  Studio empties info/updates.html on save, so what is left there is stale.
+  non_content_kind = asset_manifest, announcements, course_settings or
+  legacy_announcements.
+- unreferenced_static (nothing a learner reaches links the static file):
+  a relevance judgment, not a fact. The file is still served by URL, and an
+  asset inventory or an analysis of what a course ships wants it. So the
+  platform flags it (static_reference = referenced or unreferenced) and leaves
+  dropping it to the consumer: Learn's view drops it, the courseware materials
+  scope drops it too.
+- release_dates: platform. When a learner of an instructor-paced run can first
+  reach the file. release_date.
+- VALID_TEXT_FILE_TYPES and the draft-folder skip in text_files, and key():
+  Learn's ingest list and ContentFile key, so Learn-parity. Every file gets a
+  row whatever its suffix; the platform's own list of readable types is
+  ol_file_types, and the platform keys a file by its path.
+- units(): Learn-parity output only (course_units, read by
+  integrations__learn__content_file_units alone). Unit kinds, collapsing
+  introduction and summary sequentials into one context unit, relation values
+  and the title fallback are Learn's model of a run. The platform's own course
+  structure is course_xml_blocks. The context-sequential title test matches
+  English titles only (on 2026-11-10, 270 of 288 translated UAI runs kept
+  "module overview" and "module summary" sequentials as lessons); kept as
+  Learn has it, for parity, and reported to Learn.
+
 Data flow:
     openedx/raw_data/course_xml                        (tar.gz, per course run)
         -> extract_course_file_exclusions              (this asset)
@@ -48,7 +92,7 @@ import posixpath
 import re
 import tarfile
 from bisect import bisect_left, bisect_right
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -116,6 +160,39 @@ NON_CONTENT_OLX_FILES = (
     "assets/assets.xml",
     "info/updates.items.json",
 )
+
+
+class LearnerVisibility(StrEnum):
+    """Whether a learner of the run can reach a file, and if not, why"""
+
+    VISIBLE = "visible"
+    STAFF_ONLY = "staff_only"
+    UNREACHABLE_TAB = "unreachable_tab"
+    ABOUT_PAGE_NOT_SERVED = "about_page_not_served"
+
+
+class StaticReference(StrEnum):
+    """Whether text a learner reaches links a static/ file"""
+
+    REFERENCED = "referenced"
+    UNREFERENCED = "unreferenced"
+
+
+class NonContentKind(StrEnum):
+    """What a file that is not course content is instead"""
+
+    ASSET_MANIFEST = "asset_manifest"
+    ANNOUNCEMENTS = "announcements"
+    COURSE_SETTINGS = "course_settings"
+    LEGACY_ANNOUNCEMENTS = "legacy_announcements"
+
+
+# The kind of each of NON_CONTENT_OLX_FILES
+NON_CONTENT_OLX_FILE_KINDS = {
+    "policies/assets.json": NonContentKind.ASSET_MANIFEST,
+    "assets/assets.xml": NonContentKind.ASSET_MANIFEST,
+    "info/updates.items.json": NonContentKind.ANNOUNCEMENTS,
+}
 
 # A legacy transcript is named for its video's id rather than for anything the
 # course text contains, so the id is the only link back to the block using it.
@@ -453,16 +530,9 @@ class OlxArchive:
         _exclude(excluded, self._staff_only, "staff_only")
         _exclude(excluded, self._unreachable_tabs, "unreachable_tab")
         _exclude(excluded, self._hidden_about_pages, "about_page")
-        _exclude(
-            excluded,
-            (
-                self.root / name
-                for name in NON_CONTENT_OLX_FILES
-                if (self.root / name).is_file()
-            ),
-            "non_content",
-        )
-        referenced, unreferenced = self._static_references(set(excluded))
+        _exclude(excluded, self._non_content_files, "non_content")
+        # Learn's self._static_references(excluded): the four rules above
+        referenced, unreferenced = self._static_reference_split
         _exclude(excluded, unreferenced, "unreferenced_static")
         # A hidden video's transcript may also be a visible video's, so put
         # back anything a reachable block still links.
@@ -477,6 +547,75 @@ class OlxArchive:
             excluded, self.root.glob("info/**/updates.html"), "legacy_announcements"
         )
         return excluded
+
+    @cached_property
+    def learner_visibility(self) -> dict[Path, LearnerVisibility]:
+        """
+        Why no learner can reach each file that none can; a file absent is
+        visible. Empty for a non-OLX tree, which has no rules to apply.
+
+        The platform's reading of Learn's unreachable rules: every rule that
+        holds is considered, not only the first, and a static file a reachable
+        block links stays visible, as Learn puts it back.
+        """
+        if not self.is_olx:
+            return {}
+        referenced, _ = self._static_reference_split
+        hidden: dict[Path, LearnerVisibility] = {}
+        for paths, why in (
+            (self._staff_only, LearnerVisibility.STAFF_ONLY),
+            (self._unreachable_tabs, LearnerVisibility.UNREACHABLE_TAB),
+            (self._hidden_about_pages, LearnerVisibility.ABOUT_PAGE_NOT_SERVED),
+        ):
+            for path in paths:
+                if path not in referenced:
+                    hidden.setdefault(path, why)
+        return hidden
+
+    @cached_property
+    def static_references(self) -> dict[Path, StaticReference]:
+        """Whether text a learner reaches links each static/ file"""
+        if not self.is_olx:
+            return {}
+        referenced, unreferenced = self._static_reference_split
+        return {
+            **dict.fromkeys(unreferenced, StaticReference.UNREFERENCED),
+            **dict.fromkeys(referenced, StaticReference.REFERENCED),
+        }
+
+    @cached_property
+    def non_content_kinds(self) -> dict[Path, NonContentKind]:
+        """What each file that is not course content is instead"""
+        if not self.is_olx:
+            return {}
+        kinds = {
+            self.root / name: NON_CONTENT_OLX_FILE_KINDS[name]
+            for name in NON_CONTENT_OLX_FILES
+            if (self.root / name).is_file()
+        }
+        for path in self.root.glob("policies/**/*"):
+            kinds.setdefault(path, NonContentKind.COURSE_SETTINGS)
+        for path in self.root.glob("info/**/updates.html"):
+            kinds.setdefault(path, NonContentKind.LEGACY_ANNOUNCEMENTS)
+        return kinds
+
+    @cached_property
+    def _non_content_files(self) -> set[Path]:
+        """NON_CONTENT_OLX_FILES the tree has"""
+        return {
+            self.root / name
+            for name in NON_CONTENT_OLX_FILES
+            if (self.root / name).is_file()
+        }
+
+    @cached_property
+    def _static_reference_split(self) -> tuple[set[Path], set[Path]]:
+        """
+        static/ files split into (referenced, unreferenced) by text outside the
+        unreachable pages and the non-content files, scanned once for
+        excluded, learner_visibility and static_references
+        """
+        return self._static_references(self._unreachable | self._non_content_files)
 
     @cached_property
     def release_dates(self) -> dict[Path, datetime]:
@@ -1355,6 +1494,11 @@ def build_file_rows(
     The archive's etl_source is the row's source_system. content_file_key is the
     file's ContentFile key (OlxArchive.key), which dbt can't derive from the path
     for a block stored below its type folder (a url_name with a colon).
+
+    excluded, exclusion_reason and content_file_key are Learn's; the other
+    columns are the platform's (see the module docstring). learner_visibility
+    is null for a tree that isn't OLX, static_reference outside static/, and
+    non_content_kind for course content.
     """
     excluded = archive.excluded
     release_dates = archive.release_dates
@@ -1363,6 +1507,11 @@ def build_file_rows(
         if not path.is_file():
             continue
         release = release_dates.get(path)
+        visibility = (
+            archive.learner_visibility.get(path, LearnerVisibility.VISIBLE)
+            if archive.is_olx
+            else None
+        )
         rows.append(
             {
                 "course_id": course_id,
@@ -1373,6 +1522,9 @@ def build_file_rows(
                 "excluded": path in excluded,
                 "exclusion_reason": excluded.get(path),
                 "release_date": format_release_date(release) if release else None,
+                "learner_visibility": visibility,
+                "static_reference": archive.static_references.get(path),
+                "non_content_kind": archive.non_content_kinds.get(path),
             }
         )
     return rows
@@ -1432,8 +1584,10 @@ def build_unit_rows(
             description=(
                 "Every file in a course export, flagged with whether MIT Learn "
                 "leaves it out of its ContentFiles (staff-only, asset manifests, "
-                "unreferenced static files), with the release date Learn gives it. "
-                "One JSONL row per file."
+                "unreferenced static files), with the release date Learn gives it, "
+                "and the platform's own flags: whether a learner can reach it, "
+                "whether learner text links a static file, and what a non-content "
+                "file is. One JSONL row per file."
             ),
         ),
         "course_units": AssetOut(
@@ -1513,6 +1667,15 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
                             {row["exclusion_reason"] for row in excluded}
                         )
                     }
+                ),
+                "learner_visibility_counts": json.dumps(
+                    dict(
+                        sorted(
+                            Counter(
+                                str(row["learner_visibility"]) for row in rows
+                            ).items()
+                        )
+                    )
                 ),
             },
         )
