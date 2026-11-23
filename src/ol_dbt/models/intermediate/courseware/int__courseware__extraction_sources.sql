@@ -19,9 +19,13 @@
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
-    randomized variants of one question. Files are dropped by the export's own exclusion
-    rules, except about_page: Learn leaves the about pages out of search, but the
-    description and prerequisites stated there are what the context scope is for. Each
+    randomized variants of one question. Static documents are dropped by the platform's
+    flags on the export (stg__openedx__s3__course_file_exclusions): no learner can reach
+    them (staff-only, an unreachable tab), no text a learner reaches links them, or they
+    are not course content. Exclusion rows written before those flags fall back to Learn's
+    exclusion reasons, less about_page. About pages are read either way: Learn leaves
+    them out of search, but the description and prerequisites stated there are what the
+    context scope is for. Each
     about page is one field of the about page, so its text is prefixed with the field's
     name ("Prerequisites" then "None"); bare, "None" says nothing. The description pages
     are left as they are, since the course header already gives them as DESCRIPTION.
@@ -83,6 +87,7 @@
 #}
 {% set courseruns = var('courseware_courseruns', []) %}
 {% set ocw_courses = var('courseware_ocw_courses', []) %}
+{# Learn's exclusion reasons honored for exclusion rows written before the platform flags #}
 {% set honored_exclusions = ['unreferenced_static', 'unreachable_tab', 'legacy_announcements', 'non_content', 'course_settings'] %}
 {% set document_extensions = ['.pdf', '.pptx', '.ppt', '.docx', '.doc', '.txt', '.md'] %}
 {% set context_sequential_titles = ['module overview and learning goals'] %}
@@ -157,9 +162,17 @@ with content as (
         , content_file_path
     from {{ ref('stg__openedx__s3__course_file_exclusions') }}
     where
-        content_file_is_excluded
-        and content_file_exclusion_reason in ('{{ honored_exclusions | join("', '") }}')
-        and courserun_readable_id in {{ courserun_filter }}
+        courserun_readable_id in {{ courserun_filter }}
+        and case
+            when content_file_learner_visibility is not null
+                then
+                    content_file_learner_visibility in ('staff_only', 'unreachable_tab')
+                    or coalesce(content_file_static_reference = 'unreferenced', false)
+                    or content_file_non_content_kind is not null
+            else
+                content_file_is_excluded
+                and content_file_exclusion_reason in ('{{ honored_exclusions | join("', '") }}')
+        end
 )
 
 , documents as (

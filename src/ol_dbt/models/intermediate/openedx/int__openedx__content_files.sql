@@ -21,6 +21,12 @@
   export) is_exclusion_checked is false and the two are null, and so are
   release_date and the key the exclusions asset gives.
 
+  is_excluded and exclusion_reason are Learn's verdict, for the Learn views.
+  learner_visibility, static_reference and non_content_kind are the platform's
+  own facts from the same rules, each applied on its own rather than first
+  rule wins, for every other consumer. They are null where is_excluded is, and
+  for a run whose exclusion rows predate them.
+
   release_date is the date Learn's OlxArchive.release_dates gives the file, from
   the OLX start dates on its path down from the course, as the exclusions asset
   computes it.
@@ -183,6 +189,9 @@ with blocks as (
                 then coalesce(file_exclusions.content_file_is_excluded, false)
         end as is_excluded
         , file_exclusions.content_file_exclusion_reason as exclusion_reason
+        , file_exclusions.content_file_learner_visibility as learner_visibility
+        , file_exclusions.content_file_static_reference as static_reference
+        , file_exclusions.content_file_non_content_kind as non_content_kind
         , file_exclusions.content_file_release_date as release_date
         , file_exclusions.content_file_key as exclusions_key
     from candidate_files
@@ -319,6 +328,9 @@ select
     , module_files.is_exclusion_checked
     , module_files.is_excluded
     , module_files.exclusion_reason
+    , module_files.learner_visibility
+    , module_files.static_reference
+    , module_files.non_content_kind
 from module_files
 left join video_transcript_map
     on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id

@@ -261,6 +261,33 @@ models:
       keys a block stored below its type folder (url_name a:b in <type>/a/b.xml) by
       its url_name; null for a course whose newest file predates the asset keying
       files
+  - name: content_file_learner_visibility
+    description: str, the platform's reading of whether a learner of the run can reach
+      the file, from the same rules as Learn's but each applied on its own (visible,
+      staff_only, unreachable_tab, about_page_not_served). A static file a reachable
+      block links is visible. Null for an export without course.xml and for a course
+      whose newest file predates the asset setting it
+    tests:
+    - accepted_values:
+        arguments:
+          values: [visible, staff_only, unreachable_tab, about_page_not_served]
+  - name: content_file_static_reference
+    description: str, for a file under static/, whether text a learner reaches links
+      it (referenced, unreferenced). An unreferenced file is still served by URL,
+      so this is a relevance flag, not visibility. Null outside static/ and for a
+      course whose newest file predates the asset setting it
+    tests:
+    - accepted_values:
+        arguments:
+          values: [referenced, unreferenced]
+  - name: content_file_non_content_kind
+    description: str, what a file that is not course content is instead (asset_manifest,
+      announcements, course_settings, legacy_announcements); null for course content
+      and for a course whose newest file predates the asset setting it
+    tests:
+    - accepted_values:
+        arguments:
+          values: [asset_manifest, announcements, course_settings, legacy_announcements]
   - name: content_file_checked_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp

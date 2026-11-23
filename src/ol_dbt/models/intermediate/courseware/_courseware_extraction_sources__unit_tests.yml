@@ -214,3 +214,69 @@ unit_tests:
     vars:
       courseware_courseruns:
       - "course-v1:X+Y+1T2026"
+
+- name: test_int__courseware__extraction_sources_drops_documents_by_the_platform_flags
+  description: >
+    A static document is dropped when the platform's flags say no learner can reach
+    it, no learner text links it, or it is not course content. Each rule counts on
+    its own, so a staff-only video's own transcript is dropped though Learn's first
+    reason (staff_only) was not one courseware honors. Exclusion rows written before
+    the flags fall back to Learn's reasons, less about_page and staff_only.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows:
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/old_unused.pdf, content_file_is_excluded: true, content_file_exclusion_reason: unreferenced_static}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/old_staff.txt, content_file_is_excluded: true, content_file_exclusion_reason: staff_only}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_unused.pdf, content_file_is_excluded: true, content_file_exclusion_reason: unreferenced_static,
+      content_file_learner_visibility: visible, content_file_static_reference: unreferenced}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_staff.txt, content_file_is_excluded: true, content_file_exclusion_reason: staff_only,
+      content_file_learner_visibility: staff_only, content_file_static_reference: unreferenced}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_kept.pdf, content_file_is_excluded: false, content_file_learner_visibility: visible,
+      content_file_static_reference: referenced}
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/old_unused.pdf, content_file_extension: .pdf, content_file_text: old
+        unused, content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/old_staff.txt, content_file_extension: .txt, content_file_text: old
+        staff, content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_unused.pdf, content_file_extension: .pdf, content_file_text: new
+        unused, content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_staff.txt, content_file_extension: .txt, content_file_text: new
+        staff, content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/new_kept.pdf, content_file_extension: .pdf, content_file_text: new
+        kept, content_file_extraction_status: extracted}
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__courseware__ocw_files')
+    rows: []
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows: []
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: materials, source_ref: static/new_kept.pdf, source_text: new kept}
+    - {scope_id: materials, source_ref: static/old_staff.txt, source_text: old staff}
+  overrides:
+    vars:
+      courseware_courseruns:
+      - "course-v1:X+Y+1T2026"

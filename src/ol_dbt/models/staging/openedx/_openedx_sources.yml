@@ -160,6 +160,18 @@ sources:
       description: str, the file's ContentFile key from Learn's OlxArchive.key, which
         keys a block stored below its type folder (url_name a:b in <type>/a/b.xml)
         by its url_name; null in files written before the asset keyed files
+    - name: learner_visibility
+      description: str, the platform's reading of whether a learner can reach the
+        file (visible, staff_only, unreachable_tab, about_page_not_served); null for
+        an export without course.xml and in files written before the asset set it
+    - name: static_reference
+      description: str, for a static/ file, whether text a learner reaches links it
+        (referenced, unreferenced); null outside static/ and in files written before
+        the asset set it
+    - name: non_content_kind
+      description: str, what a file that is not course content is instead (asset_manifest,
+        announcements, course_settings, legacy_announcements); null for course content
+        and in files written before the asset set it
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at
