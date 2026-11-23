@@ -9,8 +9,10 @@ The Data API is called directly over HTTP with ``requests``, not the
 sources. Channels, playlists and videos are public data, read with an API key
 (the ``key`` query param). Transcripts are caption tracks, which the Data API
 lists and downloads only for an OAuth user who can edit the video
-(captions.list, captions.download), so they are read with a refresh token for
-an account the channels add as a manager.
+(captions.list, captions.download). A refresh token authorizes as the one
+channel picked at consent, so captions are read with one OAuth client and a
+refresh token per channel, and each video's captions with its own channel's
+token.
 
 Data flow:
     GitHub (mitodl/open-video-data/youtube/*.yaml)
@@ -24,10 +26,10 @@ Data flow:
            for)
 
 Credentials are resolved lazily at run time. The qa and production profiles
-read them from Vault (``YOUTUBE_VAULT_PATH``), where the dagster stack in
-ol-infrastructure writes MIT Learn's API key and, where captions are fetched,
-the OAuth client and refresh token. Any other profile reads
-YOUTUBE_DEVELOPER_KEY and the YOUTUBE_CAPTIONS_* variables from the
+read them from Vault (``YOUTUBE_VAULT_PATH``): MIT Learn's API key, which the
+dagster stack in ol-infrastructure writes there, and, where captions are
+fetched, the OAuth client and a refresh token per channel. Any other profile
+reads YOUTUBE_DEVELOPER_KEY and the YOUTUBE_CAPTIONS_* variables from the
 environment. Without caption credentials the transcripts table is not loaded.
 
 Run standalone:
@@ -72,6 +74,8 @@ TOKEN_REFRESH_MARGIN_SECONDS = 60
 # /download).
 CAPTIONS_LIST_UNITS = 50
 CAPTIONS_DOWNLOAD_UNITS = 200
+# channels.list, which a run calls once per refresh token to learn its channel.
+CHANNELS_LIST_UNITS = 1
 # What one run may spend on captions. A project gets 10,000 units a day by
 # default, and the source runs daily.
 CAPTION_QUOTA_UNITS_DEFAULT = 9_000
@@ -94,11 +98,16 @@ OCW_CONTENT_FILES_TABLE = "int__ocw__content_files"
 TRANSCRIPT_FETCHED = "fetched"
 # The video has no caption track to fetch.
 TRANSCRIPT_NONE = "none"
-# captions.list 404s: the video is gone or private.
+# captions.list 404s: the video went private or was deleted between videos.list
+# and captions.list. A video videos.list does not return is not listed, so it
+# gets no row.
 TRANSCRIPT_UNAVAILABLE = "unavailable"
-# captions.list 403s: the account cannot edit the video (not a channel it
-# manages).
+# captions.list 403s: its channel's token cannot edit the video.
 TRANSCRIPT_FORBIDDEN = "forbidden"
+# This many forbidden listings in a row from one channel mean its token cannot
+# edit the channel's videos at all, so the run stops using it rather than
+# spending the shared quota marking each video.
+FORBIDDEN_STREAK_LIMIT = 3
 TRANSCRIPT_FAILED = "failed"
 
 
@@ -222,12 +231,12 @@ _CONFIG_FILE_FOLDER_DEFAULT = "youtube"
 
 YOUTUBE_VAULT_MOUNT = "secret-data"
 YOUTUBE_VAULT_PATH = "pipelines/youtube"
-# The OAuth client and refresh token captions are read with, as keys of the
-# Vault secret and, outside the deployed profiles, environment variables.
+# The OAuth client and the refresh tokens captions are read with, as keys of
+# the Vault secret and, outside the deployed profiles, environment variables.
 CAPTION_CREDENTIAL_KEYS = {
     "client_id": "captions_client_id",
     "client_secret": "captions_client_secret",  # pragma: allowlist secret
-    "refresh_token": "captions_refresh_token",  # noqa: S105
+    "refresh_tokens": "captions_refresh_tokens",  # noqa: S105
 }
 
 
@@ -276,11 +285,29 @@ def srt_segments(body: str) -> list[dict[str, Any]]:
 
 @dataclass(frozen=True)
 class CaptionCredentials:
-    """An OAuth client and a refresh token its user granted youtube.force-ssl."""
+    """An OAuth client and the refresh tokens channels granted it.
+
+    :param refresh_tokens: Each token granted youtube.force-ssl as one channel,
+        by a label that only names it in logs (e.g. ``ocw``). Which channel a
+        token is for is asked of the API, not configured.
+    """
 
     client_id: str
     client_secret: str
-    refresh_token: str
+    refresh_tokens: dict[str, str]
+
+
+def _refresh_tokens(value: object) -> dict[str, str]:
+    """Read the refresh tokens: a mapping of label to token, or its JSON."""
+    tokens = json.loads(value) if isinstance(value, str) else value
+    if (
+        not isinstance(tokens, dict)
+        or not tokens
+        or not all(isinstance(t, str) and t for t in tokens.values())
+    ):
+        msg = "YouTube caption refresh_tokens must map a label to each refresh token"
+        raise ValueError(msg)
+    return {str(label): token for label, token in tokens.items()}
 
 
 def _resolve_caption_credentials() -> CaptionCredentials | None:
@@ -288,11 +315,12 @@ def _resolve_caption_credentials() -> CaptionCredentials | None:
 
     Deployed profiles read them from the Vault secret the API key is in; the
     others from YOUTUBE_CAPTIONS_CLIENT_ID, YOUTUBE_CAPTIONS_CLIENT_SECRET and
-    YOUTUBE_CAPTIONS_REFRESH_TOKEN.
+    YOUTUBE_CAPTIONS_REFRESH_TOKENS (a JSON object of label to token).
 
     :returns: The credentials, or None when none are configured, which turns
         caption fetching off for the environment.
-    :raises ValueError: Some but not all of them are configured.
+    :raises ValueError: Some but not all of them are configured, or the
+        refresh tokens are not a mapping of label to token.
     """
     if config.active_profile() in config.DEPLOYED_PROFILES:
         secret = vault.read_kv_secret(YOUTUBE_VAULT_MOUNT, YOUTUBE_VAULT_PATH)
@@ -312,19 +340,22 @@ def _resolve_caption_credentials() -> CaptionCredentials | None:
     return CaptionCredentials(
         client_id=str(values["client_id"]),
         client_secret=str(values["client_secret"]),
-        refresh_token=str(values["refresh_token"]),
+        refresh_tokens=_refresh_tokens(values["refresh_tokens"]),
     )
 
 
 class CaptionsUnavailableError(RuntimeError):
-    """The caption credentials cannot read captions at all."""
+    """A refresh token cannot read its channel's captions at all."""
 
 
 class CaptionsClient:
-    """Calls the captions endpoints with an access token from a refresh token."""
+    """Calls the captions endpoints as one channel, from its refresh token."""
 
-    def __init__(self, credentials: CaptionCredentials) -> None:
-        self._credentials = credentials
+    def __init__(self, credentials: CaptionCredentials, label: str) -> None:
+        self.label = label
+        self._client_id = credentials.client_id
+        self._client_secret = credentials.client_secret
+        self._refresh_token = credentials.refresh_tokens[label]
         self._token: str | None = None
         self._expires_at = datetime.min.replace(tzinfo=UTC)
 
@@ -335,24 +366,52 @@ class CaptionsClient:
                 resp = requests.post(
                     OAUTH_GRANT_URL,
                     data={
-                        "client_id": self._credentials.client_id,
-                        "client_secret": self._credentials.client_secret,
-                        "refresh_token": self._credentials.refresh_token,
+                        "client_id": self._client_id,
+                        "client_secret": self._client_secret,
+                        "refresh_token": self._refresh_token,
                         "grant_type": "refresh_token",
                     },
                     timeout=30,
                 )
-            except requests.HTTPError as exc:
-                # Not a per-video failure: a revoked or expired grant fails the
-                # run, rather than marking every video failed.
-                msg = "Could not get an access token from the caption refresh token"
+                grant = resp.json()
+                token = grant["access_token"]
+                expires_in = grant["expires_in"]
+            # Not a per-video failure: a revoked grant, or a token endpoint
+            # that is down past dlt's retries, stops this channel for the run,
+            # rather than marking each of its videos failed for
+            # CAPTIONS_RELIST_DAYS.
+            except (requests.RequestException, KeyError, ValueError) as exc:
+                msg = f"Could not get an access token from refresh token {self.label}"
                 raise CaptionsUnavailableError(msg) from exc
-            grant = resp.json()
-            self._token = grant["access_token"]
+            self._token = token
             self._expires_at = now + timedelta(
-                seconds=grant["expires_in"] - TOKEN_REFRESH_MARGIN_SECONDS
+                seconds=expires_in - TOKEN_REFRESH_MARGIN_SECONDS
             )
         return {"Authorization": f"Bearer {self._token}"}
+
+    def channel_id(self) -> str:
+        """Return the id of the channel the refresh token authorizes as.
+
+        :raises CaptionsUnavailableError: Google refuses the token, or its
+            account has no channel.
+        """
+        try:
+            resp = requests.get(
+                f"{YOUTUBE_API_BASE}/channels",
+                params={"part": "id", "mine": "true"},
+                headers=self._authorization(),
+                timeout=30,
+            )
+        except requests.HTTPError as exc:
+            msg = (
+                f"Refresh token {self.label} cannot read its channel: {_describe(exc)}"
+            )
+            raise CaptionsUnavailableError(msg) from exc
+        items = resp.json().get("items") or []
+        if not items:
+            msg = f"Refresh token {self.label} authorizes no YouTube channel"
+            raise CaptionsUnavailableError(msg)
+        return items[0]["id"]
 
     def list_tracks(self, video_id: str) -> list[dict[str, Any]]:
         """Return captions.list's items for a video (one page holds them all)."""
@@ -373,6 +432,46 @@ class CaptionsClient:
             timeout=60,
         )
         return resp.content.decode("utf-8")
+
+
+def caption_clients(
+    credentials: CaptionCredentials,
+    make_client: Callable[[CaptionCredentials, str], CaptionsClient] = CaptionsClient,
+) -> dict[str, CaptionsClient]:
+    """Return a captions client for each channel a refresh token authorizes as.
+
+    A token Google refuses, or whose account has no channel, is logged and
+    left out, so one bad token does not stop the other channels.
+
+    :returns: Each client by the id of its channel.
+    :rtype: dict[str, CaptionsClient]
+    """
+    clients: dict[str, CaptionsClient] = {}
+    for label in credentials.refresh_tokens:
+        client = make_client(credentials, label)
+        try:
+            channel_id = client.channel_id()
+        # KeyError and ValueError: a response not shaped as documented.
+        except (
+            CaptionsUnavailableError,
+            requests.RequestException,
+            KeyError,
+            ValueError,
+        ):
+            logger.exception("Not fetching captions with refresh token %s", label)
+            continue
+        if channel_id in clients:
+            logger.warning(
+                "Refresh tokens %s and %s are both for channel %s: using %s",
+                clients[channel_id].label,
+                label,
+                channel_id,
+                clients[channel_id].label,
+            )
+            continue
+        logger.info("Refresh token %s reads captions of channel %s", label, channel_id)
+        clients[channel_id] = client
+    return clients
 
 
 def _api_error_reason(exc: requests.HTTPError) -> str | None:
@@ -719,122 +818,142 @@ def _listing_failure(
     return _transcript_row(video_id, now, fetch_status=status, error=_describe(exc))
 
 
-def caption_rows(  # noqa: C901, PLR0912, PLR0913, PLR0915
+@dataclass
+class _Budget:
+    """The quota units a run may still spend on captions."""
+
+    units: int
+    spent: int = 0
+
+    def take(self, units: int) -> bool:
+        """Spend ``units`` if they fit, and say whether they did."""
+        if self.spent + units > self.units:
+            return False
+        self.spent += units
+        return True
+
+
+def _is_auth_error(exc: requests.HTTPError) -> bool:
+    """Whether an error means the token cannot read its channel's captions."""
+    return (
+        _status_code(exc) == HTTPStatus.UNAUTHORIZED
+        or _api_error_reason(exc) in AUTH_REASONS
+    )
+
+
+def _video_caption_rows(  # noqa: PLR0913
     client: CaptionsClient,
-    queue: Iterable[str],
-    video_languages: dict[str, set[str]],
+    video_id: str,
+    video_languages: set[str],
     state: dict[str, dict[str, Any]],
     *,
     tracks: TranscriptTracks,
-    quota_units: int,
+    budget: _Budget,
     now: datetime,
-) -> Generator[dict[str, Any]]:
-    """List and download the captions of videos in order, within a quota.
+) -> Generator[dict[str, Any], None, str | None]:
+    """List and download one video's captions; see caption_rows.
 
-    :param client: The captions client.
-    :param queue: The videos to try, in order (see captions_queue).
-    :param video_languages: Each video's languages, for tracks_to_fetch.
-    :param state: What earlier runs recorded per video, updated in place:
-        ``listed_at`` and the ``lastUpdated`` of each track downloaded.
-    :param tracks: Which tracks to fetch.
-    :param quota_units: The most the run may spend.
-    :param now: The run's time, stamped on every row.
-    :returns: Transcript and status rows of raw__youtube__api__transcripts.
-    :raises CaptionsUnavailableError: The credentials cannot read captions at
-        all (no token, a 401, a grant without the youtube.force-ssl scope), so
-        the run stops before marking every video it reaches.
+    :returns: The video's fetch_status, or None when the run is out of quota
+        and stops here.
+    :raises CaptionsUnavailableError: The client's token cannot read captions.
+        Tracks downloaded before it are kept in the state, and when the video
+        was last listed is left as it was.
     """
-    spent = 0
-    for video_id in queue:
-        if spent + CAPTIONS_LIST_UNITS > quota_units:
+    if not budget.take(CAPTIONS_LIST_UNITS):
+        return None
+    try:
+        items = client.list_tracks(video_id)
+    except requests.HTTPError as exc:
+        reason = _api_error_reason(exc)
+        if reason in QUOTA_REASONS:
+            logger.warning("YouTube caption quota spent: %s", _describe(exc))
+            return None
+        if _is_auth_error(exc):
+            msg = f"Refresh token {client.label} cannot list captions: {_describe(exc)}"
+            raise CaptionsUnavailableError(msg) from exc
+        if _status_code(exc) == HTTPStatus.NOT_FOUND:
+            status = TRANSCRIPT_UNAVAILABLE
+        elif reason == "forbidden":
+            status = TRANSCRIPT_FORBIDDEN
+        else:
+            logger.exception("Failed to list captions of video_id=%s", video_id)
+            status = TRANSCRIPT_FAILED
+        yield _listing_failure(state, video_id, now, status, exc)
+        return status
+    except (requests.RequestException, ValueError) as exc:
+        # A timeout or dropped connection that dlt's retries did not get
+        # past, or a body that is not JSON.
+        logger.exception("Failed to list captions of video_id=%s", video_id)
+        yield _listing_failure(state, video_id, now, TRANSCRIPT_FAILED, exc)
+        return TRANSCRIPT_FAILED
+
+    listed = [CaptionTrack.from_api(item) for item in items]
+    chosen = tracks_to_fetch(
+        one_per_key([t for t in listed if t.fetchable]), tracks, video_languages
+    )
+    known = state.get(video_id, {}).get("tracks", {})
+    current = {
+        t.caption_id: t.last_updated
+        for t in chosen
+        if t.last_updated and known.get(t.caption_id) == t.last_updated
+    }
+    errors = []
+
+    def _keep_downloaded() -> None:
+        if video_id not in state and not current:
+            return
+        state[video_id] = {
+            "listed_at": state.get(video_id, {}).get("listed_at"),
+            "tracks": {**known, **current},
+        }
+
+    for track in (t for t in chosen if t.caption_id not in current):
+        if not budget.take(CAPTIONS_DOWNLOAD_UNITS):
             break
-        spent += CAPTIONS_LIST_UNITS
         try:
-            items = client.list_tracks(video_id)
+            segments = srt_segments(client.download(track.caption_id))
+        except CaptionsUnavailableError:
+            _keep_downloaded()
+            raise
         except requests.HTTPError as exc:
-            reason = _api_error_reason(exc)
-            if reason in QUOTA_REASONS:
+            if _api_error_reason(exc) in QUOTA_REASONS:
                 logger.warning("YouTube caption quota spent: %s", _describe(exc))
                 break
-            if _status_code(exc) == HTTPStatus.UNAUTHORIZED or reason in AUTH_REASONS:
-                msg = f"The caption credentials cannot list captions: {_describe(exc)}"
+            if _is_auth_error(exc):
+                _keep_downloaded()
+                msg = (
+                    f"Refresh token {client.label} cannot download captions: "
+                    f"{_describe(exc)}"
+                )
                 raise CaptionsUnavailableError(msg) from exc
-            if _status_code(exc) == HTTPStatus.NOT_FOUND:
-                status = TRANSCRIPT_UNAVAILABLE
-            elif reason == "forbidden":
-                status = TRANSCRIPT_FORBIDDEN
-            else:
-                logger.exception("Failed to list captions of video_id=%s", video_id)
-                status = TRANSCRIPT_FAILED
-            yield _listing_failure(state, video_id, now, status, exc)
-            continue
-        except (requests.RequestException, ValueError) as exc:
-            # A timeout or dropped connection that dlt's retries did not get
-            # past, or a body that is not JSON.
-            logger.exception("Failed to list captions of video_id=%s", video_id)
-            yield _listing_failure(state, video_id, now, TRANSCRIPT_FAILED, exc)
-            continue
-
-        listed = [CaptionTrack.from_api(item) for item in items]
-        chosen = tracks_to_fetch(
-            one_per_key([t for t in listed if t.fetchable]),
-            tracks,
-            video_languages.get(video_id, set()),
-        )
-        known = state.get(video_id, {}).get("tracks", {})
-        current = {
-            t.caption_id: t.last_updated
-            for t in chosen
-            if t.last_updated and known.get(t.caption_id) == t.last_updated
-        }
-        errors = []
-        stopped = False
-        for track in (t for t in chosen if t.caption_id not in current):
-            if spent + CAPTIONS_DOWNLOAD_UNITS > quota_units:
-                stopped = True
-                break
-            spent += CAPTIONS_DOWNLOAD_UNITS
-            try:
-                segments = srt_segments(client.download(track.caption_id))
-            except requests.HTTPError as exc:
-                if _api_error_reason(exc) in QUOTA_REASONS:
-                    logger.warning("YouTube caption quota spent: %s", _describe(exc))
-                    stopped = True
-                    break
-                logger.exception(
-                    "Failed to download caption %s of video_id=%s",
-                    track.caption_id,
-                    video_id,
-                )
-                errors.append(f"{track.language_code}: {_describe(exc)}")
-                continue
-            except (requests.RequestException, UnicodeDecodeError, ValueError) as exc:
-                logger.exception(
-                    "Failed to read caption %s of video_id=%s",
-                    track.caption_id,
-                    video_id,
-                )
-                errors.append(f"{track.language_code}: {_describe(exc)}")
-                continue
-            yield _transcript_row(
+            logger.exception(
+                "Failed to download caption %s of video_id=%s",
+                track.caption_id,
                 video_id,
-                now,
-                language_code=track.language_code,
-                is_generated=track.is_generated,
-                caption_id=track.caption_id,
-                track_name=track.name,
-                track_last_updated=track.last_updated,
-                fetch_status=TRANSCRIPT_FETCHED,
-                transcript="\n".join(segment["text"] for segment in segments),
-                segments=segments,
             )
-            if track.last_updated:
-                current[track.caption_id] = track.last_updated
-        if stopped:
-            # Out of quota partway: what was downloaded is kept, and the video
-            # is listed first next run for the rest.
-            state[video_id] = {"listed_at": None, "tracks": current}
-            break
+            errors.append(f"{track.language_code}: {_describe(exc)}")
+            continue
+        except (requests.RequestException, UnicodeDecodeError, ValueError) as exc:
+            logger.exception(
+                "Failed to read caption %s of video_id=%s", track.caption_id, video_id
+            )
+            errors.append(f"{track.language_code}: {_describe(exc)}")
+            continue
+        yield _transcript_row(
+            video_id,
+            now,
+            language_code=track.language_code,
+            is_generated=track.is_generated,
+            caption_id=track.caption_id,
+            track_name=track.name,
+            track_last_updated=track.last_updated,
+            fetch_status=TRANSCRIPT_FETCHED,
+            transcript="\n".join(segment["text"] for segment in segments),
+            segments=segments,
+        )
+        if track.last_updated:
+            current[track.caption_id] = track.last_updated
+    else:
         if errors:
             status = TRANSCRIPT_FAILED
         else:
@@ -863,7 +982,88 @@ def caption_rows(  # noqa: C901, PLR0912, PLR0913, PLR0915
         # A track that failed is not in current, so the video's next listing
         # downloads it again.
         state[video_id] = {"listed_at": now.isoformat(), "tracks": current}
-    logger.info("Spent %d of %d caption quota units", spent, quota_units)
+        return status
+    # Out of quota partway: what was downloaded is kept, and the video is
+    # listed first next run for the rest.
+    state[video_id] = {"listed_at": None, "tracks": current}
+    return None
+
+
+def caption_rows(  # noqa: PLR0913
+    clients: dict[str, CaptionsClient],
+    video_channels: dict[str, str],
+    queue: Iterable[str],
+    video_languages: dict[str, set[str]],
+    state: dict[str, dict[str, Any]],
+    *,
+    tracks: TranscriptTracks,
+    quota_units: int,
+    now: datetime,
+) -> Generator[dict[str, Any]]:
+    """List and download the captions of videos in order, within a quota.
+
+    Each video is read with the client of the channel it belongs to. A video
+    on a channel no client is for is passed over: no request, no row, and its
+    state is left as it was.
+
+    :param clients: A captions client per channel id (see caption_clients).
+    :param video_channels: The channel id of each video.
+    :param queue: The videos to try, in order (see captions_queue).
+    :param video_languages: Each video's languages, for tracks_to_fetch.
+    :param state: What earlier runs recorded per video, updated in place:
+        ``listed_at`` and the ``lastUpdated`` of each track downloaded.
+    :param tracks: Which tracks to fetch.
+    :param quota_units: The most the run may spend, across every channel: the
+        quota is the OAuth client's project's, which all the tokens share.
+    :param now: The run's time, stamped on every row.
+    :returns: Transcript and status rows of raw__youtube__api__transcripts.
+        When a channel's token turns out unable to read captions (a 401, a
+        grant without the youtube.force-ssl scope, or FORBIDDEN_STREAK_LIMIT
+        forbidden listings in a row), the run stops using it and goes on with
+        the others. The video it was on keeps when it was last listed.
+    """
+    clients = dict(clients)
+    budget = _Budget(quota_units)
+    forbidden_streak: dict[str, int] = {}
+    for video_id in queue:
+        channel_id = video_channels.get(video_id, "")
+        client = clients.get(channel_id)
+        if client is None:
+            continue
+        try:
+            status = yield from _video_caption_rows(
+                client,
+                video_id,
+                video_languages.get(video_id, set()),
+                state,
+                tracks=tracks,
+                budget=budget,
+                now=now,
+            )
+        except CaptionsUnavailableError:
+            logger.exception("Stopped fetching captions of channel %s", channel_id)
+            del clients[channel_id]
+            if not clients:
+                break
+            continue
+        if status is None:
+            break
+        if status == TRANSCRIPT_FORBIDDEN:
+            forbidden_streak[channel_id] = forbidden_streak.get(channel_id, 0) + 1
+        else:
+            forbidden_streak[channel_id] = 0
+        if forbidden_streak[channel_id] >= FORBIDDEN_STREAK_LIMIT:
+            logger.error(
+                "Refresh token %s cannot edit channel %s's videos: stopped "
+                "fetching its captions after %d forbidden listings in a row",
+                client.label,
+                channel_id,
+                FORBIDDEN_STREAK_LIMIT,
+            )
+            del clients[channel_id]
+            if not clients:
+                break
+    logger.info("Spent %d of %d caption quota units", budget.spent, quota_units)
 
 
 @dlt.source(name="youtube")
@@ -1087,8 +1287,9 @@ def youtube_source(  # noqa: C901
         """Yield the caption tracks of the videos OCW has no transcript for.
 
         Captions come from the Data API (captions.list, then captions.download
-        as SRT for each track ``transcript_tracks`` picks), under the OAuth
-        user of the caption credentials. A run spends at most
+        as SRT for each track ``transcript_tracks`` picks), each video's with
+        the refresh token of the channel that owns it (snippet.channelId). A
+        video on a channel no token is for is not listed. A run spends at most
         ``caption_quota_units``, so it covers part of the videos: those never
         listed (with uploaded captions first), then those listed more than
         CAPTIONS_RELIST_DAYS ago. The resource state remembers when each video
@@ -1108,49 +1309,75 @@ def youtube_source(  # noqa: C901
         A video the run does not reach keeps its rows from earlier runs. When
         the day's quota runs out, the run stops there. Without caption
         credentials the resource yields nothing. An error that stops captions
-        altogether (credentials Google refuses, OCW's table unreadable) is
-        logged and ends this resource only, so the other tables still load.
+        altogether (no token Google accepts, OCW's table unreadable) is logged
+        and ends this resource only, so the other tables still load.
         """
-        credentials = _resolve_caption_credentials()
-        if credentials is None:
-            logger.warning("No YouTube caption credentials: not fetching captions")
-            return
         fetched_at = datetime.now(tz=UTC)
-
-        # Captions fail on their own: an error here would otherwise fail the
-        # extraction, and with it the channels, playlists and videos MIT Learn
-        # reads.
+        # Captions fail on their own: an error here (a malformed caption
+        # secret included) would otherwise fail the extraction, and with it the
+        # channels, playlists and videos MIT Learn reads.
         try:
+            credentials = _resolve_caption_credentials()
+            if credentials is None:
+                logger.warning("No YouTube caption credentials: not fetching captions")
+                return
+            clients = caption_clients(credentials)
+            if not clients:
+                logger.warning("No caption refresh token works: not fetching captions")
+                return
             skip = _ocw_transcript_video_ids()
+            candidates = [v for v in _video_ids(listing) if v not in skip]
+            # Each video's channel, whether it has uploaded captions
+            # (contentDetails.caption) and the language it is spoken in: one
+            # videos.list request per 50 videos.
+            video_channels: dict[str, str] = {}
+            captioned: set[str] = set()
+            video_languages: dict[str, set[str]] = {}
+            for video in _videos(candidates, "snippet,contentDetails", _api_key()):
+                snippet = video.get("snippet") or {}
+                video_channels[video["id"]] = snippet.get("channelId", "")
+                language = _language(
+                    snippet.get("defaultAudioLanguage")
+                    or snippet.get("defaultLanguage")
+                )
+                video_languages[video["id"]] = {language} if language else set()
+                if (video.get("contentDetails") or {}).get("caption") == "true":
+                    captioned.add(video["id"])
         except Exception:
-            logger.exception("Could not read OCW's videos: not fetching captions")
+            logger.exception("Not fetching captions")
             return
-        candidates = [v for v in _video_ids(listing) if v not in skip]
-        # Uploaded captions (contentDetails.caption) and the language each
-        # video is spoken in: one videos.list request per 50 videos.
-        captioned: set[str] = set()
-        video_languages: dict[str, set[str]] = {}
-        for video in _videos(candidates, "snippet,contentDetails", _api_key()):
-            snippet = video.get("snippet") or {}
-            language = _language(
-                snippet.get("defaultAudioLanguage") or snippet.get("defaultLanguage")
+        uncovered: dict[str, int] = {}
+        for video_id in candidates:
+            channel_id = video_channels.get(video_id, "")
+            if channel_id not in clients:
+                uncovered[channel_id] = uncovered.get(channel_id, 0) + 1
+        for channel_id, count in sorted(uncovered.items()):
+            logger.info(
+                "No caption refresh token for channel %s: passing over %d videos",
+                channel_id or "(unknown)",
+                count,
             )
-            video_languages[video["id"]] = {language} if language else set()
-            if (video.get("contentDetails") or {}).get("caption") == "true":
-                captioned.add(video["id"])
 
         state = dlt.current.resource_state().setdefault("videos", {})
         try:
             yield from caption_rows(
-                CaptionsClient(credentials),
-                captions_queue(candidates, captioned, state, fetched_at),
+                clients,
+                video_channels,
+                captions_queue(
+                    [v for v in candidates if video_channels.get(v) in clients],
+                    captioned,
+                    state,
+                    fetched_at,
+                ),
                 video_languages,
                 state,
                 tracks=tracks,
-                quota_units=caption_quota_units,
+                # The channel lookups came out of the same quota.
+                quota_units=caption_quota_units
+                - CHANNELS_LIST_UNITS * len(credentials.refresh_tokens),
                 now=fetched_at,
             )
-        # CaptionsUnavailableError, or anything caption_rows did not expect.
+        # Anything caption_rows did not expect.
         except Exception:
             logger.exception("Stopped fetching captions")
 

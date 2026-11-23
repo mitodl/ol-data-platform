@@ -222,7 +222,8 @@ class _FakeCaptions:
     download raises. A video it does not name has one English track.
     """
 
-    def __init__(self, listings=None, texts=None):
+    def __init__(self, listings=None, texts=None, label="fake"):
+        self.label = label
         self.listings = listings or {}
         self.texts = texts or {}
         self.listed: list[str] = []
@@ -252,17 +253,26 @@ def _caption_rows(
     *,
     state=None,
     languages=None,
+    channels=None,
     tracks=youtube.TranscriptTracks.NATIVE,
     quota_units=youtube.CAPTION_QUOTA_UNITS_DEFAULT,
     now=NOW,
 ):
-    """Run caption_rows over a fake client; ``languages`` maps a video to its
-    languages, English when it is not named."""
+    """Run caption_rows over fake clients.
+
+    ``client`` is one fake client, for channel ``ch``, or a mapping of channel
+    to client; ``channels`` maps a video to its channel, ``ch`` when it is not
+    named; ``languages`` maps a video to its languages, English when it is not
+    named.
+    """
     state = {} if state is None else state
     languages = languages or {}
+    channels = channels or {}
+    clients = client if isinstance(client, dict) else {"ch": client}
     rows = list(
         youtube.caption_rows(
-            client,
+            clients,
+            {v: channels.get(v, "ch") for v in video_ids},
             video_ids,
             {v: languages.get(v, {"en"}) for v in video_ids},
             state,
@@ -491,28 +501,153 @@ def test_a_request_that_never_succeeds_is_a_failed_row_not_a_failed_run(error):
     assert {v["listed_at"] for v in state.values()} == {NOW.isoformat()}
 
 
+@pytest.mark.parametrize("during", ["list", "download"])
 @pytest.mark.parametrize(
     "error",
     [_http_error(401, "authError"), _http_error(403, "insufficientPermissions")],
 )
-def test_credentials_that_cannot_read_captions_stop_the_run_untouched(error):
-    client = _FakeCaptions({"b": error})
-    state: dict[str, Any] = {}
-    rows = []
-    with pytest.raises(youtube.CaptionsUnavailableError):
-        for row in youtube.caption_rows(
-            client,
-            ["a", "b", "c"],
-            {},
-            state,
-            tracks=youtube.TranscriptTracks.NATIVE,
-            quota_units=youtube.CAPTION_QUOTA_UNITS_DEFAULT,
-            now=NOW,
-        ):
-            rows.append(row)
+def test_a_token_that_cannot_read_captions_stops_only_its_channel(error, during):
+    """Its videos are left untouched rather than marked; other channels go on."""
+    if during == "list":
+        ocw = _FakeCaptions({"b": error})
+    else:
+        ocw = _FakeCaptions({"b": [_item("b-en", "en")]}, {"b-en": error})
+    other = _FakeCaptions()
+    rows, state = _caption_rows(
+        {"ocw": ocw, "other": other},
+        ["a", "b", "c", "d"],
+        channels={"a": "ocw", "b": "ocw", "c": "ocw", "d": "other"},
+    )
 
-    assert sorted(state) == ["a"]
-    assert {row["video_id"] for row in rows} == {"a"}
+    assert ocw.listed == ["a", "b"]
+    assert other.listed == ["d"]
+    assert sorted(state) == ["a", "d"]
+    assert {row["video_id"] for row in rows} == {"a", "d"}
+
+
+def test_a_token_stopped_partway_keeps_what_it_downloaded():
+    """The downloaded track is not fetched again; the video keeps its listing."""
+    listed_at = (NOW - timedelta(days=100)).isoformat()
+    state = {"v": {"listed_at": listed_at, "tracks": {"old": "2025-01-01T00:00:00Z"}}}
+    client = _FakeCaptions(
+        {"v": [_item("v-en", "en"), _item("v-fr", "fr")]},
+        {"v-fr": _http_error(401, "authError")},
+    )
+    rows, state = _caption_rows(client, ["v"], state=state)
+
+    assert [r["caption_id"] for r in rows] == ["v-en"]
+    assert state["v"] == {
+        "listed_at": listed_at,
+        "tracks": {"old": "2025-01-01T00:00:00Z", "v-en": "2026-01-01T00:00:00Z"},
+    }
+
+
+def test_a_channel_whose_listings_are_all_forbidden_is_stopped():
+    """One forbidden video is that video's; a run of them is the token's."""
+    forbidden = _http_error(403, "forbidden")
+    broken = _FakeCaptions({f"b{i}": forbidden for i in range(5)})
+    ok = _FakeCaptions({"o1": forbidden})
+    video_ids = ["b0", "o1", "b1", "o2", "b2", "b3", "b4", "o3"]
+    rows, state = _caption_rows(
+        {"broken": broken, "ok": ok},
+        video_ids,
+        channels={v: "broken" if v.startswith("b") else "ok" for v in video_ids},
+    )
+
+    assert broken.listed == ["b0", "b1", "b2"]
+    assert ok.listed == ["o1", "o2", "o3"]
+    assert "b3" not in state
+    assert [r["fetch_status"] for r in rows if r["video_id"] == "o1"] == ["forbidden"]
+
+
+def test_the_quota_is_shared_by_every_channel():
+    """Two videos of one track each cost 2 * (50 + 200) units."""
+    first = _FakeCaptions()
+    second = _FakeCaptions()
+    _rows, state = _caption_rows(
+        {"first": first, "second": second},
+        ["a", "b", "c"],
+        channels={"a": "first", "b": "second", "c": "first"},
+        quota_units=520,
+    )
+
+    assert first.listed == ["a"]
+    assert second.listed == ["b"]
+    assert sorted(state) == ["a", "b"]
+
+
+def test_videos_are_read_with_their_own_channels_token():
+    ocw = _FakeCaptions(label="ocw")
+    residential = _FakeCaptions(label="residential")
+    rows, state = _caption_rows(
+        {"UC-ocw": ocw, "UC-res": residential},
+        ["o1", "r1", "edx", "o2"],
+        channels={"o1": "UC-ocw", "r1": "UC-res", "edx": "UC-edx", "o2": "UC-ocw"},
+    )
+
+    assert ocw.listed == ["o1", "o2"]
+    assert residential.listed == ["r1"]
+    # No token for its channel: no request, no row, nothing recorded.
+    assert "edx" not in {row["video_id"] for row in rows}
+    assert "edx" not in state
+
+
+def test_caption_clients_find_each_tokens_channel():
+    credentials = youtube.CaptionCredentials(
+        "id",
+        "secret",
+        {
+            "ocw": "t1",
+            "revoked": "t2",
+            "nochannel": "t3",
+            "down": "t4",
+            "odd": "t5",
+            "ocw-again": "t6",
+        },
+    )
+    errors = {
+        "revoked": youtube.CaptionsUnavailableError("refused"),
+        "nochannel": youtube.CaptionsUnavailableError("no channel"),
+        "down": requests.ConnectionError("reset"),
+        "odd": KeyError("id"),
+    }
+
+    class _Client:
+        def __init__(self, _credentials, label):
+            self.label = label
+
+        def channel_id(self):
+            if self.label in errors:
+                raise errors[self.label]
+            return "UC-ocw"
+
+    clients = youtube.caption_clients(credentials, _Client)
+    assert {channel: c.label for channel, c in clients.items()} == {"UC-ocw": "ocw"}
+
+
+def test_captions_client_reads_the_channel_its_token_is_for(monkeypatch):
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        youtube.requests,
+        "post",
+        lambda *_a, **_kw: FakeResponse(
+            json_data={"access_token": "t", "expires_in": 3599}
+        ),
+    )
+
+    def _fake_get(url, params=None, **_kwargs):
+        calls.append(params)
+        items = [{"id": "UC-ocw"}] if len(calls) == 1 else []
+        return FakeResponse(json_data={"items": items})
+
+    monkeypatch.setattr(youtube.requests, "get", _fake_get)
+    client = youtube.CaptionsClient(
+        youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}), "ocw"
+    )
+    assert client.channel_id() == "UC-ocw"
+    assert calls[0] == {"part": "id", "mine": "true"}
+    with pytest.raises(youtube.CaptionsUnavailableError, match="no YouTube channel"):
+        client.channel_id()
 
 
 @pytest.mark.parametrize("during", ["list", "download"])
@@ -632,7 +767,8 @@ def _transcripts_resource(
     """Run the transcripts resource over a fake listing and captions client.
 
     ``videos`` maps a video id to its videos.list record; a video it does not
-    name is in English with uploaded captions.
+    name is on channel ``UC-ocw``, in English with uploaded captions. ``client``
+    is for ``UC-ocw``.
     """
     videos = videos or {}
     parts: list[str] = []
@@ -644,7 +780,7 @@ def _transcripts_resource(
                 video_id,
                 {
                     "id": video_id,
-                    "snippet": {"defaultAudioLanguage": "en"},
+                    "snippet": {"channelId": "UC-ocw", "defaultAudioLanguage": "en"},
                     "contentDetails": {"caption": "true"},
                 },
             )
@@ -654,9 +790,11 @@ def _transcripts_resource(
     monkeypatch.setattr(
         youtube,
         "_resolve_caption_credentials",
-        lambda: youtube.CaptionCredentials("id", "secret", "refresh"),
+        lambda: youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}),
     )
-    monkeypatch.setattr(youtube, "CaptionsClient", lambda _credentials: client)
+    monkeypatch.setattr(
+        youtube, "caption_clients", lambda _credentials: {"UC-ocw": client}
+    )
     monkeypatch.setattr(youtube, "_ocw_transcript_video_ids", lambda: skip)
     monkeypatch.setattr(
         youtube, "_fetch_channel_configs", lambda **_kw: [{"channel_id": "c"}]
@@ -684,15 +822,61 @@ def test_transcripts_skip_ocw_videos_and_list_captioned_ones_first(monkeypatch):
         videos={
             "silent": {
                 "id": "silent",
-                "snippet": {},
+                "snippet": {"channelId": "UC-ocw"},
                 "contentDetails": {"caption": "false"},
-            }
+            },
         },
     )
 
     assert parts == ["snippet,contentDetails"]
     assert client.listed == ["spoken", "silent"]
     assert {row["video_id"] for row in rows} == {"spoken", "silent"}
+
+
+def test_transcripts_pass_over_videos_of_channels_without_a_token(monkeypatch):
+    client = _FakeCaptions()
+    rows, _parts = _transcripts_resource(
+        monkeypatch,
+        ["edx", "ocw"],
+        client,
+        videos={
+            "edx": {
+                "id": "edx",
+                "snippet": {"channelId": "UC-edx"},
+                "contentDetails": {"caption": "true"},
+            }
+        },
+    )
+
+    assert client.listed == ["ocw"]
+    assert {row["video_id"] for row in rows} == {"ocw"}
+
+
+def test_transcripts_load_nothing_when_no_token_works(monkeypatch):
+    client = _FakeCaptions()
+    # Sets up the fakes, with a working token, then takes it away.
+    _rows, parts = _transcripts_resource(monkeypatch, ["v"], client)
+    monkeypatch.setattr(youtube, "caption_clients", lambda _credentials: {})
+    source = youtube.youtube_source(api_key="k")
+    assert list(source.resources["raw__youtube__api__transcripts"]) == []
+    assert client.listed == ["v"]
+    # Nothing past the token check: not even the videos.list lookup.
+    assert len(parts) == 1
+
+
+def test_malformed_caption_credentials_end_only_the_transcripts_resource(
+    monkeypatch,
+):
+    client = _FakeCaptions()
+    _transcripts_resource(monkeypatch, ["v"], client)
+
+    def _malformed():
+        msg = "YouTube caption refresh_tokens must map a label to each refresh token"
+        raise ValueError(msg)
+
+    monkeypatch.setattr(youtube, "_resolve_caption_credentials", _malformed)
+    source = youtube.youtube_source(api_key="k")
+    assert list(source.resources["raw__youtube__api__transcripts"]) == []
 
 
 def test_a_second_run_does_not_download_unchanged_tracks(monkeypatch, tmp_path):
@@ -777,19 +961,30 @@ def test_transcripts_load_nothing_without_caption_credentials(monkeypatch):
 
 
 def test_resolve_caption_credentials_from_the_environment(monkeypatch):
-    for name in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
+    for name in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKENS"):
         monkeypatch.delenv(f"YOUTUBE_CAPTIONS_{name}", raising=False)
     assert youtube._resolve_caption_credentials() is None
 
     monkeypatch.setenv("YOUTUBE_CAPTIONS_CLIENT_ID", "id")
-    with pytest.raises(ValueError, match="client_secret, refresh_token"):
+    with pytest.raises(ValueError, match="client_secret, refresh_tokens"):
         youtube._resolve_caption_credentials()
 
     monkeypatch.setenv("YOUTUBE_CAPTIONS_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("YOUTUBE_CAPTIONS_REFRESH_TOKEN", "refresh")
-    assert youtube._resolve_caption_credentials() == youtube.CaptionCredentials(
-        "id", "secret", "refresh"
+    monkeypatch.setenv(
+        "YOUTUBE_CAPTIONS_REFRESH_TOKENS", '{"ocw": "t1", "residential": "t2"}'
     )
+    assert youtube._resolve_caption_credentials() == youtube.CaptionCredentials(
+        "id", "secret", {"ocw": "t1", "residential": "t2"}
+    )
+
+
+@pytest.mark.parametrize("tokens", ['"t1"', '["t1"]', "{}", '{"ocw": ""}', "{"])
+def test_refresh_tokens_must_map_a_label_to_each_token(monkeypatch, tokens):
+    monkeypatch.setenv("YOUTUBE_CAPTIONS_CLIENT_ID", "id")
+    monkeypatch.setenv("YOUTUBE_CAPTIONS_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("YOUTUBE_CAPTIONS_REFRESH_TOKENS", tokens)
+    with pytest.raises(ValueError):  # noqa: PT011
+        youtube._resolve_caption_credentials()
 
 
 @pytest.mark.parametrize("profile", ["qa", "production"])
@@ -798,7 +993,7 @@ def test_resolve_caption_credentials_reads_vault_in_deployed_profiles(
 ):
     monkeypatch.setenv("DLT_PROFILE", profile)
     monkeypatch.setenv("YOUTUBE_CAPTIONS_CLIENT_ID", "env-id")
-    secrets = {"developer_key": "k"}
+    secrets: dict[str, Any] = {"developer_key": "k"}
     monkeypatch.setattr(youtube.vault, "read_kv_secret", lambda _mount, _path: secrets)
     # The API key alone: no captions in this environment.
     assert youtube._resolve_caption_credentials() is None
@@ -806,10 +1001,10 @@ def test_resolve_caption_credentials_reads_vault_in_deployed_profiles(
     secrets.update(
         captions_client_id="id",
         captions_client_secret="secret",  # pragma: allowlist secret
-        captions_refresh_token="refresh",  # noqa: S106
+        captions_refresh_tokens={"ocw": "refresh"},
     )
     assert youtube._resolve_caption_credentials() == youtube.CaptionCredentials(
-        "id", "secret", "refresh"
+        "id", "secret", {"ocw": "refresh"}
     )
 
 
@@ -832,7 +1027,8 @@ def test_captions_client_refreshes_its_access_token_when_it_expires(monkeypatch)
     monkeypatch.setattr(youtube.requests, "post", _fake_post)
     monkeypatch.setattr(youtube.requests, "get", _fake_get)
     client = youtube.CaptionsClient(
-        youtube.CaptionCredentials("id", "secret", "refresh")
+        youtube.CaptionCredentials("id", "secret", {"other": "x", "ocw": "refresh"}),
+        "ocw",
     )
 
     assert client.list_tracks("v1") == [_item("c1", "en")]
@@ -856,10 +1052,24 @@ def test_captions_client_fails_the_run_on_a_refused_refresh_token(monkeypatch):
 
     monkeypatch.setattr(youtube.requests, "post", _fake_post)
     client = youtube.CaptionsClient(
-        youtube.CaptionCredentials("id", "secret", "refresh")
+        youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}), "ocw"
     )
-    with pytest.raises(RuntimeError, match="refresh token"):
+    with pytest.raises(youtube.CaptionsUnavailableError, match="refresh token ocw"):
         client.list_tracks("v")
+
+
+def test_an_unreachable_token_endpoint_stops_the_channel_not_the_video(monkeypatch):
+    """Rather than a failed row that defers the video CAPTIONS_RELIST_DAYS."""
+
+    def _fake_post(*_args, **_kwargs):
+        raise requests.ConnectionError("reset")
+
+    monkeypatch.setattr(youtube.requests, "post", _fake_post)
+    client = youtube.CaptionsClient(
+        youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}), "ocw"
+    )
+    with pytest.raises(youtube.CaptionsUnavailableError):
+        client.download("c1")
 
 
 def test_ocw_transcript_video_ids_are_empty_outside_deployed_profiles(monkeypatch):

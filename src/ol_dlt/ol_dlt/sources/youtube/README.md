@@ -66,14 +66,21 @@ only through `all` takes the channel's.
   key (the `key` query param).
 - Transcripts are caption tracks. `captions.list` and `captions.download` need
   OAuth (scope `youtube.force-ssl`), and a download "requires the user to have
-  permission to edit the video", so they are read as a Google account the
-  channels add as a manager. A service account cannot do it: "YouTube does not
-  support Service Accounts" (the `youtubeSignupRequired` entry of the [Data API
-  errors](https://developers.google.com/youtube/v3/docs/errors)). A video on a
-  channel the account does not manage gets `fetch_status` `forbidden`.
+  permission to edit the video", so they are read as the channel itself. A
+  refresh token authorizes as the one channel picked at consent, so there is a
+  token per channel, and the run asks `channels.list?mine=true` (1 unit) which
+  channel each is for. Each video is read with the token of the channel that
+  owns it (`snippet.channelId`); a video on a channel no token is for is not
+  listed. A token Google refuses, or that gets three `forbidden` listings in a
+  row, stops only its own channel for the run. A service account
+  cannot do it: "YouTube does not support Service Accounts" (the
+  `youtubeSignupRequired` entry of the [Data API
+  errors](https://developers.google.com/youtube/v3/docs/errors)). A video its
+  channel's token cannot edit gets `fetch_status` `forbidden`.
 - `captions.list` costs 50 quota units and `captions.download` 200, so a run
   spends at most `caption_quota_units` (default 9,000, under the 10,000 a day
-  a project gets by default) and covers a few dozen videos. It skips videos OCW
+  a project gets by default) across every channel, and covers a few dozen
+  videos. It skips videos OCW
   has transcript text for (`int__ocw__content_files`, read from the dbt build),
   then lists videos never listed, those with uploaded captions
   (`contentDetails.caption`) first, then those listed more than 90 days ago.
@@ -87,7 +94,10 @@ only through `all` takes the channel's.
   `transcript` their text. Each video listed gets a status row (empty
   `language_code`) with `fetch_status` (`fetched`, `none`, `unavailable`,
   `forbidden`, `failed`), any errors and `listed_tracks`. A failed download
-  writes no row of its own, so the last good text stays.
+  writes no row of its own, so the last good text stays. A private or deleted
+  video is not returned by `videos.list`, so it is not listed and keeps
+  whatever rows it had (`unavailable` is only for one that goes private
+  between the two calls).
 
 ## Configuration
 
@@ -96,20 +106,27 @@ only through `all` takes the channel's.
   `secret-data/pipelines/youtube` (written by the dagster stack in
   ol-infrastructure from MIT Learn's SOPS secrets). Other profiles read
   `YOUTUBE_DEVELOPER_KEY` from the environment.
-- **Caption credentials:** an OAuth client id and secret and a refresh token,
-  as `captions_client_id`, `captions_client_secret` and
-  `captions_refresh_token` in the same Vault secret, or
+- **Caption credentials:** an OAuth client id and secret and a refresh token
+  per channel, as `captions_client_id`, `captions_client_secret` and
+  `captions_refresh_tokens` in the same Vault secret, or
   `YOUTUBE_CAPTIONS_CLIENT_ID`, `YOUTUBE_CAPTIONS_CLIENT_SECRET` and
-  `YOUTUBE_CAPTIONS_REFRESH_TOKEN` outside the deployed profiles. Without them
-  the transcripts table is not loaded. The OAuth client is made by hand in
+  `YOUTUBE_CAPTIONS_REFRESH_TOKENS` outside the deployed profiles. The refresh
+  tokens are a mapping (or its JSON) of a label to a token, e.g.
+  `{"ocw": "1//...", "residential": "1//..."}`; the label only names the token
+  in logs. Without them the transcripts table is not loaded. The OAuth client
+  is made by hand in
   `mitol01` (Google has no API for OAuth clients; see ol-infrastructure's
   `src/ol_infrastructure/infrastructure/gcp/README.md`). An External consent
   screen in Testing status issues refresh tokens that expire in 7 days, so the
-  client's consent screen is Internal (an mit.edu account) or published. The
-  refresh token comes from one consent by the managing account with
-  `access_type=offline` (Google's [installed app
-  flow](https://developers.google.com/youtube/v3/guides/auth/installed-apps)),
-  and stops working if it goes unused for six months or the account revokes it.
+  client's consent screen is Internal (an mit.edu account) or published. Each
+  refresh token comes from one consent with `access_type=offline` (Google's
+  [installed app
+  flow](https://developers.google.com/youtube/v3/guides/auth/installed-apps))
+  by someone who can pick the channel in Google's account chooser at the
+  consent screen (the owner of the channel or of its Brand Account; YouTube
+  Studio's Manager and Editor permissions are reported not to carry to the
+  API, which Google's docs do not say either way). A token
+  stops working if it goes unused for six months or is revoked.
 - **Destination:** built by `ol_dlt.config.pipeline_for("youtube")` from the
   active `DLT_PROFILE` (no per-source `.dlt/config.toml` block).
 
