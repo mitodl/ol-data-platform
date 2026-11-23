@@ -1450,8 +1450,7 @@ unit_tests:
     Trino's to_iso8601 writes nine fractional digits for from_iso8601_timestamp_nanos,
     so the StarRocks and DuckDB bodies pad microseconds with three zeros. A key that
     ends in six digits on one engine and nine on the other doesn't match across them.
-    The inputs carry an explicit offset because DuckDB reads a zone-less one in the
-    session time zone.
+    A zone-less input is UTC whatever the session time zone (user 3).
   model: stg__edxorg__s3__user
   given:
   - input: source('ol_warehouse_raw_data', 'raw__edxorg__s3__tables__auth_user')
@@ -1460,7 +1459,11 @@ unit_tests:
       is_superuser: '0', date_joined: '2013-05-01 12:00:00.123456+00:00', last_login: '2026-10-01T08:09:10+00:00'}
     - {id: '2', username: b, email: b@example.com, is_active: '1', is_staff: '0',
       is_superuser: '0', date_joined: '2014-01-02T03:04:05+00:00', last_login: 'NULL'}
+    - {id: '3', username: c, email: c@example.com, is_active: '1', is_staff: '0',
+      is_superuser: '0', date_joined: '2015-07-04 02:30:00.5', last_login: '2016-03-13
+        02:30:00'}
   expect:
     rows:
     - {user_id: 1, user_joined_on: '2013-05-01T12:00:00.123456000Z', user_last_login: '2026-10-01T08:09:10.000000000Z'}
     - {user_id: 2, user_joined_on: '2014-01-02T03:04:05.000000000Z', user_last_login: null}
+    - {user_id: 3, user_joined_on: '2015-07-04T02:30:00.500000000Z', user_last_login: '2016-03-13T02:30:00.000000000Z'}
