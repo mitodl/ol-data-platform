@@ -1,0 +1,98 @@
+always_filter_main_dttm: false
+cache_timeout: null
+catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: table_name
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: table_schema
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: last_built_at
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: true
+  python_date_format: null
+  type: TIMESTAMP(3)
+  verbose_name: null
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+default_endpoint: null
+description: When each table a governed dashboard reads was last built, from its Iceberg
+  snapshots, live. Backs the dashboards' freshness tiles.
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: last_built_at
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
+schema: ol_warehouse_production_reporting
+sql: |
+  {#- When each table a dashboard reads was last built, read live from the table's
+      Iceberg snapshots, for the dashboards' freshness tiles. A dbt table model is
+      recreated on every build, so its latest commit is its last build; compaction
+      (operation 'replace') rewrites files without new data, so it is skipped. Add a
+      (layer, table) pair here when a governed dashboard starts reading a table. -#}
+  {%- set dashboard_tables = [
+      ("reporting", "chatbot_usage_report"),
+      ("reporting", "course_staff_report"),
+      ("dimensional", "dim_user"),
+      ("reporting", "enrollment_detail_report"),
+      ("mart", "marts__combined__orders"),
+      ("mart", "marts__combined__products"),
+      ("mart", "marts__combined_course_enrollment_detail"),
+      ("mart", "marts__combined_coursesinprogram"),
+      ("mart", "marts__combined_discounts"),
+      ("reporting", "orders_with_product_report"),
+  ] %}
+  {%- for layer, table in dashboard_tables %}
+  select
+      '{{ table }}' as table_name
+      , 'ol_warehouse_production_{{ layer }}' as table_schema
+      , (
+          select cast(max(committed_at) at time zone 'UTC' as timestamp(3))
+          from ol_warehouse_production_{{ layer }}."{{ table }}$snapshots"
+          where operation != 'replace'
+      ) as last_built_at
+  {%- if not loop.last %}
+  union all
+  {%- endif %}
+  {%- endfor %}
+table_name: data_freshness
+template_params: null
+uuid: 4d57e4d7-e292-4c7f-8963-a85f62085c72
+version: 1.0.0

@@ -1,13 +1,14 @@
 cache_timeout: -1
 certification_details: null
 certified_by: null
-dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d  # tables
+dataset_uuid: 4d57e4d7-e292-4c7f-8963-a85f62085c72  # data_freshness
 description: null
 params:
   adhoc_filters:
   - clause: WHERE
     comparator:
     - enrollment_detail_report
+    - marts__combined_course_enrollment_detail
     datasourceWarning: false
     expressionType: SIMPLE
     filterOptionName: filter_yzr33if0wy_yimljrtjtk
@@ -18,41 +19,23 @@ params:
     sqlExpression: null
     subject: table_name
   - clause: WHERE
-    comparator:
-    - Trino
-    datasourceWarning: false
-    expressionType: SIMPLE
-    filterOptionName: filter_database_name_trino
-    isExtra: false
-    isNew: false
-    operator: IN
-    operatorId: IN
-    sqlExpression: null
-    subject: database_name
-  - clause: WHERE
     comparator: No filter
     expressionType: SIMPLE
     operator: TEMPORAL_RANGE
-    subject: created_on
+    subject: last_built_at
   all_columns:
   - expressionType: SQL
+    label: table
+    sqlExpression: table_name
+  - expressionType: SQL
     label: last_updated_on (in UTC)
-    sqlExpression: changed_on
+    sqlExpression: last_built_at
   allow_render_html: true
   annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   extra_form_data: {}
   groupby: []
-  metrics:
-  - aggregate: null
-    column: null
-    datasourceWarning: false
-    expressionType: SQL
-    hasCustomLabel: false
-    label: changed_on
-    optionName: metric_giytfm3lm0n_4y5j6xkf0wx
-    sqlExpression: changed_on
   order_by_cols: []
   percent_metrics: []
   query_mode: raw
@@ -60,8 +43,7 @@ params:
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup:
-    changed_on: true
-    created_on: true
+    last_built_at: true
   viz_type: table
 slice_name: Enrollment Detail Dashboard (Last Updated)
 uuid: 1ed19d7a-4f9b-4c13-a6f9-ba348f1c4d3d
