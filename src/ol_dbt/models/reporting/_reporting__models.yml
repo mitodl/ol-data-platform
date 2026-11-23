@@ -2270,8 +2270,8 @@ models:
     to active to leave out learners who have since unenrolled, or leave it unfiltered
     to count them. Verified status reads tfact_enrollment.is_verified for active enrollments,
     and the enrollment mode for unenrolled ones, which the fact never marks verified.
-    Global Alumni records no enrollment time, so its runs show certificates but no
-    enrollments. Backs the course-run enrollment trends dashboard.
+    Global Alumni is left out, since it records neither an enrollment time nor certificates.
+    Backs the course-run enrollment trends dashboard.
   config:
     meta:
       qa_branches:

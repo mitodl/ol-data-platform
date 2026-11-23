@@ -7,6 +7,9 @@ with enrollment_detail as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
     -- A row with no run can't be filtered to on the dashboard.
     where courserun_readable_id is not null
+        -- Global Alumni records neither an enrollment time nor certificates, so its
+        -- runs would have no event to date. Left out rather than shown as empty.
+        and platform != '{{ var("global_alumni") }}'
 )
 
 -- Taken once per run, so every day of a run carries the same values and a native
@@ -30,12 +33,14 @@ with enrollment_detail as (
         enrollment_detail.platform
         , enrollment_detail.courserun_readable_id
         -- edX.org and Emeritus enrollments have no id of their own, and an Emeritus row
-        -- may have no user_id either; the learner's email keeps those apart.
+        -- may have no user_id or email either. Emeritus enrollments are unique on run,
+        -- email and full name, so the name keeps those apart.
         , {{ dbt_utils.generate_surrogate_key([
             'enrollment_detail.platform'
             , 'enrollment_detail.courserunenrollment_id'
             , 'enrollment_detail.user_id'
             , 'enrollment_detail.user_email'
+            , 'enrollment_detail.user_full_name'
             , 'enrollment_detail.courserun_readable_id'
         ]) }} as enrollment_key
         , enrollment_detail.courserunenrollment_enrollment_mode as enrollment_mode
@@ -51,7 +56,7 @@ with enrollment_detail as (
         , enrollment_detail.courseruncertificate_is_earned as has_certificate
         , enrollment_detail.courserunenrollment_created_on as enrolled_on
         -- Falls back to the enrollment for a platform that records no upgrade time
-        -- (edX.org, residential, Emeritus, Global Alumni) or a verified enrollment
+        -- (edX.org, residential, Emeritus) or a verified enrollment
         -- with no order.
         , coalesce(
             enrollment_detail.courserunenrollment_upgraded_on
@@ -109,7 +114,6 @@ with enrollment_detail as (
         , count(distinct case when activity_type = 'certificate' then enrollment_key end)
             as certificates
     from activity
-    -- Global Alumni records no enrollment time, so its enrollments have no day.
     where activity_date is not null
     group by
         platform
