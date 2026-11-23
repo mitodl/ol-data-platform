@@ -182,6 +182,10 @@ unit_tests:
       event_time_range_raw: 9am UTC+5.5}
     - {event_id: v, event_start_date_raw: '2026-07-15', event_end_date_raw: '2026-07-15',
       event_time_range_raw: 9am PT - 1pm ET}
+    - {event_id: w, event_start_date_raw: '2026-07-15', event_end_date_raw: '2026-07-15',
+      event_time_range_raw: 9am UTC - 5pm}
+    - {event_id: x, event_start_date_raw: '2026-07-15', event_end_date_raw: '2026-07-15',
+      event_time_range_raw: 10am (UTC -4)}
   expect:
     rows:
     - {event_id: a, start_date: "2026-09-15", end_date: "2026-09-15", zone_abbreviation: null,
@@ -271,6 +275,18 @@ unit_tests:
       learn_minute_1: '00', learn_ampm_1: am, learn_hour_2: 1, learn_minute_2: '00',
       learn_ampm_2: pm, learn_tz_1: PT, learn_tz_2: ET, utc_name: null, utc_offset_minutes: null,
       zone_abbreviation_1: PT, zone_abbreviation_2: ET, utc_offset_unreadable: false}
+    - {event_id: w, start_date: '2026-07-15', end_date: '2026-07-15', zone_abbreviation: null,
+      utc_offset_hours: null, run_count: 2, hour_1: 9, minute_1: '00', ampm_1: am,
+      hour_2: 5, minute_2: '00', ampm_2: pm, learn_run_count: 2, learn_hour_1: 9,
+      learn_minute_1: '00', learn_ampm_1: am, learn_hour_2: 5, learn_minute_2: '00',
+      learn_ampm_2: pm, learn_tz_1: UTC, learn_tz_2: null, utc_name: UTC, utc_offset_minutes: null,
+      zone_abbreviation_1: null, zone_abbreviation_2: null, utc_offset_unreadable: false}
+    - {event_id: x, start_date: '2026-07-15', end_date: '2026-07-15', zone_abbreviation: null,
+      utc_offset_hours: -4, run_count: 1, hour_1: 10, minute_1: '00', ampm_1: am,
+      hour_2: null, minute_2: '00', ampm_2: null, learn_run_count: 2, learn_hour_1: 10,
+      learn_minute_1: '00', learn_ampm_1: am, learn_hour_2: 4, learn_minute_2: '00',
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: UTC, utc_offset_minutes: 0,
+      zone_abbreviation_1: null, zone_abbreviation_2: null, utc_offset_unreadable: false}
 
 - name: test_int__news_events__mitpe_event_times_parses_each_case
   model: int__news_events__mitpe_event_times
@@ -345,6 +361,9 @@ unit_tests:
     - {event_id: y, time_range_raw: 9am UTC+5.5, start_date: '2026-07-15', end_date: '2026-07-15',
       utc_name: UTC, utc_offset_unreadable: true, run_count: 1, hour_1: 9, minute_1: '00',
       ampm_1: am, minute_2: '00'}
+    - {event_id: z, time_range_raw: 9am UTC - 5pm, start_date: '2026-07-15', end_date: '2026-07-15',
+      utc_name: UTC, run_count: 2, hour_1: 9, minute_1: '00', ampm_1: am, hour_2: 5,
+      minute_2: '00', ampm_2: pm}
   expect:
     rows:
     - {event_id: a, event_start_date: "2026-09-15", event_end_date: "2026-09-15",
@@ -419,6 +438,9 @@ unit_tests:
     - {event_id: y, event_start_date: '2026-07-15', event_end_date: '2026-07-15',
       start_on: null, end_on: null, time_parse_status: unparseable, start_time_zone: null,
       end_time_zone: null}
+    - {event_id: z, event_start_date: '2026-07-15', event_end_date: '2026-07-15',
+      start_on: '2026-07-15 09:00:00+00', end_on: '2026-07-15 17:00:00+00', time_parse_status: parsed,
+      start_time_zone: UTC, end_time_zone: UTC}
 
 - name: test_int__news_events__mitpe_event_times_learn_matches_learn
   description: >

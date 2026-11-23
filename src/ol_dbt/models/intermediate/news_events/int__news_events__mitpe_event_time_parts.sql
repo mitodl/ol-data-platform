@@ -18,6 +18,11 @@
     1pm ET" keeps both.
 #}
 
+{#- One pattern strips and extracts the offset. At most one space before the
+    sign and none after it, so the separator in "9am UTC - 5pm" is not read as
+    UTC-5, while "(UTC -4)" still is an offset. -#}
+{%- set offset_pattern = "'(?i)\\b(?:utc|gmt)\\s?([+-]\\d[\\d:]*(?:\\.\\d+)?)'" %}
+
 with events as (
     select * from {{ ref('stg__mitpe__api__events') }}
 )
@@ -35,7 +40,7 @@ with events as (
             regexp_replace_all(
                 regexp_replace_all(
                     "coalesce(event_time_range_raw, '')"
-                    , "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d[\\d:]*(?:\\.\\d+)?'"
+                    , offset_pattern
                     , "' '"
                 )
                 , "'(?i)a\\.\\s?m\\b\\.?'"
@@ -47,7 +52,7 @@ with events as (
         -- The whole offset token, so "UTC+5.5" or "UTC+100" is not read as its
         -- first digits.
         , {{ regexp_extract_or_null(
-            "event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*([+-]\\s*\\d[\\d:]*(?:\\.\\d+)?)'", 1
+            "event_time_range_raw", offset_pattern, 1
         ) }} as utc_offset_token
         -- Case-sensitive, so "et al." is not Eastern time.
         , {{ regexp_extract_or_null(
