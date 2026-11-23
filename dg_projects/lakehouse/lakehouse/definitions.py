@@ -738,6 +738,8 @@ non_airbyte_staging_schedules = (
 # before its cutover. Production builds them through dbt_automation_sensor (the
 # OCW ones through ocw_learn_automation_sensor); QA
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
+# The same holds for the dimensional tables the b2b StarRocks views read, so the
+# job builds those too.
 #
 # Selects the models tagged qa_scheduled with their upstream models: the Learn
 # views whose every QA raw input exists, and the dimensional tables the b2b
