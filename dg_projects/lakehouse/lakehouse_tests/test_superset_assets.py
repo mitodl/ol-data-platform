@@ -303,3 +303,23 @@ def test_superset_dataset_keys_reject_a_quoted_boolean():
             layers={"dimensional"},
             opt_in_layers={"dimensional"},
         )
+
+
+def test_superset_dataset_keys_ignore_a_quoted_boolean_outside_the_layers():
+    manifest = {
+        "nodes": {
+            "model.open_learning.stg_a": _model(
+                "stg_a", "staging", {"superset_dataset": "true"}
+            ),
+        }
+    }
+
+    selected = superset_dataset_keys(
+        [AssetKey(["staging", "stg_a"])],
+        manifest,
+        LayerKeyTranslator(),
+        layers={"dimensional"},
+        opt_in_layers={"dimensional"},
+    )
+
+    assert selected == []

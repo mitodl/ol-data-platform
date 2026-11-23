@@ -82,10 +82,12 @@ def superset_dataset_keys(
         if node["resource_type"] in {"model", "snapshot"}
     }
     # A quoted "true" would otherwise leave a model unpublished without a word.
+    # Only the published layers are checked: the meta does nothing elsewhere, and
+    # a stray value on a staging model shouldn't stop the code location loading.
     not_bool = sorted(
         key.to_user_string()
         for key, value in superset_dataset_meta.items()
-        if value is not None and not isinstance(value, bool)
+        if key.path[0] in layers and value is not None and not isinstance(value, bool)
     )
     if not_bool:
         msg = f"superset_dataset meta must be a YAML boolean: {not_bool}"
