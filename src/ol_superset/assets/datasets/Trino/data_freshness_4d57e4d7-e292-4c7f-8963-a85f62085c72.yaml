@@ -1,5 +1,5 @@
 always_filter_main_dttm: false
-cache_timeout: null
+cache_timeout: -1
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
@@ -79,7 +79,12 @@ sql: |
       ("mart", "marts__combined_discounts"),
       ("reporting", "orders_with_product_report"),
   ] %}
-  {%- for layer, table in dashboard_tables %}
+  {#- Only the tables the chart filters on, so one table missing mid-rebuild can't
+      fail other dashboards' tiles. With no table_name filter, or none that is
+      listed above, every table is read. -#}
+  {%- set requested = filter_values('table_name')
+      | select('in', dashboard_tables | map(attribute=1) | list) | list %}
+  {%- for layer, table in dashboard_tables if not requested or table in requested %}
   select
       '{{ table }}' as table_name
       , 'ol_warehouse_production_{{ layer }}' as table_schema
