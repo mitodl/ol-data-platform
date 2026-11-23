@@ -836,13 +836,19 @@ resources_dict = {
 if not SKIP_AIRBYTE:
     resources_dict["airbyte"] = airbyte_workspace
 
-# The image's manifest is compiled for the production target, so these are
-# production's table FQNs whatever environment loads this. That is one reason
-# the sensors are registered in production only.
-openmetadata_table_fqns = table_fqns_by_asset_key(
-    *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
-    asset_keys=set(full_dbt_project.keys),
-    service=TRINO_SERVICE,
+# OpenMetadata catalogs production's Trino relations. The sensors and schedule
+# these feed are registered in production only, and other environments' manifests
+# name other relations (QA's StarRocks nodes have no database, which fails the
+# mapping). Gated on the environment, not DBT_TARGET, so moving production off
+# Trino fails here at load instead of leaving the sensors with no tables.
+openmetadata_table_fqns = (
+    table_fqns_by_asset_key(
+        *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
+        asset_keys=set(full_dbt_project.keys),
+        service=TRINO_SERVICE,
+    )
+    if DAGSTER_ENV == "production"
+    else {}
 )
 asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
     openmetadata_table_fqns
