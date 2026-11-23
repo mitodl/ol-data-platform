@@ -408,6 +408,9 @@ def test_dbt_layers_match_the_dbt_project_schemas():
 def test_dbt_layer_delete_is_refused_where_it_is_not_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        module, "ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS", frozenset()
+    )
     calls = _by_database(monkeypatch, {})
 
     with pytest.raises(ValueError, match="Deletion is not enabled"):
