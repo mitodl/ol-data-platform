@@ -13,8 +13,10 @@ models:
       - source_id
       - platform_code
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
       - micromasters/app_postgres
       - mitxonline/app_postgres
       - xpro/app_postgres
