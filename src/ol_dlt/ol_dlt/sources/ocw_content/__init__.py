@@ -65,7 +65,6 @@ import hashlib
 import json
 import logging
 import re
-import sys
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -897,9 +896,3 @@ def build_source(courses: Sequence[str] | None = None) -> Any:  # noqa: ANN401
     :param courses: Slugs to load on their own; sweeps every course when None.
     """
     return config.with_nullable_load_id(ocw_content_source(courses=courses))
-
-
-if __name__ == "__main__":
-    named = sys.argv[1:] or None
-    pipeline = ocw_course_pipeline if named else ocw_content_pipeline
-    print(pipeline.run(build_source(named)))  # noqa: T201
