@@ -19,6 +19,7 @@ WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
+COPY src/ol_dlt src/ol_dlt
 COPY dg_projects/openedx dg_projects/openedx
 
 # Install dependencies from the openedx project

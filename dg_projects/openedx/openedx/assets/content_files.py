@@ -11,15 +11,14 @@ Data flow:
             -> openedx/processed_data/course_document_text  (JSONL in S3)
                 -> integrations__learn__content_files       (dbt)
 
-Only documents Tika can parse are handled here. Video transcripts are a
-separate asset: they need no external service, and pairing them with Tika would
-mean a Tika outage also stopped transcript extraction.
-
-What counts as a document here is aligned to MIT Learn's VALID_TEXT_FILE_TYPES,
-but the two systems reach that set differently -- MIT Learn filters by file
-extension, this asset by MIME type -- so agreement is a property that has to be
-asserted rather than assumed. The tests parametrize over MIT Learn's list to
-enforce it.
+Text is read from the files whose extension is in the platform's list,
+ol_file_types.TEXT_FILE_EXTENSIONS, which OCW reads by too: through Tika,
+and a notebook directly. Every other file still gets a row, with
+extraction_status skipped_unsupported, so the snapshot lists every file of the
+course. MIT Learn's narrower VALID_TEXT_FILE_TYPES is applied in
+integrations__learn__content_files, from each row's file_extension. Video
+transcripts are a separate asset: they need no external service, and pairing
+them with Tika would mean a Tika outage also stopped transcript extraction.
 
 Note that Open edX course *problems* do not arrive here at all. `problem/` is a
 first-class OLX block-type directory, so problem documents are carried by the
@@ -53,6 +52,13 @@ from dagster import (
     Output,
     asset,
 )
+from ol_file_types import (
+    NOTEBOOK_EXTENSION,
+    STATUS_SKIPPED_UNSUPPORTED,
+    file_extension,
+    is_text_file,
+    notebook_text,
+)
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import STATIC_BUNDLE_SUFFIX
 from upath import UPath
@@ -71,6 +77,13 @@ MIN_EXTRACTION_SUCCESS_RATE = 0.5
 # Below this many candidate documents the rate is not meaningful -- one failure
 # out of one is 0% and would trip the guard on a course with a single bad PDF.
 MIN_DOCUMENTS_FOR_RATE_CHECK = 5
+
+# upstream_or_code_changes only sees a code change through the code version, and
+# Dagster's code_version_changed ignores the first one an asset gets, so this
+# value re-runs nothing (a backfill re-extracts the existing snapshots). Change
+# it when the files read or their text change, e.g. ol_file_types' list, and
+# every course run's documents are extracted again.
+DOCUMENT_TEXT_CODE_VERSION = "platform-file-types-1"
 
 # Subtitle suffixes. These are NOT documents, even though a real archive makes
 # them look like one: `mimetypes` maps `.srt` to `text/plain`, which Tika
@@ -110,7 +123,7 @@ def is_transcript(relative_path: str) -> bool:
     `subs_<id>.srt.sjson`, which is SJSON despite what the middle of the name
     suggests.
     """
-    return Path(relative_path).suffix.lower() in TRANSCRIPT_SUFFIXES
+    return file_extension(relative_path) in TRANSCRIPT_SUFFIXES
 
 
 @contextmanager
@@ -160,39 +173,25 @@ def open_bundle_members(
         yield _members()
 
 
-def file_extension(relative_path: str) -> str:
-    """Return a bundle member's lowercased final suffix, or "" if it has none.
-
-    Published on every row for two reasons. It is a `ContentFile` field on MIT
-    Learn's side, carried through `documents_from_olx` metadata, so publishing it
-    saves the consumer re-deriving what this asset already knows. And MIT Learn
-    selects files by EXTENSION where this asset gates by MIME type, so a consumer
-    that needs to apply its own allowlist can do so directly rather than mapping
-    back from a MIME string.
-    """
-    return Path(relative_path).suffix.lower()
-
-
 # Pinned to Python's builtin table rather than the module-level lookup, which
 # reads /etc/mime.types when the host has one. That file is present on a dev
 # machine and on ubuntu-latest but absent from the python:3.14-slim runtime
 # image, so the same file resolved to different MIME types in dev and in
-# production: `.rtf` was `application/rtf` locally and `text/rtf` in the
-# cluster, and only one of those was in SUPPORTED_CONTENT_TYPES. Every RTF MIT
-# Learn extracts today would have been skipped in production with no row and no
-# error, while the parity test passed in the one environment nobody runs
-# production in.
+# production (`.rtf` was `application/rtf` locally and `text/rtf` in the
+# cluster). The type only labels the row and hints Tika now; which files are
+# read is decided by extension.
 _MIMETYPES = mimetypes.MimeTypes(filenames=())
+UNKNOWN_CONTENT_TYPE = "application/octet-stream"
 
 
-def _content_type(relative_path: str) -> str:
-    """Guess a document's MIME type from its path.
+def _content_type(relative_path: str) -> str | None:
+    """Guess a document's MIME type from its path, or None when the table has none.
 
     The bundle manifest carries the same value, but it is a sibling S3 object;
     deriving it here keeps this asset dependent on the archive alone.
     """
     mime_type, _ = _MIMETYPES.guess_type(relative_path)
-    return mime_type or "application/octet-stream"
+    return mime_type
 
 
 HTML_CONTENT_TYPE = "text/html"
@@ -379,9 +378,8 @@ def build_document_rows(
     course_id: str,
     source_system: str,
     extract: Any,
-    is_supported: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Extract text from each supported document, returning rows and counters.
+    """Extract text from each document the platform reads, returning rows and counters.
 
     Split out from the asset body so the dispatch and failure accounting can be
     tested without a Dagster context or a live Tika service.
@@ -391,17 +389,25 @@ def build_document_rows(
     read at all -- in a real export the skipped images and archives are the
     bulk of the archive.
 
+    ``extract(file_bytes, content_type)`` reads a document through Tika;
+    ``content_type`` is None when the MIME table has no entry for it, and Tika
+    detects the type. A notebook is read here instead (notebook_text).
+
     An html row also carries ``static_references``, the static files its body
     links to (see static_references); every other row carries null.
 
-    A file Tika cannot parse is skipped silently -- images and archives are
-    normal course content, not errors. A file Tika *should* parse but does not
-    is counted as a failure, feeds the success-rate guard, and still gets a row
-    carrying `extraction_status: "failed"` and null content -- an absent row
-    reads downstream as a deleted file.
+    A file whose extension is not in TEXT_FILE_EXTENSIONS is not read, and gets
+    a row with `extraction_status: "skipped_unsupported"` and null content and
+    size -- images and archives are normal course content, not errors. A file
+    that is read but fails is counted as a failure, feeds the success-rate
+    guard, and still gets a row carrying `extraction_status: "failed"` and null
+    content -- an absent row reads downstream as a deleted file. A notebook is
+    counted under ``notebook_*`` instead: the guard judges Tika, which never
+    sees one.
 
-    Subtitles are skipped even though Tika would accept them, because the
-    transcript asset owns those and Tika's output for one is unusable.
+    Subtitles are skipped with no row even though Tika would accept them,
+    because the transcript asset owns those and Tika's output for one is
+    unusable.
     """
     rows: list[dict[str, Any]] = []
     counters = {
@@ -409,9 +415,28 @@ def build_document_rows(
         "extracted": 0,
         "empty": 0,
         "failed": 0,
+        "notebook_candidates": 0,
+        "notebook_extracted": 0,
+        "notebook_empty": 0,
+        "notebook_failed": 0,
         "skipped": 0,
         "transcripts": 0,
     }
+
+    def add_row(relative_path: str, content_type: str | None, **fields: Any) -> None:
+        rows.append(
+            {
+                "course_id": course_id,
+                "source_system": source_system,
+                "file_path": relative_path,
+                "file_extension": file_extension(relative_path),
+                "content_type": content_type or UNKNOWN_CONTENT_TYPE,
+                "size_bytes": None,
+                "content": None,
+                "static_references": None,
+                **fields,
+            }
+        )
 
     for relative_path, read_bytes in members:
         if is_transcript(relative_path):
@@ -420,11 +445,18 @@ def build_document_rows(
 
         content_type = _content_type(relative_path)
 
-        if not is_supported(content_type):
+        if not is_text_file(relative_path):
             counters["skipped"] += 1
+            add_row(
+                relative_path,
+                content_type,
+                extraction_status=STATUS_SKIPPED_UNSUPPORTED,
+            )
             continue
 
         file_bytes = read_bytes()
+        is_notebook = file_extension(relative_path) == NOTEBOOK_EXTENSION
+        tally = "notebook_" if is_notebook else ""
 
         # A zero-byte file has no text, which is a fact rather than a failure.
         # Tika answers 422 for an empty body, and counting that as a failed
@@ -432,33 +464,26 @@ def build_document_rows(
         # the health guard divides by -- an Open edX export ships a stack of
         # empty about/ placeholders, so this is common enough to matter.
         if not file_bytes:
-            counters["candidates"] += 1
-            counters["empty"] += 1
-            rows.append(
-                {
-                    "course_id": course_id,
-                    "source_system": source_system,
-                    "file_path": relative_path,
-                    "file_extension": file_extension(relative_path),
-                    "content_type": content_type,
-                    "size_bytes": 0,
-                    "content": None,
-                    "extraction_status": "empty",
-                    "static_references": None,
-                }
+            counters[f"{tally}candidates"] += 1
+            counters[f"{tally}empty"] += 1
+            add_row(
+                relative_path, content_type, size_bytes=0, extraction_status="empty"
             )
             continue
 
         linked = (
             static_references(file_bytes) if content_type == HTML_CONTENT_TYPE else None
         )
-        counters["candidates"] += 1
+        counters[f"{tally}candidates"] += 1
         try:
-            text = extract(file_bytes, content_type)
+            if is_notebook:
+                text = notebook_text(file_bytes)
+            else:
+                text = extract(file_bytes, content_type)
         except Exception as error:
             raise_if_service_failure(error, relative_path)
-            counters["failed"] += 1
-            log.exception("Tika extraction failed for %s", relative_path)
+            counters[f"{tally}failed"] += 1
+            log.exception("Text extraction failed for %s", relative_path)
             # A failed document still gets a row. Emitting nothing makes a
             # transient Tika failure indistinguishable, downstream, from the
             # file having been deleted from the course -- and MIT Learn treats
@@ -467,41 +492,30 @@ def build_document_rows(
             # failures out through a `failed_keys` side channel that exempts
             # them from the stale pass; a JSONL snapshot has no side channel,
             # so the status has to travel in the row itself.
-            rows.append(
-                {
-                    "course_id": course_id,
-                    "source_system": source_system,
-                    "file_path": relative_path,
-                    "file_extension": file_extension(relative_path),
-                    "content_type": content_type,
-                    "size_bytes": len(file_bytes),
-                    "content": None,
-                    "extraction_status": "failed",
-                    "static_references": linked,
-                }
+            add_row(
+                relative_path,
+                content_type,
+                size_bytes=len(file_bytes),
+                extraction_status="failed",
+                static_references=linked,
             )
             continue
 
         if text:
-            counters["extracted"] += 1
+            counters[f"{tally}extracted"] += 1
         else:
             # Tika answered but produced nothing. Common for scanned PDFs with
             # no OCR; recorded as a row so the absence is visible downstream
             # rather than looking like the file was never seen.
-            counters["empty"] += 1
+            counters[f"{tally}empty"] += 1
 
-        rows.append(
-            {
-                "course_id": course_id,
-                "source_system": source_system,
-                "file_path": relative_path,
-                "file_extension": file_extension(relative_path),
-                "content_type": content_type,
-                "size_bytes": len(file_bytes),
-                "content": text or None,
-                "extraction_status": "extracted" if text else "empty",
-                "static_references": linked,
-            }
+        add_row(
+            relative_path,
+            content_type,
+            size_bytes=len(file_bytes),
+            content=text or None,
+            extraction_status="extracted" if text else "empty",
+            static_references=linked,
         )
 
     return rows, counters
@@ -565,9 +579,10 @@ def assert_extraction_healthy(counters: dict[str, int], course_id: str) -> None:
     # `openedx_document_extraction` on the instance (Deployment -> Concurrency),
     # these runs are still unbounded.
     pool="openedx_document_extraction",
+    code_version=DOCUMENT_TEXT_CODE_VERSION,
     description=(
-        "Plain text extracted via Apache Tika from the documents in a course "
-        "archive (PDFs, HTML, Office files). One JSONL row per document."
+        "Plain text extracted from the files in a course's static asset bundle "
+        "(Tika, notebooks directly). One JSONL row per file, skipped types included."
     ),
 )
 def extract_course_document_text(
@@ -589,7 +604,6 @@ def extract_course_document_text(
                 course_id=course_id,
                 source_system=source_system,
                 extract=partial(tika.extract_text, ocr_strategy=TIKA_PDF_OCR_STRATEGY),
-                is_supported=tika.is_supported,
             )
         assert_extraction_healthy(counters, course_id)
         snapshot = stamp_static_assets_version(

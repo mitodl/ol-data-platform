@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -1168,6 +1169,87 @@ def test_file_over_the_size_limit_is_failed_without_being_read(
 
     assert result == (None, "failed", False)
     assert tika.calls == 0
+
+
+def test_a_notebook_is_read_without_tika(bucket: FakeS3) -> None:
+    key = "courses/a-course/lab1.ipynb"
+    bucket.objects[key] = json.dumps(
+        {"cells": [{"cell_type": "code", "source": "import numpy"}]}
+    ).encode()
+    tika = FakeTika()
+
+    result = ocw_content._extract_text(bucket, tika, _BUCKET, key, 10)  # noqa: SLF001
+
+    assert result == ("import numpy", "extracted", False)
+    assert tika.calls == 0
+
+
+def test_a_broken_notebook_is_failed_and_not_retried(bucket: FakeS3) -> None:
+    key = "courses/a-course/lab1.ipynb"
+    bucket.objects[key] = b"not json"
+
+    result = ocw_content._extract_text(  # noqa: SLF001
+        bucket, FakeTika(), _BUCKET, key, 8
+    )
+
+    assert result == (None, "failed", False)
+
+
+def _add_notebooks(fake: FakeS3, slug: str, bodies: list[bytes]) -> None:
+    for number, body in enumerate(bodies):
+        file_key = f"courses/{slug}/lab{number}.ipynb"
+        fake.objects[f"courses/{slug}/resources/lab-{number}/data.json"] = json.dumps(
+            {"title": f"Lab {number}", "resourcetype": "Other", "file": f"/{file_key}"}
+        ).encode()
+        fake.objects[file_key] = body
+
+
+def _read_course(fake: FakeS3, tika: FakeTika, slug: str) -> list[dict[str, Any]]:
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        rows, _bytes = ocw_content.read_course(
+            fs=fake,
+            pool=pool,
+            client=tika,
+            bucket=_BUCKET,
+            slug=slug,
+            objects=ocw_content.list_course(fake, _BUCKET, slug),
+            version="v1",
+        )
+    return rows
+
+
+def test_a_read_notebook_does_not_hide_a_tika_outage() -> None:
+    fake = FakeS3(_course("a-course"))
+    notebook = {"cells": [{"cell_type": "code", "source": "import numpy"}]}
+    _add_notebooks(fake, "a-course", [json.dumps(notebook).encode()])
+
+    with pytest.raises(TikaUnavailableError, match="Tika failed 1 files"):
+        _read_course(fake, FakeTika(fail=True), "a-course")
+
+
+def test_broken_notebooks_are_failed_without_probing_tika() -> None:
+    fake = FakeS3(_course("a-course", files=0))
+    _add_notebooks(fake, "a-course", [b"not json"] * FAILURES_BEFORE_PROBE)
+    tika = FakeTika()
+
+    rows = _read_course(fake, tika, "a-course")
+
+    statuses = [row["extraction_status"] for row in rows if row["file_key"]]
+    assert statuses == ["failed"] * FAILURES_BEFORE_PROBE
+    assert tika.calls == 0
+
+
+@pytest.mark.parametrize(
+    ("path", "key"),
+    [
+        ("/courses/a-course/notes.tex", "courses/a-course/notes.tex"),
+        ("/courses/a-course/lab1.ipynb", "courses/a-course/lab1.ipynb"),
+        ("/courses/a-course/book.epub", "courses/a-course/book.epub"),
+        ("/courses/a-course/logo.png", None),
+    ],
+)
+def test_bucket_key_reads_the_platform_file_types(path: str, key: str | None) -> None:
+    assert ocw_content.bucket_key(path) == key
 
 
 @pytest.mark.integration
