@@ -113,7 +113,7 @@ repos:
     pass_filenames: false
     require_serial: true
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: v1.32.0
+  rev: v1.33.1
   hooks:
   - id: zizmor
     args: [--no-progress, --min-severity=medium, --min-confidence=medium]
