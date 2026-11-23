@@ -24,8 +24,9 @@
   is_excluded and exclusion_reason are Learn's verdict, for the Learn views.
   learner_visibility, static_reference and non_content_kind are the platform's
   own facts from the same rules, each applied on its own rather than first
-  rule wins, for every other consumer. They are null where is_excluded is, and
-  for a run whose exclusion rows predate them.
+  rule wins, for every other consumer. They are null where is_excluded is, for a
+  run whose exclusion rows predate them, and for a file of a checked run with no
+  exclusion row of its own (which is_excluded calls not excluded).
 
   release_date is the date Learn's OlxArchive.release_dates gives the file, from
   the OLX start dates on its path down from the course, as the exclusions asset

@@ -19,11 +19,14 @@
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
-    randomized variants of one question. Static documents are dropped by the platform's
-    flags on the export (stg__openedx__s3__course_file_exclusions): no learner can reach
-    them (staff-only, an unreachable tab), no text a learner reaches links them, or they
-    are not course content. Exclusion rows written before those flags fall back to Learn's
-    exclusion reasons, less about_page. About pages are read either way: Learn leaves
+    randomized variants of one question. Files are dropped by the platform's flags on
+    the export (stg__openedx__s3__course_file_exclusions): no learner can reach them (a
+    draft, staff-only, an unreachable tab), no text a learner reaches links them, or
+    they are not course content. Exclusion rows written before those flags fall back to
+    Learn's exclusion reasons less about_page and staff_only, so a file Learn excludes
+    first as staff_only is dropped only once its run is exported again with the flags
+    (in production every such static file is an .srt, which is not read as a
+    document). About pages are read either way: Learn leaves
     them out of search, but the description and prerequisites stated there are what the
     context scope is for. Each
     about page is one field of the about page, so its text is prefixed with the field's
@@ -166,8 +169,8 @@ with content as (
         and case
             when content_file_learner_visibility is not null
                 then
-                    content_file_learner_visibility in ('staff_only', 'unreachable_tab')
-                    or coalesce(content_file_static_reference = 'unreferenced', false)
+                    content_file_learner_visibility in ('draft', 'staff_only', 'unreachable_tab')
+                    or content_file_static_reference = 'unreferenced'
                     or content_file_non_content_kind is not null
             else
                 content_file_is_excluded

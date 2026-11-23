@@ -14,8 +14,6 @@ from typing import Any
 import pytest
 from defusedxml import EntitiesForbidden
 from openedx.assets.content_file_exclusions import (
-    NON_CONTENT_OLX_FILE_KINDS,
-    NON_CONTENT_OLX_FILES,
     OlxArchive,
     build_file_rows,
     build_unit_rows,
@@ -253,7 +251,22 @@ def test_non_content_kind_names_what_a_non_content_file_is(rows):
         "info/updates.items.json": "announcements",
         "info/updates.html": "legacy_announcements",
     }
-    assert set(NON_CONTENT_OLX_FILE_KINDS) == set(NON_CONTENT_OLX_FILES)
+
+
+def test_an_unpublished_draft_is_not_visible(tmp_path):
+    files = {**COURSE_FILES, "drafts/vertical/next_week.xml": "<vertical/>"}
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    row = {
+        row["file_path"]: row
+        for row in build_file_rows(
+            OlxArchive(olx_root, "mitxonline"), course_id="c", course_xml_version="abc"
+        )
+    }["drafts/vertical/next_week.xml"]
+    assert row["learner_visibility"] == "draft"
+    # Learn never reads a draft, so it has no reason to exclude one.
+    assert not row["excluded"]
 
 
 def test_platform_flags_keep_every_rule_that_holds(tmp_path):

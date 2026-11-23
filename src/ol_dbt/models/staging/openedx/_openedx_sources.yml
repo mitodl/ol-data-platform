@@ -162,8 +162,9 @@ sources:
         by its url_name; null in files written before the asset keyed files
     - name: learner_visibility
       description: str, the platform's reading of whether a learner can reach the
-        file (visible, staff_only, unreachable_tab, about_page_not_served); null for
-        an export without course.xml and in files written before the asset set it
+        file (visible, draft, staff_only, unreachable_tab, about_page_not_served);
+        null for an export without course.xml and in files written before the asset
+        set it
     - name: static_reference
       description: str, for a static/ file, whether text a learner reaches links it
         (referenced, unreferenced); null outside static/ and in files written before

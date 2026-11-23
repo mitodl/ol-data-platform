@@ -36,6 +36,8 @@ facts land as columns every model may read and none is dropped on their
 account here; excluded and exclusion_reason stay Learn's verdict (first rule
 wins, as Learn's set gives no reason), read only by integrations__learn__*.
 
+- The draft-folder skip in text_files (unpublished drafts Studio exports under
+  drafts/): platform. No learner can reach a draft. learner_visibility = draft.
 - staff_only (a visible_to_staff_only subtree, less what a reachable block also
   links): platform. No learner can reach it. learner_visibility = staff_only.
 - unreachable_tab (a tab page hidden, staff-only or missing from the policy's
@@ -60,8 +62,8 @@ wins, as Learn's set gives no reason), read only by integrations__learn__*.
   scope drops it too.
 - release_dates: platform. When a learner of an instructor-paced run can first
   reach the file. release_date.
-- VALID_TEXT_FILE_TYPES and the draft-folder skip in text_files, and key():
-  Learn's ingest list and ContentFile key, so Learn-parity. Every file gets a
+- VALID_TEXT_FILE_TYPES in text_files, and key(): Learn's ingest list and
+  ContentFile key, so Learn-parity. Every file gets a
   row whatever its suffix; the platform's own list of readable types is
   ol_file_types, and the platform keys a file by its path.
 - units(): Learn-parity output only (course_units, read by
@@ -153,19 +155,12 @@ OLL_ETL_SOURCE = "oll"
 
 REFERENCE_SCAN_EXTENSIONS = frozenset({".xml", ".html", ".htm", ".json", ".txt", ".md"})
 
-# Asset manifests list every file in the export, and updates.items.json is
-# mostly deleted announcements; neither describes current course content.
-NON_CONTENT_OLX_FILES = (
-    "policies/assets.json",
-    "assets/assets.xml",
-    "info/updates.items.json",
-)
-
 
 class LearnerVisibility(StrEnum):
     """Whether a learner of the run can reach a file, and if not, why"""
 
     VISIBLE = "visible"
+    DRAFT = "draft"
     STAFF_ONLY = "staff_only"
     UNREACHABLE_TAB = "unreachable_tab"
     ABOUT_PAGE_NOT_SERVED = "about_page_not_served"
@@ -187,12 +182,14 @@ class NonContentKind(StrEnum):
     LEGACY_ANNOUNCEMENTS = "legacy_announcements"
 
 
-# The kind of each of NON_CONTENT_OLX_FILES
+# Asset manifests list every file in the export, and updates.items.json is
+# mostly deleted announcements; neither describes current course content.
 NON_CONTENT_OLX_FILE_KINDS = {
     "policies/assets.json": NonContentKind.ASSET_MANIFEST,
     "assets/assets.xml": NonContentKind.ASSET_MANIFEST,
     "info/updates.items.json": NonContentKind.ANNOUNCEMENTS,
 }
+NON_CONTENT_OLX_FILES = tuple(NON_CONTENT_OLX_FILE_KINDS)
 
 # A legacy transcript is named for its video's id rather than for anything the
 # course text contains, so the id is the only link back to the block using it.
@@ -556,13 +553,15 @@ class OlxArchive:
 
         The platform's reading of Learn's unreachable rules: every rule that
         holds is considered, not only the first, and a static file a reachable
-        block links stays visible, as Learn puts it back.
+        block links stays visible, as Learn puts it back. Unpublished drafts,
+        which Learn skips by never reading them, are not visible either.
         """
         if not self.is_olx:
             return {}
         referenced, _ = self._static_reference_split
         hidden: dict[Path, LearnerVisibility] = {}
         for paths, why in (
+            (self._draft_files, LearnerVisibility.DRAFT),
             (self._staff_only, LearnerVisibility.STAFF_ONLY),
             (self._unreachable_tabs, LearnerVisibility.UNREACHABLE_TAB),
             (self._hidden_about_pages, LearnerVisibility.ABOUT_PAGE_NOT_SERVED),
@@ -589,15 +588,27 @@ class OlxArchive:
         if not self.is_olx:
             return {}
         kinds = {
-            self.root / name: NON_CONTENT_OLX_FILE_KINDS[name]
-            for name in NON_CONTENT_OLX_FILES
-            if (self.root / name).is_file()
+            path: NON_CONTENT_OLX_FILE_KINDS[path.relative_to(self.root).as_posix()]
+            for path in self._non_content_files
         }
         for path in self.root.glob("policies/**/*"):
             kinds.setdefault(path, NonContentKind.COURSE_SETTINGS)
         for path in self.root.glob("info/**/updates.html"):
             kinds.setdefault(path, NonContentKind.LEGACY_ANNOUNCEMENTS)
         return kinds
+
+    @cached_property
+    def _draft_files(self) -> set[Path]:
+        """
+        Files under an unpublished-drafts folder, by the test text_files and
+        _reference_candidates use: "draft" in a directory name
+        """
+        return {
+            path
+            for path in self.root.rglob("*")
+            if path.is_file()
+            and any("draft" in part for part in path.relative_to(self.root).parts[:-1])
+        }
 
     @cached_property
     def _non_content_files(self) -> set[Path]:

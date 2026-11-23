@@ -86,9 +86,11 @@ models:
       when it is not
   - name: learner_visibility
     description: str, the platform's reading of whether a learner can reach the file
-      (visible, staff_only, unreachable_tab, about_page_not_served), each rule applied
-      on its own; null when is_exclusion_checked is false or the exclusion rows predate
-      the column. Read this, not is_excluded, outside the Learn views
+      (visible, draft, staff_only, unreachable_tab, about_page_not_served), each rule
+      applied on its own; null when is_exclusion_checked is false, when the exclusion
+      rows predate the column, and for a file of a checked run with no exclusion row
+      of its own (which is_excluded calls not excluded). Read this, not is_excluded,
+      outside the Learn views
   - name: static_reference
     description: str, for a static/ file, whether text a learner reaches links it
       (referenced, unreferenced); a relevance flag, since an unreferenced file is

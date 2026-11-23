@@ -264,13 +264,13 @@ models:
   - name: content_file_learner_visibility
     description: str, the platform's reading of whether a learner of the run can reach
       the file, from the same rules as Learn's but each applied on its own (visible,
-      staff_only, unreachable_tab, about_page_not_served). A static file a reachable
-      block links is visible. Null for an export without course.xml and for a course
-      whose newest file predates the asset setting it
+      draft, staff_only, unreachable_tab, about_page_not_served). A static file a
+      reachable block links is visible. Null for an export without course.xml and
+      for a course whose newest file predates the asset setting it
     tests:
     - accepted_values:
         arguments:
-          values: [visible, staff_only, unreachable_tab, about_page_not_served]
+          values: [visible, draft, staff_only, unreachable_tab, about_page_not_served]
   - name: content_file_static_reference
     description: str, for a file under static/, whether text a learner reaches links
       it (referenced, unreferenced). An unreferenced file is still served by URL,
