@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
 # minimal-notebook provides JupyterLab, jupyterhub-singleuser, and the Z2JH
 # user/entrypoint setup (jovyan, NB_UID, start.sh hooks) without the conda
 # data-science stack. All notebook-level packages (pandas, trino, pyiceberg,
