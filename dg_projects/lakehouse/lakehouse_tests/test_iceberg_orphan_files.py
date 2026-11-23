@@ -362,8 +362,10 @@ def _dbt_table(database: str, table: str, eligible_bytes: int) -> TableOrphanFil
     )
 
 
-def test_dbt_layer_pass_deletes_nowhere_yet():
-    assert frozenset() == module.ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS
+def test_dbt_layer_pass_deletes_only_in_qa():
+    assert (
+        frozenset({"qa"}) == module.ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS
+    )
 
 
 def test_dbt_layer_pass_covers_the_dbt_layers_of_its_own_warehouse():
