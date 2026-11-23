@@ -227,6 +227,15 @@ def test_canvas_instigators_start_running_in_production_only(environment: str) -
         } == {expected}
 
 
+@pytest.mark.parametrize("environment", ["dev", "ci", "qa", "production"])
+def test_canvas_content_ingest_runs_in_production_only(environment: str) -> None:
+    """Stopped, the warehouse keeps the hand-started first load while Learn moves on."""
+    expected = "RUNNING" if environment == "production" else "STOPPED"
+    with _repository_for(environment) as repo:
+        schedule = repo.get_schedule_def("canvas_content_ingest_daily_schedule")
+        assert schedule.default_status.value == expected
+
+
 def test_canvas_sheet_sensor_requests_only_local_assets() -> None:
     """The webhook asset is in delivery, and a sensor cannot launch it from here.
 
