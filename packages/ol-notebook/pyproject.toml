@@ -1,0 +1,37 @@
+[project]
+name = "ol-notebook"
+# Bump on every change: uv treats a rebuilt wheel with an unchanged version as
+# already installed in an existing notebook environment.
+version = "0.1.0"
+description = "Helpers for MIT Open Learning marimo notebooks, in JupyterHub and as published apps"
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+requires-python = ">=3.12"
+license = "BSD-3-Clause"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+# Notebooks list ol-notebook in their PEP 723 header, so these resolve inside
+# each notebook's sandbox environment next to whatever else it declares. Keep
+# the bounds loose for that reason.
+dependencies = [
+    # 9.1 added openid_token_file for authentication_openid_connect_client.
+    "mysql-connector-python>=9.1",
+    "sqlalchemy>=2.0",
+    # Compilation and reflection for ol_notebook.dialect.
+    "starrocks>=1.2",
+]
+repository = "https://github.com/mitodl/ol-data-platform"
+
+[project.entry-points."sqlalchemy.dialects"]
+"starrocks.mysqlconnector" = "ol_notebook.dialect:StarRocksMySQLConnectorDialect"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ol_notebook"]
