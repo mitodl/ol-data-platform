@@ -5,7 +5,8 @@
     Scopes:
       unit       one per sequential a learner can navigate to (not staff-only, alone or by
                  its chapter, and not hidden from the table of contents), its leaf blocks
-                 in course-tree order (dim_course_content)
+                 in course-tree order (dim_course_content), less those whose own OLX
+                 file the flags below drop (a staff-only vertical's components)
       context    the about pages, reachable tabs and course info pages, then the blocks of
                  the sequentials that describe the course or a module rather than teach:
                  one titled "Module Overview and Learning Goals" wherever it sits, and a
@@ -320,7 +321,17 @@ with content as (
             and leaf_blocks.courserun_readable_id = latest_xml_blocks.courserun_readable_id
             and latest_xml_blocks.export_path
             = concat(leaf_blocks.block_category, '/', leaf_blocks.block_name, '.xml')
-    where leaf_blocks.parent_category != 'library_content' or leaf_blocks.sibling_position = 1
+    -- the exclusions asset marks every file of a staff-only subtree, so a component a
+    -- staff-only vertical holds is dropped by its own OLX file; for rows written before
+    -- the flags no honored reason applies to a block file, so the component stays
+    left join excluded_paths
+        on
+            latest_xml_blocks.platform = excluded_paths.platform
+            and latest_xml_blocks.courserun_readable_id = excluded_paths.courserun_readable_id
+            and latest_xml_blocks.export_path = excluded_paths.content_file_path
+    where
+        excluded_paths.content_file_path is null
+        and (leaf_blocks.parent_category != 'library_content' or leaf_blocks.sibling_position = 1)
 )
 
 , unit_sources as (
