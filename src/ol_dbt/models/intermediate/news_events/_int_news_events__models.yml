@@ -26,10 +26,16 @@ models:
       date when it has none
   - name: zone_abbreviation
     description: str, the first US zone abbreviation (ET, EST, EDT, CT, CST, CDT,
-      MT, MST, MDT, PT, PST, PDT) or JST, KST, UTC or GMT in the range, as a whole
-      word, upper case
+      MT, MST, MDT, PT, PST, PDT) or JST or KST in the range, upper case and a whole
+      word
+  - name: utc_name
+    description: str, UTC or GMT where the range names either, upper case and a whole
+      word
   - name: utc_offset_hours
     description: int, the hours of a "UTC+3" or "GMT-4" offset in the range
+  - name: utc_offset_minutes
+    description: int, the minutes of a "UTC+5:30" offset, 0 for a whole-hour one,
+      null without an offset
   - name: run_count
     description: int, the number of "<hour>[:<minute>]<non-digits>" runs in the normalized
       range
@@ -157,56 +163,77 @@ unit_tests:
     - {event_id: i, event_start_date_raw: "", event_end_date_raw: "", event_time_range_raw: "9am"}
     - {event_id: m, event_start_date_raw: "2026-02-10", event_end_date_raw: "2026-02-10",
       event_time_range_raw: "TBD, see Meet the Team"}
+    - {event_id: r, event_start_date_raw: '2026-02-10', event_end_date_raw: '2026-02-10',
+      event_time_range_raw: 7-8p.m.}
+    - {event_id: s, event_start_date_raw: '2026-07-15', event_end_date_raw: '2026-07-15',
+      event_time_range_raw: '9am - 5pm (IST, UTC+5:30)'}
+    - {event_id: t, event_start_date_raw: '2026-07-15', event_end_date_raw: '2026-07-15',
+      event_time_range_raw: '10am - 12pm, Smith et al. (PT)'}
   expect:
     rows:
     - {event_id: a, start_date: "2026-09-15", end_date: "2026-09-15", zone_abbreviation: null,
       utc_offset_hours: null, run_count: 2, hour_1: 12, minute_1: "30", ampm_1: pm,
       hour_2: 1, minute_2: "00", ampm_2: pm, learn_run_count: 2, learn_hour_1: 12,
       learn_minute_1: "30", learn_ampm_1: pm, learn_hour_2: 1, learn_minute_2: "00",
-      learn_ampm_2: pm, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: pm, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
     - {event_id: b, start_date: "2025-03-27", end_date: "2025-03-27", zone_abbreviation: ET,
       utc_offset_hours: null, run_count: 2, hour_1: 12, minute_1: "00", ampm_1: null,
       hour_2: 1, minute_2: "00", ampm_2: pm, learn_run_count: 2, learn_hour_1: 12,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: 1, learn_minute_2: "00",
-      learn_ampm_2: pm, learn_tz_1: null, learn_tz_2: ET}
+      learn_ampm_2: pm, learn_tz_1: null, learn_tz_2: ET, utc_name: null, utc_offset_minutes: null}
     # The offset is not a third time for the platform; Learn counts three runs.
     - {event_id: c, start_date: "2026-06-03", end_date: "2026-06-03", zone_abbreviation: EDT,
       utc_offset_hours: -4, run_count: 2, hour_1: 7, minute_1: "45", ampm_1: am, hour_2: 5,
       minute_2: "30", ampm_2: pm, learn_run_count: 3, learn_hour_1: 7, learn_minute_1: "45",
       learn_ampm_1: am, learn_hour_2: 5, learn_minute_2: "30", learn_ampm_2: pm, learn_tz_1: null,
-      learn_tz_2: null}
+      learn_tz_2: null, utc_name: UTC, utc_offset_minutes: 0}
     - {event_id: d, start_date: "2026-05-26", end_date: "2026-05-31", zone_abbreviation: null,
       utc_offset_hours: null, run_count: 0, hour_1: null, minute_1: "00", ampm_1: null,
       hour_2: null, minute_2: "00", ampm_2: null, learn_run_count: 0, learn_hour_1: null,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: null, learn_minute_2: "00",
-      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
     - {event_id: e, start_date: "2026-02-10", end_date: "2026-02-10", zone_abbreviation: null,
       utc_offset_hours: null, run_count: 1, hour_1: 8, minute_1: "00", ampm_1: pm,
       hour_2: null, minute_2: "00", ampm_2: null, learn_run_count: 1, learn_hour_1: 8,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: null, learn_minute_2: "00",
-      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
     # UTC matches as a word inside "(UTC+3)"; the offset is what the parse uses.
-    - {event_id: f, start_date: "2026-06-03", end_date: "2026-06-03", zone_abbreviation: UTC,
+    - {event_id: f, start_date: "2026-06-03", end_date: "2026-06-03", zone_abbreviation: null,
       utc_offset_hours: 3, run_count: 2, hour_1: 8, minute_1: "00", ampm_1: null,
       hour_2: 16, minute_2: "10", ampm_2: null, learn_run_count: 3, learn_hour_1: 8,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: 16, learn_minute_2: "10",
-      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: UTC, utc_offset_minutes: 0}
     - {event_id: g, start_date: "2026-02-10", end_date: "2026-02-10", zone_abbreviation: CT,
       utc_offset_hours: null, run_count: 1, hour_1: 11, minute_1: "00", ampm_1: am,
       hour_2: null, minute_2: "00", ampm_2: null, learn_run_count: 1, learn_hour_1: 11,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: null, learn_minute_2: "00",
-      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
     - {event_id: i, start_date: null, end_date: null, zone_abbreviation: null, utc_offset_hours: null,
       run_count: 1, hour_1: 9, minute_1: "00", ampm_1: am, hour_2: null, minute_2: "00",
       ampm_2: null, learn_run_count: 1, learn_hour_1: 9, learn_minute_1: "00", learn_ampm_1: am,
       learn_hour_2: null, learn_minute_2: "00", learn_ampm_2: null, learn_tz_1: null,
-      learn_tz_2: null}
+      learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
     # "Meet" holds no zone: a zone abbreviation is a whole word.
     - {event_id: m, start_date: "2026-02-10", end_date: "2026-02-10", zone_abbreviation: null,
       utc_offset_hours: null, run_count: 0, hour_1: null, minute_1: "00", ampm_1: null,
       hour_2: null, minute_2: "00", ampm_2: null, learn_run_count: 0, learn_hour_1: null,
       learn_minute_1: "00", learn_ampm_1: null, learn_hour_2: null, learn_minute_2: "00",
-      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null}
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
+    - {event_id: r, start_date: '2026-02-10', end_date: '2026-02-10', zone_abbreviation: null,
+      utc_offset_hours: null, run_count: 2, hour_1: 7, minute_1: '00', ampm_1: null,
+      hour_2: 8, minute_2: '00', ampm_2: pm, learn_run_count: 2, learn_hour_1: 7,
+      learn_minute_1: '00', learn_ampm_1: null, learn_hour_2: 8, learn_minute_2: '00',
+      learn_ampm_2: null, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
+    - {event_id: s, start_date: '2026-07-15', end_date: '2026-07-15', zone_abbreviation: null,
+      utc_offset_hours: 5, run_count: 2, hour_1: 9, minute_1: '00', ampm_1: am, hour_2: 5,
+      minute_2: '00', ampm_2: pm, learn_run_count: 3, learn_hour_1: 9, learn_minute_1: '00',
+      learn_ampm_1: am, learn_hour_2: 5, learn_minute_2: '00', learn_ampm_2: pm, learn_tz_1: null,
+      learn_tz_2: null, utc_name: UTC, utc_offset_minutes: 30}
+    - {event_id: t, start_date: '2026-07-15', end_date: '2026-07-15', zone_abbreviation: PT,
+      utc_offset_hours: null, run_count: 2, hour_1: 10, minute_1: '00', ampm_1: am,
+      hour_2: 12, minute_2: '00', ampm_2: pm, learn_run_count: 2, learn_hour_1: 10,
+      learn_minute_1: '00', learn_ampm_1: am, learn_hour_2: 12, learn_minute_2: '00',
+      learn_ampm_2: pm, learn_tz_1: null, learn_tz_2: null, utc_name: null, utc_offset_minutes: null}
 
 - name: test_int__news_events__mitpe_event_times_parses_each_case
   model: int__news_events__mitpe_event_times
@@ -218,29 +245,28 @@ unit_tests:
       ampm_2: pm, utc_offset_hours: null}
     # Noon to 1 PM, in daylight time although it says ET.
     - {event_id: b, time_range_raw: "12-1pm ET", start_date: "2025-03-27", end_date: "2025-03-27",
-      zone_abbreviation: ET, run_count: 2, hour_1: 12, minute_1: "00", hour_2: 1,
-      minute_2: "00", ampm_2: pm}
+      run_count: 2, hour_1: 12, minute_1: "00", hour_2: 1, minute_2: "00", ampm_2: pm,
+      zone_abbreviation: ET}
     - {event_id: c, time_range_raw: "8:00AM - 1:00PM JST", start_date: "2022-11-08",
-      end_date: "2022-11-08", zone_abbreviation: JST, run_count: 2, hour_1: 8, minute_1: "00",
-      ampm_1: am, hour_2: 1, minute_2: "00", ampm_2: pm}
+      end_date: "2022-11-08", run_count: 2, hour_1: 8, minute_1: "00", ampm_1: am,
+      hour_2: 1, minute_2: "00", ampm_2: pm, zone_abbreviation: JST}
     - {event_id: d, time_range_raw: "", start_date: "2026-05-26", end_date: "2026-05-31",
       run_count: 0, minute_1: "00", minute_2: "00"}
     - {event_id: e, time_range_raw: "40 minutes", start_date: "2022-09-16", end_date: "2022-09-16",
       run_count: 1, hour_1: 40, minute_1: "00", minute_2: "00"}
     - {event_id: f, time_range_raw: "9am-10am EDT", start_date: "2026-07-17", end_date: "2026-07-17",
-      zone_abbreviation: EDT, run_count: 2, hour_1: 9, minute_1: "00", ampm_1: am,
-      hour_2: 10, minute_2: "00", ampm_2: am}
+      run_count: 2, hour_1: 9, minute_1: "00", ampm_1: am, hour_2: 10, minute_2: "00",
+      ampm_2: am, zone_abbreviation: EDT}
     # EST in April is read as Eastern time, which is daylight time then.
     - {event_id: g, time_range_raw: "12:00 PM EST", start_date: "2026-04-07", end_date: "2026-04-07",
-      zone_abbreviation: EST, run_count: 1, hour_1: 12, minute_1: "00", ampm_1: pm,
-      minute_2: "00"}
+      run_count: 1, hour_1: 12, minute_1: "00", ampm_1: pm, minute_2: "00", zone_abbreviation: EST}
     - {event_id: h, time_range_raw: "10 - 9 AM", start_date: "2026-06-17", end_date: "2026-06-17",
       run_count: 2, hour_1: 10, minute_1: "00", hour_2: 9, minute_2: "00", ampm_2: am}
     - {event_id: i, time_range_raw: "9am", start_date: null, end_date: null, run_count: 1,
       hour_1: 9, minute_1: "00", ampm_1: am, minute_2: "00"}
     - {event_id: j, time_range_raw: "10am-11am PT", start_date: "2026-07-01", end_date: "2026-07-01",
-      zone_abbreviation: PT, run_count: 2, hour_1: 10, minute_1: "00", ampm_1: am,
-      hour_2: 11, minute_2: "00", ampm_2: am}
+      run_count: 2, hour_1: 10, minute_1: "00", ampm_1: am, hour_2: 11, minute_2: "00",
+      ampm_2: am, zone_abbreviation: PT}
     - {event_id: k, time_range_raw: "11-1pm", start_date: "2026-02-10", end_date: "2026-02-10",
       run_count: 2, hour_1: 11, minute_1: "00", hour_2: 1, minute_2: "00", ampm_2: pm}
     - {event_id: l, time_range_raw: "11am-1", start_date: "2026-02-10", end_date: "2026-02-10",
@@ -251,13 +277,31 @@ unit_tests:
       run_count: 2, hour_1: 14, minute_1: "00", hour_2: 15, minute_2: "30"}
     # A US abbreviation wins over the offset beside it.
     - {event_id: o, time_range_raw: "7:45 AM - 5:30 PM (EDT, UTC-4)", start_date: "2026-06-03",
-      end_date: "2026-06-03", zone_abbreviation: EDT, utc_offset_hours: -4, run_count: 2,
-      hour_1: 7, minute_1: "45", ampm_1: am, hour_2: 5, minute_2: "30", ampm_2: pm}
+      end_date: "2026-06-03", run_count: 2, hour_1: 7, minute_1: "45", ampm_1: am,
+      hour_2: 5, minute_2: "30", ampm_2: pm, utc_offset_hours: -4, zone_abbreviation: EDT,
+      utc_offset_minutes: 0}
     - {event_id: p, time_range_raw: "8:00 - 16:10 EEST (UTC+3)", start_date: "2026-06-03",
-      end_date: "2026-06-03", zone_abbreviation: UTC, utc_offset_hours: 3, run_count: 2,
-      hour_1: 8, minute_1: "00", hour_2: 16, minute_2: "10"}
+      end_date: "2026-06-03", run_count: 2, hour_1: 8, minute_1: "00", hour_2: 16,
+      minute_2: "10", utc_offset_hours: 3, zone_abbreviation: null, utc_name: UTC,
+      utc_offset_minutes: 0}
     - {event_id: q, time_range_raw: "8 p.m.", start_date: "2026-02-10", end_date: "2026-02-10",
       run_count: 1, hour_1: 8, minute_1: "00", ampm_1: pm, minute_2: "00"}
+    - {event_id: r, time_range_raw: 9-5, start_date: '2026-07-15', end_date: '2026-07-15',
+      run_count: 2, hour_1: 9, minute_1: '00', hour_2: 5, minute_2: '00'}
+    - {event_id: s, time_range_raw: 12-1, start_date: '2026-02-10', end_date: '2026-02-10',
+      run_count: 2, hour_1: 12, minute_1: '00', hour_2: 1, minute_2: '00'}
+    - {event_id: t, time_range_raw: '9am - 5pm (IST, UTC+5:30)', start_date: '2026-07-15',
+      end_date: '2026-07-15', run_count: 2, hour_1: 9, minute_1: '00', ampm_1: am,
+      hour_2: 5, minute_2: '00', ampm_2: pm, utc_offset_hours: 5, utc_name: UTC, utc_offset_minutes: 30}
+    - {event_id: u, time_range_raw: 9am - 5pm (UTC-13), start_date: '2026-07-15',
+      end_date: '2026-07-15', run_count: 2, hour_1: 9, minute_1: '00', ampm_1: am,
+      hour_2: 5, minute_2: '00', ampm_2: pm, utc_offset_hours: -13, utc_name: UTC,
+      utc_offset_minutes: 0}
+    - {event_id: v, time_range_raw: 0:30 - 2pm, start_date: '2026-02-10', end_date: '2026-02-10',
+      run_count: 2, hour_1: 0, minute_1: '30', hour_2: 2, minute_2: '00', ampm_2: pm}
+    - {event_id: w, time_range_raw: 9am UTC+0, start_date: '2026-02-10', end_date: '2026-02-10',
+      run_count: 1, hour_1: 9, minute_1: '00', ampm_1: am, minute_2: '00', utc_offset_hours: 0,
+      utc_name: UTC, utc_offset_minutes: 0}
   expect:
     rows:
     - {event_id: a, event_start_date: "2026-09-15", event_end_date: "2026-09-15",
@@ -270,9 +314,9 @@ unit_tests:
       start_on: "2022-11-07 23:00:00+00", end_on: "2022-11-08 04:00:00+00", time_parse_status: parsed,
       time_zone: Asia/Tokyo}
     - {event_id: d, event_start_date: "2026-05-26", event_end_date: "2026-05-31",
-      start_on: null, end_on: null, time_parse_status: no_time, time_zone: America/New_York}
+      start_on: null, end_on: null, time_parse_status: no_time, time_zone: null}
     - {event_id: e, event_start_date: "2022-09-16", event_end_date: "2022-09-16",
-      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: America/New_York}
+      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: null}
     - {event_id: f, event_start_date: "2026-07-17", event_end_date: "2026-07-17",
       start_on: "2026-07-17 13:00:00+00", end_on: "2026-07-17 14:00:00+00", time_parse_status: parsed,
       time_zone: America/New_York}
@@ -292,7 +336,7 @@ unit_tests:
       start_on: "2026-02-10 16:00:00+00", end_on: "2026-02-10 18:00:00+00", time_parse_status: parsed,
       time_zone: America/New_York}
     - {event_id: m, event_start_date: "2026-02-10", event_end_date: "2026-02-10",
-      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: America/New_York}
+      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: null}
     - {event_id: n, event_start_date: "2026-02-10", event_end_date: "2026-02-10",
       start_on: "2026-02-10 19:00:00+00", end_on: "2026-02-10 20:30:00+00", time_parse_status: parsed,
       time_zone: America/New_York}
@@ -305,6 +349,22 @@ unit_tests:
     - {event_id: q, event_start_date: "2026-02-10", event_end_date: "2026-02-10",
       start_on: "2026-02-11 01:00:00+00", end_on: "2026-02-11 01:00:00+00", time_parse_status: parsed,
       time_zone: America/New_York}
+    - {event_id: r, event_start_date: '2026-07-15', event_end_date: '2026-07-15',
+      start_on: '2026-07-15 13:00:00+00', end_on: '2026-07-15 21:00:00+00', time_parse_status: parsed,
+      time_zone: America/New_York}
+    - {event_id: s, event_start_date: '2026-02-10', event_end_date: '2026-02-10',
+      start_on: '2026-02-10 17:00:00+00', end_on: '2026-02-10 18:00:00+00', time_parse_status: parsed,
+      time_zone: America/New_York}
+    - {event_id: t, event_start_date: '2026-07-15', event_end_date: '2026-07-15',
+      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: null}
+    - {event_id: u, event_start_date: '2026-07-15', event_end_date: '2026-07-15',
+      start_on: null, end_on: null, time_parse_status: unparseable, time_zone: null}
+    - {event_id: v, event_start_date: '2026-02-10', event_end_date: '2026-02-10',
+      start_on: '2026-02-10 05:30:00+00', end_on: '2026-02-10 19:00:00+00', time_parse_status: parsed,
+      time_zone: America/New_York}
+    - {event_id: w, event_start_date: '2026-02-10', event_end_date: '2026-02-10',
+      start_on: '2026-02-10 09:00:00+00', end_on: '2026-02-10 09:00:00+00', time_parse_status: parsed,
+      time_zone: UTC}
 
 - name: test_int__news_events__mitpe_event_times_learn_matches_learn
   description: >
@@ -332,7 +392,8 @@ unit_tests:
       learn_hour_1: 9, learn_minute_1: "00", learn_ampm_1: am, learn_hour_2: 10, learn_minute_2: "00",
       learn_ampm_2: am, learn_tz_2: EDT}
     - {event_id: g, start_date: "2026-04-07", end_date: "2026-04-07", learn_run_count: 1,
-      learn_hour_1: 12, learn_minute_1: "00", learn_ampm_1: pm, learn_tz_1: EST, learn_minute_2: "00"}
+      learn_hour_1: 12, learn_minute_1: "00", learn_ampm_1: pm, learn_minute_2: "00",
+      learn_tz_1: EST}
     - {event_id: h, start_date: "2026-06-17", end_date: "2026-06-17", learn_run_count: 2,
       learn_hour_1: 10, learn_minute_1: "00", learn_hour_2: 9, learn_minute_2: "00",
       learn_ampm_2: am}

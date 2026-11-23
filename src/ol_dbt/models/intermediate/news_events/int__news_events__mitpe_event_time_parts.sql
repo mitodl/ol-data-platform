@@ -12,7 +12,7 @@
   - learn_*: from the range as written, plus the zone abbreviation after an AM/PM,
     which is how Learn reads it.
   - unprefixed: from the range with any UTC or GMT offset taken out (it is
-    utc_offset_hours instead) and "a.m."/"p.m." read as AM/PM, so "(EDT, UTC-4)"
+    utc_offset_hours and utc_offset_minutes instead) and "a.m."/"p.m." read as AM/PM, so "(EDT, UTC-4)"
     is not a third time and "8 p.m." is evening.
 #}
 
@@ -27,30 +27,33 @@ with events as (
         , coalesce(nullif(event_start_date_raw, ''), nullif(event_end_date_raw, '')) as start_date
         , coalesce(nullif(event_end_date_raw, ''), nullif(event_start_date_raw, '')) as end_date
         , coalesce(event_time_range_raw, '') as learn_range
+        -- "a.m." has no leading word boundary to match on: "8a.m." has none
+        -- between the 8 and the a.
         , {{ regexp_replace_all(
             regexp_replace_all(
                 regexp_replace_all(
                     "coalesce(event_time_range_raw, '')"
-                    , "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d{1,2}(?::\\d{2})?'"
+                    , "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d{1,2}(?::?\\d{2})?'"
                     , "' '"
                 )
-                , "'(?i)\\ba\\.\\s?m\\b\\.?'"
+                , "'(?i)a\\.\\s?m\\b\\.?'"
                 , "'am'"
             )
-            , "'(?i)\\bp\\.\\s?m\\b\\.?'"
+            , "'(?i)p\\.\\s?m\\b\\.?'"
             , "'pm'"
         ) }} as platform_range
         , {{ regexp_extract_or_null("event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*([+-])\\s*\\d{1,2}'", 1) }}
             as utc_offset_sign
         , {{ regexp_extract_or_null("event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*(\\d{1,2})'", 1) }}
             as utc_offset_digits
-        , upper(
-            {{ regexp_extract_or_null(
-                "event_time_range_raw"
-                , "'(?i)\\b(ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|JST|KST|UTC|GMT)\\b'"
-                , 1
-            ) }}
-        ) as zone_abbreviation
+        , {{ regexp_extract_or_null(
+            "event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d{1,2}:?(\\d{2})'", 1
+        ) }} as utc_offset_minute_digits
+        -- Case-sensitive, so "et al." is not Eastern time.
+        , {{ regexp_extract_or_null(
+            "event_time_range_raw", "'\\b(ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|JST|KST)\\b'", 1
+        ) }} as zone_abbreviation
+        , {{ regexp_extract_or_null("event_time_range_raw", "'\\b(UTC|GMT)\\b'", 1) }} as utc_name
     from events
 )
 
@@ -68,7 +71,11 @@ select
     , start_date
     , end_date
     , zone_abbreviation
+    , utc_name
     , cast(utc_offset_digits as integer) * case when utc_offset_sign = '-' then -1 else 1 end as utc_offset_hours
+    , case
+        when utc_offset_digits is not null then coalesce(cast(utc_offset_minute_digits as integer), 0)
+    end as utc_offset_minutes
     {% for prefix, runs in [('', 'platform_runs'), ('learn_', 'learn_runs')] %}
     , {{ array_length(runs) }} as {{ prefix }}run_count
     {% for position in [1, 2] %}
