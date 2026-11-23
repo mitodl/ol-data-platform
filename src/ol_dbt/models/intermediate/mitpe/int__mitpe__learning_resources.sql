@@ -11,31 +11,11 @@ with source as (
     select * from {{ ref('stg__mitpe__api__courses') }}
 )
 
-, duration_text as (
-    select
-        *
-        -- "7 half days" and "5 Half-Days" are one unit, so join them before taking the
-        -- word after the number
-        , replace(replace(lower(trim(course_duration)), 'half days', 'half-days'), 'half day', 'half-day')
-            as duration_normalized
-    from source
-)
-
 , duration_parts as (
     select
         *
-        , {{ regexp_extract_or_null('duration_normalized', "'^(\\d+(?:\\.\\d+)?)'", 1) }} as duration_min_value
-        , {{ regexp_extract_or_null('duration_normalized', "'^\\d+(?:\\.\\d+)?\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)'", 1) }}
-            as duration_max_value
-        -- the first word after the number or range (and an optional hyphen, "8-week"),
-        -- up to a space or punctuation ("3 mes/curso", "3 days, online",
-        -- "2 days in person+3 live webinars")
-        , {{ regexp_extract_or_null(
-            'duration_normalized',
-            "'^\\d+(?:\\.\\d+)?(?:\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?)?\\s*-?\\s*([^\\s/+,.;:()]+)'",
-            1
-        ) }} as duration_unit_word
-    from duration_text
+        , {{ duration_parse_parts('course_duration') }}
+    from source
 )
 
 , normalized as (
@@ -69,20 +49,9 @@ with source as (
         , nullif(course_learning_format, '') as learning_format
         , nullif(course_location, '') as location
         , nullif(course_duration, '') as duration
-        , {{ try_cast('duration_min_value', 'decimal(8, 2)') }} as duration_min
-        , {{ try_cast('coalesce(duration_max_value, duration_min_value)', 'decimal(8, 2)') }}
-            as duration_max
-        , case
-            when duration_min_value is null then null
-            when duration_unit_word in ('hour', 'hours', 'hora', 'horas') then 'hour'
-            when duration_unit_word in ('half-day', 'half-days') then 'half_day'
-            when duration_unit_word in ('day', 'days', 'día', 'días', 'jour', 'jours') then 'day'
-            when duration_unit_word in (
-                'week', 'weeks', 'semana', 'semanas', 'semaine', 'semaines', 'settimana', 'settimane'
-            ) then 'week'
-            when duration_unit_word in ('month', 'months', 'mes', 'meses', 'mois', 'mesi') then 'month'
-            when duration_unit_word in ('semester', 'semesters', 'semestre', 'semestres') then 'semester'
-        end as duration_unit
+        , {{ duration_min() }} as duration_min
+        , {{ duration_max() }} as duration_max
+        , {{ duration_unit() }} as duration_unit
         , nullif(course_price_raw, '') as price_text
         -- The one amount in the text, e.g. "$3,600", "USD 3600" or "$2,500 per person".
         -- Text with no number ("Contact us") or more than one (a range) has no single

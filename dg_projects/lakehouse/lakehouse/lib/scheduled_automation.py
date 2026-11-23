@@ -187,8 +187,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # validate enforces on the tag against the committed QA observation.
     "learn_integrations_qa_daily": frozenset({"qa"}),
     # A sensor, not a schedule, gated here for the same reason. It writes check
-    # results to OpenMetadata on tables named from the image's manifest, which
-    # is compiled for production.
+    # results to OpenMetadata on tables named from the production manifest, and
+    # definitions.py maps no tables in other environments.
     "asset_check_openmetadata": frozenset({"production"}),
     # Its freshness twin, for the same reason.
     "freshness_openmetadata": frozenset({"production"}),

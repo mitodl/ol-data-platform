@@ -28,7 +28,6 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     MetadataValue,
-    RetryPolicy,
     asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -36,7 +35,12 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
-from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
+from delivery.lib.learn_webhook import (
+    WEBHOOK_RETRY_POLICY,
+    LearnDeliveryConfig,
+    skip_run_retries,
+    webhook_failure,
+)
 from delivery.lib.sanitize import clean_html
 
 log = logging.getLogger(__name__)
@@ -182,7 +186,7 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
         AssetKey(["integrations", _PROGRAMS_TABLE]),
         AssetKey(["integrations", _RUNS_TABLE]),
     ],
-    retry_policy=RetryPolicy(max_retries=3, delay=5.0),
+    retry_policy=WEBHOOK_RETRY_POLICY,
 )
 def mitpe_webhook(
     context: AssetExecutionContext,
@@ -190,6 +194,7 @@ def mitpe_webhook(
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT PE courses and programs to MIT Learn via signed webhook."""
+    skip_run_retries(context)
     courses_df = _read_table(context, _COURSES_TABLE)
     programs_df = _read_table(context, _PROGRAMS_TABLE)
     runs_df = _read_table(context, _RUNS_TABLE)

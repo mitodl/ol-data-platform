@@ -8,6 +8,11 @@
   file. A video's transcript (get_video_transcript_path) is the first English
   entry of video_files.video_transcript_resources that names a file, else the
   first entry that names a file, else video_files.video_transcript_file.
+  Staging has a transcript row for every transcript file a video names, by its
+  place in that list (none for the single file), and the chosen one gives the
+  text. A course loaded before transcript rows existed has its chosen
+  transcript's text on the resource row, which is read when there is no
+  transcript row.
 
   Every page and resource is kept. What Learn drops is flagged, and
   integrations__learn__ocw_content_files applies the drops:
@@ -55,6 +60,7 @@ with content as (
         , cast(null as varchar) as youtube_id
         , coursecontent_learning_resource_types as content_tags
         , cast(null as varchar) as extraction_status
+        , cast(null as varchar) as text_file_path
         , cast(null as boolean) as has_text_file
         , false as transcript_unreadable
         , false as is_3play_artifact
@@ -78,6 +84,16 @@ with content as (
         , {{ try_parse_json_array('coursecontent_video_transcript_resources') }} as video_transcript_entries
     from content
     where coursecontent_kind = 'resource'
+)
+
+, transcript_texts as (
+    select
+        coursecontent_s3_key
+        , coursecontent_transcript_index
+        , coursecontent_text
+        , coursecontent_text_extraction_status
+    from content
+    where coursecontent_kind = 'transcript'
 )
 
 -- One row per entry of a video's video_transcript_resources, with the JSON text
@@ -125,6 +141,7 @@ with content as (
 , transcript_resources as (
     select
         coursecontent_s3_key
+        , idx as transcript_index
         , transcript_file
         , substr(file_json, 1, 1) = '"' as is_file_string
         , row_number() over (
@@ -151,6 +168,7 @@ with content as (
 , resource_transcripts as (
     select
         resources.*
+        , transcript_resources.transcript_index
         , transcript_resources.transcript_file
         , coalesce(
             resources.is_video
@@ -174,22 +192,43 @@ with content as (
 
 , resource_files as (
     select
-        *
+        resource_transcripts.*
         , case
-            when transcript_unreadable then null
-            when is_video and is_current_format then coalesce(transcript_file, coursecontent_video_transcript_file)
-            when is_video then coursecontent_legacy_transcript_file
-            else coursecontent_file
+            when resource_transcripts.transcript_unreadable then null
+            -- Learn strips the leading slashes of a path from the list.
+            when resource_transcripts.transcript_file is not null
+                then {{ regexp_replace_all('resource_transcripts.transcript_file', "'^/+'", "''") }}
+            when resource_transcripts.is_video and resource_transcripts.is_current_format
+                then resource_transcripts.coursecontent_video_transcript_file
+            when resource_transcripts.is_video then resource_transcripts.coursecontent_legacy_transcript_file
+            else resource_transcripts.coursecontent_file
         end as text_file_path
         , case
-            when is_video
+            when resource_transcripts.is_video
                 then
                     coalesce(
-                        nullif(coursecontent_file, ''), nullif(coursecontent_video_archive_url, ''), ''
+                        nullif(resource_transcripts.coursecontent_file, '')
+                        , nullif(resource_transcripts.coursecontent_video_archive_url, '')
+                        , ''
                     )
-            else coalesce(coursecontent_file, '')
+            else coalesce(resource_transcripts.coursecontent_file, '')
         end as extension_path
+        -- A video's chosen transcript, or for a course loaded before transcript
+        -- rows existed, the resource row's text.
+        , coalesce(
+            transcript_texts.coursecontent_text_extraction_status
+            , resource_transcripts.coursecontent_text_extraction_status
+        ) as text_extraction_status
+        , coalesce(transcript_texts.coursecontent_text, resource_transcripts.coursecontent_text) as text_content
     from resource_transcripts
+    -- The list entry chosen, else the single file, which has no place in the list.
+    left join transcript_texts
+        on
+            resource_transcripts.is_video
+            and not resource_transcripts.transcript_unreadable
+            and resource_transcripts.coursecontent_s3_key = transcript_texts.coursecontent_s3_key
+            and coalesce(resource_transcripts.transcript_index, 0)
+            = coalesce(transcript_texts.coursecontent_transcript_index, 0)
 )
 
 , resource_content_files as (
@@ -207,7 +246,7 @@ with content as (
             when is_current_format then coalesce(coursecontent_body, '')
             else coursecontent_description
         end as description
-        , case when coursecontent_text_extraction_status = 'extracted' then coursecontent_text end as content
+        , case when text_extraction_status = 'extracted' then text_content end as content
         , coursecontent_file_type as file_type
         , coalesce({{ regexp_extract_or_null('extension_path', extension_pattern) }}, '') as file_extension
         , case
@@ -220,7 +259,8 @@ with content as (
             when is_video and is_current_format then nullif(coursecontent_video_youtube_id, '')
         end as youtube_id
         , coursecontent_learning_resource_types as content_tags
-        , coursecontent_text_extraction_status as extraction_status
+        , text_extraction_status as extraction_status
+        , text_file_path
         -- Learn's test: the path is split on "courses" to make the key it reads.
         , coalesce(text_file_path, '') like '%courses%' as has_text_file
         , transcript_unreadable
@@ -255,6 +295,7 @@ select
     , content_files.youtube_id
     , content_files.content_tags
     , content_files.extraction_status
+    , content_files.text_file_path
     , content_files.has_text_file
     , content_files.transcript_unreadable
     , content_files.is_3play_artifact

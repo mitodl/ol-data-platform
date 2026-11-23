@@ -1,0 +1,268 @@
+---
+version: 2
+
+models:
+- name: mitxonline_migration_course_runs
+  description: >
+    Course runs for the MITx Online migration task to create, one row per run that
+    has a row in mitxonline_migration_course_enrollments and is not in MITx Online
+    yet. A run leaves the table once it is in MITx Online.
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - mitxonline/app_postgres
+  columns:
+  - name: source
+    description: str, the system the data comes from, for example xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["xpro"]
+  - name: mitxonline_course_id
+    description: int, foreign key to the courses table in the mitxonline database.
+      Null if the course is not in MITx Online yet.
+  - name: course_readable_id
+    description: str, course readable ID formatted as course-v1:{org}+{course code}
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courseware_id
+    description: str, course run readable ID formatted as course-v1:{org}+{course
+      code}+{run tag}
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: '>0'
+  - name: run_tag
+    description: str, the course run tag, for example R1
+    tests:
+    - not_null
+  - name: enrollment_start
+    description: timestamp, the date enrollment opens
+  - name: enrollment_end
+    description: timestamp, the date enrollment closes. A run that is still open in
+      the source closes at its enrollment start, or at its creation date if enrollment
+      has not started, so it is not open for enrollment on MITx Online while the source
+      still sells it.
+  - name: start_date
+    description: timestamp, the date the course run starts
+  - name: end_date
+    description: timestamp, the date the course run ends
+  - name: is_self_paced
+    description: boolean, whether the course run is self-paced
+  - name: is_published
+    description: boolean, whether the course run is live in the source
+
+- name: mitxonline_migration_users
+  description: >
+    Users for the MITx Online migration task to create, one row per user in
+    mitxonline_migration_course_enrollments or mitxonline_migration_program_certificates
+    who has no MITx Online account in dim_user. Profile fields come from xPRO.
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - mitxonline/app_postgres
+  columns:
+  - name: source
+    description: str, the system the data comes from, for example xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["xpro"]
+  - name: source_user_id
+    description: int, user ID in the source system
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: '>0'
+  - name: user_email
+    description: str, the user's xPRO email in lower case
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: '>0'
+  - name: user_full_name
+    description: str, user full name
+  - name: user_gender
+    description: str, user gender
+  - name: user_birth_year
+    description: int, user birth year
+  - name: user_address_country
+    description: str, country code of the user address
+  - name: user_address_state
+    description: str, state or territory of the user address
+  - name: user_address_city
+    description: str, user city from the xPRO legal address
+  - name: user_address_postal_code
+    description: str, user postal code from the xPRO legal address
+  - name: user_address_street_1
+    description: str, first street line of the xPRO legal address
+  - name: user_address_street_2
+    description: str, the other xPRO street lines, joined with commas. Null if the
+      address has one line.
+
+- name: mitxonline_migration_course_enrollments
+  description: >
+    Course run enrollments, with grades and certificates, for the MITx Online
+    migration task to create or update, one row per user and run. Holds only the
+    enrollments the task must act on: an active enrollment of an active xPRO account
+    that is not in MITx Online yet, and an enrollment in MITx Online whose active
+    status or certificate no longer matches xPRO, or whose grade xPRO changed after
+    MITx Online last changed it. A row leaves the table once
+    MITx Online matches. user_mitxonline_id and courserun_id are null until the user
+    and run exist in MITx Online. A revoked certificate is left out unless it is
+    already in MITx Online.
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - mitxonline/app_postgres
+  columns:
+  - name: source
+    description: str, the system the data comes from, for example xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["xpro"]
+  - name: migration_status
+    description: str, why the row is in the table. new = not in MITx Online yet; status_changed
+      = the active status differs; grade_changed = xPRO changed the grade after MITx
+      Online last did; certificate_changed = the certificate revoked status differs.
+      A row with more than one change gets the first that applies.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["new", "status_changed", "grade_changed", "certificate_changed"]
+  - name: source_user_id
+    description: int, user ID in the source system
+    tests:
+    - not_null
+  - name: user_mitxonline_id
+    description: int, foreign key to the users table in the mitxonline database. Null
+      if the user is not in MITx Online yet.
+  - name: user_email
+    description: str, the user's xPRO email in lower case
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run readable ID formatted as course-v1:{org}+{course
+      code}+{run tag}
+    tests:
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to the course runs table in the mitxonline database.
+      Null if the run is not in MITx Online yet.
+  - name: courserunenrollment_enrollment_mode
+    description: str, MITx Online enrollment mode. audit for an xPRO audit enrollment,
+      otherwise verified, because no-id-professional is paid.
+  - name: courserunenrollment_is_active
+    description: boolean, whether the enrollment is active in the source. False for
+      refunded, deferred, transferred and unenrolled enrollments.
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: str, ISO 8601 timestamp of when the enrollment was created in the
+      source
+  - name: courserungrade_grade
+    description: float, course grade from 0 to 1
+  - name: courserungrade_letter_grade
+    description: str, letter grade
+  - name: courserungrade_is_passing
+    description: boolean, whether the grade is a passing grade
+  - name: courseruncertificate_uuid
+    description: str, certificate UUID in the source. Kept so old certificate links
+      can redirect.
+  - name: courseruncertificate_is_revoked
+    description: boolean, whether the certificate is revoked in the source
+  - name: courseruncertificate_created_on
+    description: str, ISO 8601 timestamp of when the certificate was issued in the
+      source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      config:
+        error_if: '>0'
+      arguments:
+        column_list: ["source_user_id", "courserun_readable_id"]
+
+- name: mitxonline_migration_program_certificates
+  description: >
+    Program certificates for the MITx Online migration task to create or update, one
+    row per user and program. Holds only the certificates the task must act on: a
+    valid certificate of an active xPRO account that is not in MITx Online yet, and
+    a certificate in MITx Online whose revoked status no longer matches xPRO. A row
+    leaves the table once MITx Online matches. The task creates the program
+    enrollment with the certificate. program_id is null until the program exists in
+    MITx Online.
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - mitxonline/app_postgres
+  columns:
+  - name: source
+    description: str, the system the data comes from, for example xpro
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["xpro"]
+  - name: migration_status
+    description: str, why the row is in the table. new = not in MITx Online yet; certificate_changed
+      = the revoked status differs from MITx Online.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["new", "certificate_changed"]
+  - name: source_user_id
+    description: int, user ID in the source system
+    tests:
+    - not_null
+  - name: user_mitxonline_id
+    description: int, foreign key to the users table in the mitxonline database. Null
+      if the user is not in MITx Online yet.
+  - name: user_email
+    description: str, the user's xPRO email in lower case
+    tests:
+    - not_null
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: program_readable_id
+    description: str, program readable ID formatted as program-v1:{org}+{program code}
+    tests:
+    - not_null
+  - name: program_id
+    description: int, foreign key to the programs table in the mitxonline database.
+      Null if the program is not in MITx Online yet.
+  - name: programcertificate_uuid
+    description: str, program certificate UUID in the source. Kept so old certificate
+      links can redirect.
+    tests:
+    - not_null
+  - name: programcertificate_is_revoked
+    description: boolean, whether the program certificate is revoked in the source
+  - name: program_certificate_issued_on
+    description: str, ISO 8601 timestamp of when the program certificate was issued
+      in the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      config:
+        error_if: '>0'
+      arguments:
+        column_list: ["source_user_id", "program_readable_id"]

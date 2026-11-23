@@ -95,6 +95,18 @@ RUN /app/dg_projects/lakehouse/.venv/bin/dbt deps && \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target production || \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target dev
 
+# QA builds the same project on StarRocks, and the asset graph has to come from
+# a manifest parsed for that target: test ids, relation names and some config
+# differ by adapter (BAKED_MANIFEST_TARGET_PATHS in lakehouse/lib/dbt_environment.py).
+# The profile names its catalog, so DBT_DATA_LAKE_ENV only matters to the
+# sources that read it. The credentials are dummies, as below.
+RUN DBT_STARROCKS_HOST=localhost \
+    DBT_STARROCKS_USERNAME=build \
+    DBT_STARROCKS_PASSWORD=build \
+    DBT_DATA_LAKE_ENV=qa \
+    /app/dg_projects/lakehouse/.venv/bin/dbt parse \
+        --target starrocks_qa_lake --target-path target/starrocks_qa_lake
+
 # Generate a second manifest for the b2b_analytics models, which are only
 # `+enabled` (see dbt_project.yml) when target.type == 'starrocks' and are
 # therefore absent from the manifest above. `parse` (not `compile`) is used

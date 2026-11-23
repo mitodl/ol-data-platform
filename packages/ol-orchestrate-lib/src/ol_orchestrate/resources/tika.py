@@ -36,60 +36,6 @@ class TikaParseError(Exception):
     """Tika could not parse the document it was sent."""
 
 
-# MIME types Tika handles well.
-# Anything outside this set is likely to return empty text or garbage.
-#
-# The last four were added to close a gap against MIT Learn, which filters by
-# file EXTENSION against VALID_TEXT_FILE_TYPES rather than by MIME type. Files
-# it extracts today but whose MIME type was missing here would have been
-# silently dropped by any caller gating on this set:
-#
-#   application/json   .json  -- confirmed against a local Tika 3.2.2 to return
-#   application/x-tex  .tex      usable text rather than an empty body.
-#   text/x-tex         .tex
-#   text/rtf           .rtf  -- what the builtin mimetypes table answers for
-#                               .rtf. `application/rtf` below is what a host
-#                               with an /etc/mime.types answers, and callers
-#                               that pin to the builtin table (as the Open edX
-#                               asset does) would otherwise skip every RTF in
-#                               production while extracting them in dev.
-#
-# Both `.tex` spellings stay for the same class of reason: a caller reading the
-# host mime database can produce either. That divergence is the argument for
-# the parity test over MIT Learn's extension list, which is what caught it.
-#
-# Deliberately absent:
-#   text/csv   -- excluded from VALID_TEXT_FILE_TYPES. It appears only in
-#                 VALID_TUTOR_PROBLEM_FILE_TYPES, which is Canvas-specific:
-#                 Canvas needs an explicit folder mapping because its export is
-#                 structurally different. Open edX problems are a first-class
-#                 OLX block type and are already carried as blocks, so nothing
-#                 in the Open edX path needs `.csv`.
-#   text/vtt   -- subtitles, owned by the transcript parser rather than Tika.
-SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
-    [
-        "application/pdf",
-        "text/html",
-        "text/plain",
-        "text/markdown",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/rtf",
-        "text/rtf",
-        "application/epub+zip",
-        "application/xml",
-        "text/xml",
-        "application/json",
-        "application/x-tex",
-        "text/x-tex",
-    ]
-)
-
-
 # What a caller sees while a Tika pod restarts its parser process. Tika runs the
 # parser in a forked JVM that the watchdog kills and restarts on a heap
 # OutOfMemoryError or a task timeout, without the container restarting, so the
@@ -108,22 +54,6 @@ RETRYABLE_STATUSES = frozenset({502, 503})
 # parser is retried too, and each of its retries kills the parser again for
 # every other caller on that pod.
 RETRY_DELAYS_SECONDS = (5, 15, 45)
-
-
-def _base_content_type(content_type: str) -> str:
-    """Strip parameters and normalise case from a MIME type string.
-
-    Real-world ``Content-Type`` headers often carry parameters or mixed
-    casing, e.g. ``text/html; charset=utf-8`` or ``Application/PDF``.
-    This helper reduces them to the bare type so membership checks against
-    :data:`SUPPORTED_CONTENT_TYPES` work correctly.
-
-    Examples::
-
-        _base_content_type("text/html; charset=utf-8") == "text/html"
-        _base_content_type("Application/PDF")          == "application/pdf"
-    """
-    return content_type.split(";", maxsplit=1)[0].strip().lower()
 
 
 class TikaResource(ConfigurableResource[None]):
@@ -245,7 +175,7 @@ class TikaResource(ConfigurableResource[None]):
     def extract_text(
         self,
         file_bytes: bytes,
-        content_type: str,
+        content_type: str | None,
         *,
         ocr_strategy: str | None = None,
     ) -> str | None:
@@ -253,8 +183,8 @@ class TikaResource(ConfigurableResource[None]):
 
         Sends the file bytes via HTTP PUT and returns the text of the document
         and of everything embedded in it as one stripped string, or ``None`` if
-        Tika finds no text or the content type is not in
-        :data:`SUPPORTED_CONTENT_TYPES`.
+        Tika finds no text. Which files to send is the caller's decision
+        (ol_file_types for course content).
 
         ``/rmeta/text`` and not ``/tika``: this is the endpoint MIT Learn's
         client reads (``tika.parser.from_buffer``), and the two disagree.
@@ -264,9 +194,8 @@ class TikaResource(ConfigurableResource[None]):
 
         Args:
             file_bytes: Raw bytes of the document to process.
-            content_type: MIME type of the document (e.g. ``"application/pdf"``).
-                Must be a value Tika can parse; unsupported types are skipped
-                with a debug log rather than raising.
+            content_type: MIME type of the document (e.g. ``"application/pdf"``),
+                sent as a hint; ``None`` sends none and Tika detects the type.
             ocr_strategy: Optional ``X-Tika-PDFOcrStrategy`` header value
                 (e.g. ``"ocr_only"``, ``"no_ocr"``, ``"ocr_and_text"``).
                 Passed through to Tika when provided.
@@ -279,18 +208,12 @@ class TikaResource(ConfigurableResource[None]):
             httpx.TimeoutException: If the request exceeds :attr:`timeout` seconds.
             TikaParseError: If Tika could not parse the document.
         """
-        if _base_content_type(content_type) not in SUPPORTED_CONTENT_TYPES:
-            log.debug(
-                "Skipping Tika extraction for unsupported content type: %s",
-                content_type,
-            )
-            return None
-
         headers = {
-            "Content-Type": content_type,
             "Accept": "application/json",
             "X-Access-Token": self.access_token,
         }
+        if content_type:
+            headers["Content-Type"] = content_type
         if ocr_strategy:
             headers["X-Tika-PDFOcrStrategy"] = ocr_strategy
 
@@ -347,11 +270,3 @@ class TikaResource(ConfigurableResource[None]):
                 content_type,
             )
             return {}
-
-    def is_supported(self, content_type: str) -> bool:
-        """Return True if *content_type* is in the supported extraction set.
-
-        Handles parameters and mixed casing, e.g. ``text/html; charset=utf-8``
-        and ``Application/PDF`` are both considered supported.
-        """
-        return _base_content_type(content_type) in SUPPORTED_CONTENT_TYPES

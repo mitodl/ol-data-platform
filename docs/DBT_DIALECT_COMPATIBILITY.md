@@ -66,6 +66,38 @@ is NULL over all-NULL input on all three and otherwise matches `bool_or` (true s
 after false). `tfact_enrollment` compares its stored booleans this way. Inside a
 `case when` or a `where`, NULL and false behave the same, so `bool_or` is safe there.
 
+## StarRocks session variables for one model
+
+A model that needs StarRocks settings for its own query (e.g. a lower `pipeline_dop`)
+puts `{{ session_variables_hint({'pipeline_dop': 2}) }}` on its own line right after its
+outermost `select` (on the same line as a column, `ol-dbt validate` reads the call as
+that column's alias). On StarRocks that renders a `/*+ SET_VAR(...) */` hint, which also
+applies to the CTAS or INSERT that the materialization wraps around the query; on Trino
+and DuckDB it renders nothing. Prefer it to a `set` pre-hook: a session variable set
+that way lasts as long as the connection, so it can leak into later models that reuse
+it. `tfact_problem_events` uses it because its incremental's memory grows with the dop,
+and at the default dop it exceeded a 6 GiB query limit while reading Iceberg pages.
+
+## Values that have to match Trino's text
+
+During the cutover an incremental model's stored rows come from Trino and its new rows
+from StarRocks, so a surrogate key or a stored JSON string has to be the same text on
+both, or delete+insert stops replacing rows and a `group by` splits one value in two.
+
+- A timestamp with time zone in `dbt_utils.generate_surrogate_key` goes through
+  `surrogate_key_timestamptz(timestamp, iso8601_string)`. Trino casts it to
+  `2026-11-19 00:08:16.156297000 UTC` (or `-04:00`, the zone the source string gave), and
+  StarRocks' datetime casts to `2026-11-19 00:08:16.156297`, so `tfact_problem_events`
+  gave the same event a different `event_id` on each engine.
+- A JSON object read from a top-level key goes through `json_query_object(column, key)`,
+  not `json_query_string`. Trino returns the object compact, in the source's key order;
+  StarRocks' `get_json_string` sorts the keys and adds spaces. On StarRocks the macro
+  takes the source text and compacts it. When that text has a `\u` or `\/` escape (Trino
+  decodes them), is nested more than two levels or is an array, it falls back to the
+  parsed value, which can still differ from Trino in key order. Measured 2026-11-20
+  against Trino-built rows, that was 0.055% of a week's tracking-log `answers`, and 0.08%
+  of `answers` and 0.055% of `correct_map` for a week of MITx Online studentmodule rows.
+
 ## Examples
 
 These were the first macros written, and each is applied across the models:

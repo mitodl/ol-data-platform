@@ -8,19 +8,24 @@ exhaustiveness rather than about specific target names.
 """
 
 import importlib
+import re
 from pathlib import Path
 
 import pytest
 import yaml
 from lakehouse.lib import dbt_environment
 from lakehouse.lib.dbt_environment import (
+    BAKED_MANIFEST_TARGET_PATHS,
     DATA_LAKE_ENV_MAP,
     DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     ICEBERG_MAINTENANCE_ENGINE_MAP,
     STARROCKS_DBT_TARGET_MAP,
+    STARROCKS_HOST_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
+    dbt_manifest_target_path,
+    dbt_target_reads_vault_login,
     iceberg_maintenance_engine,
     resolve_for_environment,
     starrocks_is_local,
@@ -32,6 +37,7 @@ from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
 ENVIRONMENTS = ("dev", "ci", "qa", "production")
 
 PROFILES_PATH = Path(__file__).parents[3] / "src/ol_dbt/profiles.yml"
+DOCKERFILE_PATH = Path(__file__).parents[1] / "Dockerfile"
 
 ALL_MAPS = pytest.mark.parametrize(
     ("name", "value_map"),
@@ -40,6 +46,7 @@ ALL_MAPS = pytest.mark.parametrize(
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
         ("ICEBERG_MAINTENANCE_ENGINE_MAP", ICEBERG_MAINTENANCE_ENGINE_MAP),
+        ("STARROCKS_HOST_MAP", STARROCKS_HOST_MAP),
     ],
 )
 
@@ -279,3 +286,95 @@ def test_an_override_naming_no_engine_raises():
     """A typo in DAGSTER_ICEBERG_MAINTENANCE_ENGINE fails at load, not at 02:00."""
     with pytest.raises(ValueError, match="starocks"):
         iceberg_maintenance_engine("starocks")
+
+
+@pytest.mark.parametrize("environment", ENVIRONMENTS)
+def test_every_main_target_names_a_profile_output(environment):
+    """The code location reads the target's profile at import to decide on a login.
+
+    A target missing from profiles.yml would fail the whole code location's
+    load, not just its dbt build.
+    """
+    dbt_target_reads_vault_login(PROFILES_PATH, DBT_TARGET_MAP[environment])
+
+
+@pytest.mark.parametrize(
+    ("target", "reads_vault_login"),
+    [
+        # ci writes ol_data_lake_ci through StarRocks with a Vault login.
+        ("ci", True),
+        ("starrocks_qa_lake", True),
+        ("starrocks_production", True),
+        ("production", False),  # Trino
+        ("starrocks_qa", False),  # OIDC token file
+        ("starrocks_local", False),  # passwordless root
+        ("starrocks_local_b2b", False),
+    ],
+)
+def test_only_vault_login_profiles_get_one(target, reads_vault_login):
+    """Exporting a login to a profile that ignores it only overwrites its host."""
+    assert dbt_target_reads_vault_login(PROFILES_PATH, target) is reads_vault_login
+
+
+def test_an_unknown_target_raises():
+    with pytest.raises(KeyError, match="no_such_target"):
+        dbt_target_reads_vault_login(PROFILES_PATH, "no_such_target")
+
+
+@pytest.mark.parametrize("environment", DEPLOYED_ENVIRONMENTS)
+def test_a_starrocks_target_gets_its_own_clusters_host(environment):
+    """The exported host overrides the profile's, so it must be the profile's FE.
+
+    ci pointed at QA's FE while its `ci` target writes ol_data_lake_ci, which
+    only the CI cluster registers, and its Vault issues logins for the CI
+    cluster only.
+    """
+    target = DBT_TARGET_MAP[environment]
+    if not dbt_target_reads_vault_login(PROFILES_PATH, target):
+        pytest.skip(f"{environment}'s target gets no exported login")
+    profile = yaml.safe_load(PROFILES_PATH.read_text())["open_learning"]["outputs"]
+    assert STARROCKS_HOST_MAP[environment] in profile[target]["host"]
+
+
+# The environments that load this code location from the image. The data-ci
+# cluster runs no Dagster, so ci has no baked manifest.
+IMAGE_ENVIRONMENTS = ("qa", "production")
+
+
+@pytest.mark.parametrize("environment", IMAGE_ENVIRONMENTS)
+def test_every_deployed_target_has_a_baked_manifest(environment):
+    """The asset graph must come from a manifest parsed for the target it builds.
+
+    QA's first StarRocks build failed on a test whose id hashes differently on
+    Trino.
+    """
+    assert dbt_manifest_target_path(DBT_TARGET_MAP[environment], environment)
+
+
+def _dockerfile_dbt_commands() -> list[str]:
+    """Return the Dockerfile's dbt invocations, each joined onto one line."""
+    text = DOCKERFILE_PATH.read_text().replace("\\\n", " ")
+    return [
+        line for line in text.splitlines() if re.search(r"/dbt (parse|compile)", line)
+    ]
+
+
+@pytest.mark.parametrize(("target", "target_path"), BAKED_MANIFEST_TARGET_PATHS.items())
+def test_the_dockerfile_bakes_each_declared_manifest(target, target_path):
+    """A declared path the image never writes fails the code location's load."""
+    for command in _dockerfile_dbt_commands():
+        named_path = re.search(r"--target-path (\S+)", command)
+        if re.search(rf"--target {target}( |$)", command) and (
+            (named_path.group(1) if named_path else "target") == target_path
+        ):
+            return
+    pytest.fail(f"Dockerfile parses no manifest for {target} into {target_path}")
+
+
+def test_dev_parses_its_own_manifest():
+    assert dbt_manifest_target_path("anything", "dev") == "target"
+
+
+def test_an_unbaked_deployed_target_raises():
+    with pytest.raises(KeyError, match="no_such_target"):
+        dbt_manifest_target_path("no_such_target", "qa")

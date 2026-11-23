@@ -512,6 +512,11 @@ models:
     - accepted_values:
         arguments:
           values: [extracted, empty, failed, missing]
+  - name: text_file_path
+    description: str, the path a resource's text file is named by in its data.json
+      (a video's chosen transcript, else its file), with a transcript list entry's
+      leading slashes stripped as Learn strips them; null for a page and for a video
+      whose transcript list is unreadable
   - name: has_text_file
     description: boolean, for a resource, whether the file its text comes from (a
       video's transcript, else its file) is a path naming courses/, Learn's test for
@@ -533,6 +538,59 @@ models:
     description: timestamp, when the course was last read from the bucket
 
 unit_tests:
+- name: test_int__ocw__content_files_reads_the_chosen_transcript_row
+  description: >
+    A course loaded with transcript rows has a row per transcript file of a video,
+    by its place in video_transcript_resources, or none for the single file. The
+    video's text is that of the transcript Learn chooses (the first English one, else
+    the first, else the single file), whatever else is listed. A video Learn cannot
+    read the list of has no text even when a row could be read. A 3Play file keeps
+    its text, flagged.
+  model: int__ocw__content_files
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a-course, courserun_readable_id: run1}
+  - input: ref('stg__ocw__s3__course_content')
+    rows:
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/english/data.json,
+      coursecontent_title: English, coursecontent_resource_type: Video, coursecontent_video_transcript_resources: '[{"file":
+        "/courses/a-course/t_es.srt", "language": "es"}, {"file": "/courses/a-course/t_en.srt",
+        "language": "en"}]', coursecontent_video_transcript_file: /courses/a-course/t_en.srt}
+    - {course_slug: a-course, coursecontent_kind: transcript, coursecontent_s3_key: courses/a-course/resources/english/data.json,
+      coursecontent_transcript_index: 1, coursecontent_transcript_language: es, coursecontent_text: hola,
+      coursecontent_text_extraction_status: extracted}
+    - {course_slug: a-course, coursecontent_kind: transcript, coursecontent_s3_key: courses/a-course/resources/english/data.json,
+      coursecontent_transcript_index: 2, coursecontent_transcript_language: en, coursecontent_text: hello,
+      coursecontent_text_extraction_status: extracted}
+    - {course_slug: a-course, coursecontent_kind: transcript, coursecontent_s3_key: courses/a-course/resources/english/data.json,
+      coursecontent_transcript_index: null, coursecontent_text: hello again, coursecontent_text_extraction_status: extracted}
+    # With no list the single file is read; its row has no place in a list.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/single/data.json,
+      coursecontent_title: Single, coursecontent_resource_type: Video, coursecontent_video_transcript_file: /courses/a-course/t.srt}
+    - {course_slug: a-course, coursecontent_kind: transcript, coursecontent_s3_key: courses/a-course/resources/single/data.json,
+      coursecontent_transcript_index: null, coursecontent_text: single, coursecontent_text_extraction_status: failed}
+    # Learn raises on the null entry, so the readable transcript is not the
+    # video's text.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/unreadable/data.json,
+      coursecontent_title: Unreadable, coursecontent_resource_type: Video, coursecontent_video_transcript_resources: '[null,
+        {"file": "/courses/a-course/t_u.srt", "language": "en"}]'}
+    - {course_slug: a-course, coursecontent_kind: transcript, coursecontent_s3_key: courses/a-course/resources/unreadable/data.json,
+      coursecontent_transcript_index: 2, coursecontent_transcript_language: en, coursecontent_text: unread,
+      coursecontent_text_extraction_status: extracted}
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/caption/data.json,
+      coursecontent_title: 3play caption file, coursecontent_resource_type: Other,
+      coursecontent_file: /courses/a-course/c.srt, coursecontent_text: caption, coursecontent_text_extraction_status: extracted}
+  expect:
+    rows:
+    - {content_file_key: courses/a-course/resources/english/, content: hello, extraction_status: extracted,
+      text_file_path: courses/a-course/t_en.srt, transcript_unreadable: false, is_3play_artifact: false}
+    - {content_file_key: courses/a-course/resources/single/, content: null, extraction_status: failed,
+      text_file_path: /courses/a-course/t.srt, transcript_unreadable: false, is_3play_artifact: false}
+    - {content_file_key: courses/a-course/resources/unreadable/, content: null, extraction_status: null,
+      text_file_path: null, transcript_unreadable: true, is_3play_artifact: false}
+    - {content_file_key: courses/a-course/resources/caption/, content: caption, extraction_status: extracted,
+      text_file_path: /courses/a-course/c.srt, transcript_unreadable: false, is_3play_artifact: true}
 - name: test_int__ocw__content_files_flags_what_learn_drops
   description: >
     Keys, content types and the resources Learn drops, each case checked against

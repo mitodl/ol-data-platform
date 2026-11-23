@@ -165,6 +165,42 @@
 {%- endmacro %}
 
 
+{#
+    surrogate_key_timestamptz: a timestamp-with-time-zone column as it goes into
+    dbt_utils.generate_surrogate_key, which casts every field to varchar.
+
+    Trino casts timestamp(9) with time zone to '2026-11-19 00:08:16.156297000 UTC', with the
+    zone the source ISO 8601 string gave ('-04:00' stays '-04:00'; 'Z' and '+00:00' are UTC).
+    StarRocks' datetime casts to '2026-11-19 00:08:16.156297', so the same event hashed to a
+    different key. iso8601_expr is the staged ISO 8601 string, for its zone; a string with
+    no zone (e.g. a studentmodule row's, built from a UTC timestamp) is UTC. Only rows Trino
+    staged carry a -04:00/-05:00 label: StarRocks staging always writes Z, so a raw row
+    staged by both engines would still hash differently.
+
+    StarRocks keeps microseconds, so its text matches Trino's only while the 7th-9th
+    fractional digits are 000. They were 000 on all 617,084 tfact_problem_events rows of
+    2024-03-01..05 and 2026-11-18, checked 2026-11-20.
+#}
+{% macro surrogate_key_timestamptz(timestamp_expr, iso8601_expr) -%}
+    {{ adapter.dispatch('surrogate_key_timestamptz', 'open_learning')(timestamp_expr, iso8601_expr) }}
+{%- endmacro %}
+
+{% macro default__surrogate_key_timestamptz(timestamp_expr, iso8601_expr) -%}
+    {{ timestamp_expr }}
+{%- endmacro %}
+
+{% macro starrocks__surrogate_key_timestamptz(timestamp_expr, iso8601_expr) -%}
+    concat(
+        date_format({{ timestamp_expr }}, '%Y-%m-%d %H:%i:%s.%f'), '000 '
+        , case
+            when regexp({{ iso8601_expr }}, '[+-][0-9]{2}:[0-9]{2}$') and right({{ iso8601_expr }}, 6) != '+00:00'
+                then right({{ iso8601_expr }}, 6)
+            else 'UTC'
+        end
+    )
+{%- endmacro %}
+
+
 {% macro array_join(array_expr, delimiter, null_replacement='') -%}
     {{ adapter.dispatch('array_join', 'open_learning')(array_expr, delimiter, null_replacement) }}
 {%- endmacro %}
@@ -881,6 +917,37 @@
 
 
 {#
+    session_variables_hint: StarRocks session variables for one query, as a
+    /*+ SET_VAR(...) */ hint. Call it on its own line right after the outermost
+    SELECT keyword; it applies to the whole statement, including a CTAS or INSERT
+    that wraps the query (checked on 4.1.7). Renders nothing on other engines.
+    `ol-dbt validate` renders a macro call as a placeholder token, and only drops one
+    that sits alone on its line; next to a column it reads as that column's alias.
+#}
+{% macro session_variables_hint(variables) -%}
+    {{ adapter.dispatch('session_variables_hint', 'open_learning')(variables) }}
+{%- endmacro %}
+
+{% macro default__session_variables_hint(variables) -%}
+{%- endmacro %}
+
+{% macro starrocks__session_variables_hint(variables) -%}
+    {%- if variables -%}
+        /*+ SET_VAR(
+        {%- for name, value in variables | dictsort -%}
+            {{ name }}=
+            {%- if value is boolean -%}{{ value | string | lower }}
+            {%- elif value is number -%}{{ value }}
+            {%- else -%}'{{ value }}'
+            {%- endif -%}
+            {{ ", " if not loop.last }}
+        {%- endfor -%}
+        ) */
+    {%- endif -%}
+{%- endmacro %}
+
+
+{#
     array_filter_nonempty: drop NULL and empty-string elements from a varchar array,
     keeping the order of the rest.
 #}
@@ -1553,8 +1620,14 @@
        Still unlike Trino: StarRocks formats a number with a decimal point or exponent its
        own way (1.0 gives 1, 1e10 gives 1e+10), and does not escape characters outside the
        BMP as surrogate pairs. Both sort object keys of a JSON value. #}
+    {{ starrocks_compact_json_text('json_string(' ~ json_expr ~ ')') }}
+{%- endmacro %}
+
+{% macro starrocks_compact_json_text(text_expr) -%}
+    {# Drops the whitespace between JSON tokens of serialized JSON text, keeping the
+       whitespace inside string literals. #}
     regexp_replace(
-        json_string({{ json_expr }})
+        {{ text_expr }}
         , '("(?:[^"\\\\]|\\\\.)*"|[^"\\s]+)\\s*'
         , '\\1'
     )

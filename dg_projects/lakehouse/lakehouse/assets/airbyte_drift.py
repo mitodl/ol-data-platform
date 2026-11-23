@@ -20,7 +20,12 @@ inventory (spec §5). This module only fetches and adapts.
 from typing import Any
 
 from dagster import AssetExecutionContext, Failure, MetadataValue, Output, asset
-from ol_dbt_cli.lib.inventory import check_drift, load_units
+from ol_dbt_cli.lib.inventory import (
+    check_drift,
+    load_retired,
+    load_units,
+    retired_pairs,
+)
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 from lakehouse.lib.inventory import INVENTORY_DIR
@@ -87,7 +92,12 @@ def airbyte_inventory_drift(
         raise Failure(description=msg)
 
     report = ValidationReport()
-    check_drift(workspace, units, report)
+    check_drift(
+        workspace,
+        units,
+        report,
+        retired=retired_pairs(load_retired(INVENTORY_DIR)),
+    )
 
     for issue in report.issues:
         line = f"{issue.model}: {issue.message}"

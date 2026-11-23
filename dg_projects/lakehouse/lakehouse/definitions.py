@@ -38,6 +38,7 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
+from lakehouse.assets.history_load_guard import build_history_load_guard_checks
 from lakehouse.assets.iceberg_maintenance import (
     WAREHOUSE_ENV,
     iceberg_dbt_layer_maintenance,
@@ -98,9 +99,11 @@ from lakehouse.lib.contract_freshness import (
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     ICEBERG_MAINTENANCE_ENGINE,
+    STARROCKS_HOST_MAP,
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
+from lakehouse.lib.history_load_guard import guarded_tables
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -140,18 +143,6 @@ trino_catalog_map = {
     "ci": "ol_data_lake_qa",
     "qa": "ol_data_lake_qa",
     "production": "ol_data_lake_production",
-}
-
-# qa and production run Dagster in the same EKS cluster as their StarRocks, so
-# they reach the FE through its in-cluster service. From a QA pod the external
-# name lakehouse.qa.starrocks.ol.mit.edu times out. ci falls back to the QA FE
-# for schema parity. dev is the local-dev cluster, which Tilt forwards to this
-# port on the host.
-starrocks_host_map = {
-    "dev": "127.0.0.1",
-    "ci": "lakehouse.qa.starrocks.ol.mit.edu",
-    "qa": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
-    "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
 # QA and Production each run their own, entirely separate Vault deployment, so
@@ -705,10 +696,10 @@ AWAITING_RAW_TABLE = {
     "stg__edxorg__discovery__api__programs",
 }
 
+non_airbyte_tables = non_airbyte_raw_tables(load_units(INVENTORY_DIR))
 non_airbyte_staging_models = sorted(
     staging_models_reading(
-        json.loads(dbt_project.manifest_path.read_text()),
-        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+        json.loads(dbt_project.manifest_path.read_text()), non_airbyte_tables
     )
     - {POSTHOG_STAGING_MODEL}
     - AWAITING_RAW_TABLE
@@ -786,7 +777,7 @@ DBT_ARTIFACTS_S3_PREFIX = os.environ.get(
 starrocks = StarRocksResource(
     vault=vault,
     vault_mount_point=STARROCKS_VAULT_MOUNT,
-    host=starrocks_host_map[DAGSTER_ENV],
+    host=STARROCKS_HOST_MAP[DAGSTER_ENV],
     database="b2b_analytics",
     static_username="root" if STARROCKS_IS_LOCAL else None,
 )
@@ -840,21 +831,45 @@ resources_dict = {
         vault=vault,
     ),
     "starrocks": starrocks,
-    # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
+    # Separate from "dbt" (pinned to DBT_TARGET) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,
 }
 
 if not SKIP_AIRBYTE:
     resources_dict["airbyte"] = airbyte_workspace
 
-# The image's manifest is compiled for the production target, so these are
-# production's table FQNs whatever environment loads this. That is one reason
-# the sensors are registered in production only.
-openmetadata_table_fqns = table_fqns_by_asset_key(
-    *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
-    asset_keys=set(full_dbt_project.keys),
-    service=TRINO_SERVICE,
+# OpenMetadata catalogs production's Trino relations. The sensors and schedule
+# these feed are registered in production only, and other environments' manifests
+# name other relations (QA's StarRocks nodes have no database, which fails the
+# mapping). Gated on the environment, not DBT_TARGET, so moving production off
+# Trino fails here at load instead of leaving the sensors with no tables.
+openmetadata_table_fqns = (
+    table_fqns_by_asset_key(
+        *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
+        asset_keys=set(full_dbt_project.keys),
+        service=TRINO_SERVICE,
+    )
+    if DAGSTER_ENV == "production"
+    else {}
 )
+# The load-side raw history guard (lakehouse.lib.history_load_guard): a check
+# on each Airbyte-loaded raw table a live raw history snapshot reads. The
+# sync_and_stage_* jobs select the checks on their group's assets, so it runs
+# after every scheduled sync, and the snapshot waits for it to pass.
+#
+# A table the inventory gives another loader is left out even when a paused
+# Airbyte connection still declares it. Its loads come from data_loading, which
+# would never run the check, so the snapshot would wait on it forever.
+history_load_guard_checks = build_history_load_guard_checks(
+    guarded_tables(get_manifest_and_translator_from_dbt_assets([full_dbt_project])[0]),
+    {
+        key: group
+        for assets_def in airbyte_assets
+        for key, group in assets_def.group_names_by_key.items()
+        if key.path[-1] not in non_airbyte_tables
+    },
+)
+
 asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
     openmetadata_table_fqns
 )
@@ -890,6 +905,8 @@ defs = Definitions(
         # the Sentry hook the assets get. AssetChecksDefinition subclasses
         # AssetsDefinition, so with_failure_hooks attaches it.
         *with_failure_hooks(qa_mirror_checks),
+        # Runs dbt, so a failed invocation raises and needs the hook too.
+        *with_failure_hooks(history_load_guard_checks),
     ],
     resources=resources_dict,
     executor=executor_for_environment(

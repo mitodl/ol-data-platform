@@ -27,12 +27,11 @@ from dagster import (
     RetryPolicy,
     asset,
 )
-from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 from pydantic import Field
 
-from delivery.lib.learn_webhook import webhook_failure
+from delivery.lib.learn_webhook import skip_run_retries, webhook_failure
 
 # The views mit-learn's WAREHOUSE_VIEW_SYNCS (learning_resources/tasks.py) maps to
 # a Sync task. A view Learn doesn't map is skipped there, so a view missing here
@@ -129,11 +128,7 @@ def warehouse_views_rebuilt(
     than failing every run after it.
     """
     instance = context.instance
-    # The step retries a 5xx twice, and the run_retries daemon would rerun the
-    # whole run three more times on top, up to 12 POSTs. The sensor runs this
-    # asset alone, so turning run retries off for its run touches nothing else.
-    # The next rebuild or Learn's daily beat covers a notice that never lands.
-    instance.add_run_tags(context.run_id, {RETRY_ON_ASSET_OR_OP_FAILURE_TAG: "false"})
+    skip_run_retries(context)
     read_through = instance.event_log_storage.get_maximum_record_id() or 0
     previous = instance.fetch_materializations(context.asset_key, limit=1).records
     metadata = (

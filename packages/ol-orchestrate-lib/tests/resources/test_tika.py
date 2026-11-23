@@ -6,10 +6,8 @@ import httpx2 as httpx
 import pytest
 from ol_orchestrate.resources.tika import (
     RETRY_DELAYS_SECONDS,
-    SUPPORTED_CONTENT_TYPES,
     TikaParseError,
     TikaResource,
-    _base_content_type,
 )
 
 
@@ -119,14 +117,16 @@ def test_extract_text_raises_when_tika_could_not_parse(tika: TikaResource) -> No
         tika.extract_text(b"%PDF-1.4 not a pdf", "application/pdf")
 
 
-def test_extract_text_skips_unsupported_content_type(tika: TikaResource) -> None:
-    """extract_text returns None and makes no HTTP call for unsupported MIME types."""
-    mock_http = MagicMock(spec=httpx.Client)
+def test_extract_text_without_content_type_lets_tika_detect(
+    tika: TikaResource,
+) -> None:
+    """With no content type, the request carries no Content-Type header."""
+    mock_http = _make_mock_http_client(_text_response("print('hi')"))
     with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
-        result = tika.extract_text(b"...", "application/zip")
+        result = tika.extract_text(b"print('hi')", None)
 
-    assert result is None
-    mock_http.put.assert_not_called()
+    assert result == "print('hi')"
+    assert "Content-Type" not in mock_http.put.call_args.kwargs["headers"]
 
 
 def test_extract_text_passes_ocr_strategy_header(tika: TikaResource) -> None:
@@ -324,29 +324,6 @@ def test_extract_metadata_returns_empty_dict_on_parse_failure(
 
 
 # ---------------------------------------------------------------------------
-# is_supported
-# ---------------------------------------------------------------------------
-
-
-def test_is_supported_returns_true_for_pdf(tika: TikaResource) -> None:
-    """Return True for application/pdf."""
-    assert tika.is_supported("application/pdf") is True
-
-
-def test_is_supported_returns_false_for_zip(tika: TikaResource) -> None:
-    """Return False for application/zip."""
-    assert tika.is_supported("application/zip") is False
-
-
-def test_supported_content_types_includes_common_formats() -> None:
-    """SUPPORTED_CONTENT_TYPES covers the document formats used in OCW and OpenEdX."""
-    assert "application/pdf" in SUPPORTED_CONTENT_TYPES
-    assert "text/html" in SUPPORTED_CONTENT_TYPES
-    assert "text/plain" in SUPPORTED_CONTENT_TYPES
-    assert "text/markdown" in SUPPORTED_CONTENT_TYPES
-
-
-# ---------------------------------------------------------------------------
 # Client lifecycle (__del__)
 # ---------------------------------------------------------------------------
 
@@ -366,41 +343,6 @@ def test_del_is_safe_when_no_client_created(tika: TikaResource) -> None:
     """__del__ does not raise when no client was ever created."""
     assert tika._http_client is None
     tika.__del__()  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# _base_content_type normalisation
-# ---------------------------------------------------------------------------
-
-
-def test_base_content_type_strips_parameters() -> None:
-    """Strip charset and other parameters from a MIME type."""
-    assert _base_content_type("text/html; charset=utf-8") == "text/html"
-
-
-def test_base_content_type_lowercases() -> None:
-    """Normalise mixed-case MIME types to lowercase."""
-    assert _base_content_type("Application/PDF") == "application/pdf"
-
-
-def test_base_content_type_strips_and_lowercases() -> None:
-    """Handle both parameters and mixed casing together."""
-    assert _base_content_type("Text/HTML; Charset=UTF-8") == "text/html"
-
-
-def test_base_content_type_leaves_simple_type_unchanged() -> None:
-    """Plain lowercase MIME type passes through unchanged."""
-    assert _base_content_type("application/pdf") == "application/pdf"
-
-
-def test_is_supported_accepts_mime_with_parameters(tika: TikaResource) -> None:
-    """is_supported returns True for supported types carrying charset parameters."""
-    assert tika.is_supported("text/html; charset=utf-8") is True
-
-
-def test_is_supported_accepts_mixed_case(tika: TikaResource) -> None:
-    """is_supported returns True for supported types with mixed casing."""
-    assert tika.is_supported("Application/PDF") is True
 
 
 def test_extract_text_accepts_mime_with_parameters(tika: TikaResource) -> None:

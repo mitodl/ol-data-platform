@@ -42,6 +42,7 @@ from dagster import (
     Output,
     asset,
 )
+from ol_file_types import file_extension
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
 
@@ -49,7 +50,6 @@ from openedx.assets.content_files import (
     SJSON_SUFFIX,
     SRT_SUFFIX,
     VTT_SUFFIX,
-    file_extension,
     is_transcript,
     open_bundle_members,
     stamp_static_assets_version,

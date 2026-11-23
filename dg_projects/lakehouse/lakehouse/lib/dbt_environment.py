@@ -29,8 +29,11 @@ ol-infrastructure's local-dev stack (``data-platform`` in ``enabled_apps``),
 with its own object store and Iceberg catalog, and a root login that needs no
 Vault credentials. A developer who wants the QA cluster runs with
 ``DAGSTER_ENVIRONMENT=qa``, as docker-compose.yaml does for this code location.
-The Trino map has not followed: ``dev`` there is still the production Galaxy
-cluster.
+The b2b project then works through a port-forward, but the main project's qa
+target is starrocks_qa_lake, which writes the canonical QA warehouse through
+STARROCKS_HOST_MAP's in-cluster FE name, so dbt assets don't build from a
+laptop in qa. The Trino map has not followed: ``dev`` there is still the
+production Galaxy cluster.
 
 Adding an environment
 ---------------------
@@ -44,27 +47,35 @@ materialize dbt models unattended. Deciding it should is a separate, later act.
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal, cast, get_args
 
+import yaml
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
-# Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
-# code location was already configured for -- trino_host_map/trino_catalog_map
-# in definitions.py have pointed "qa" at the QA Starburst cluster and
-# ol_data_lake_qa all along. Only this map disagreed.
+# The main (layered warehouse) project's target. "dev" and "production" are
+# Trino until the production cutover (ol-infrastructure ADR 0012).
 #
-# "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
+# "qa" is StarRocks, ahead of production, so the QA builds find the StarRocks
+# porting bugs before production does: starrocks_qa_lake writes the canonical
+# ol_warehouse_qa_<layer> schemas in ol_data_lake_qa, through the QA cluster's
+# in-cluster FE with a Vault login per invocation (see dbt_credentials in
+# assets/lakehouse/dbt.py). Nothing builds QA on Trino any more, so the two
+# engines never write the same QA tables. The asset graph reads the manifest
+# the image bakes for this target (BAKED_MANIFEST_TARGET_PATHS).
+#
+# "ci" is the StarRocks output that writes CI's own lake,
 # ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
 # `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
-# project under DAGSTER_ENVIRONMENT=ci yet. Two things come before the first run
-# there: the "dbt" resource fetches no StarRocks credentials of its own (only
-# the StarRocks project's does), and ol_warehouse_ci does not exist in Glue.
+# project under DAGSTER_ENVIRONMENT=ci yet. A target whose profile type is
+# starrocks gets Vault credentials for each dbt invocation (see
+# dbt_target_type), but ol_warehouse_ci does not exist in Glue yet.
 # `ol-dbt starrocks` creates it with a location; dbt run from here would create
 # it bare (see the profile's comment), and seeds would then fail.
 DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "dev_production",
     "ci": "ci",
-    "qa": "qa",
+    "qa": "starrocks_qa_lake",
     "production": "production",
 }
 
@@ -84,6 +95,25 @@ STARROCKS_LOCAL_TARGET = "starrocks_local_b2b"
 STARROCKS_LOCAL_TARGETS: frozenset[str] = frozenset(
     {"starrocks_local", STARROCKS_LOCAL_TARGET}
 )
+
+# The FE each environment's `starrocks` resource connects to, and so the host
+# exported to every StarRocks dbt invocation. Dagster runs in the same EKS
+# cluster as that environment's StarRocks (data-ci, data-qa, data-production),
+# so each reaches its FE through the in-cluster service; from a QA pod the
+# external name lakehouse.qa.starrocks.ol.mit.edu times out. ci's own cluster
+# registers ol_data_lake_ci read/write and ol_data_lake_qa read-only
+# (ol-infrastructure Pulumi.lakehouse.CI.yaml), so it serves both the `ci` lake
+# target and the b2b views that read QA, and its Vault (vault-ci) issues logins
+# for it and not for QA's FE. dev is the local-dev cluster, which Tilt forwards
+# to this port on the host.
+STARROCKS_IN_CLUSTER_FE = "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local"
+
+STARROCKS_HOST_MAP: Mapping[str, str] = {
+    "dev": "127.0.0.1",
+    "ci": STARROCKS_IN_CLUSTER_FE,
+    "qa": STARROCKS_IN_CLUSTER_FE,
+    "production": STARROCKS_IN_CLUSTER_FE,
+}
 
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": STARROCKS_LOCAL_TARGET,
@@ -214,6 +244,68 @@ DBT_TARGET = resolve_for_environment(
     what="dbt target",
 )
 
+# Where the image bakes the main project's manifest for each deployed target
+# (dg_projects/lakehouse/Dockerfile). The asset graph comes from it, and so do
+# dagster-dbt's per-event lookups during a build: each test or model the build
+# reports is looked up by unique_id, and each row count queries the node's
+# relation_name. A manifest parsed for another target breaks both. The QA
+# build on starrocks_qa_lake against the Trino production manifest failed on
+# a test whose id differs between adapters (a `quote: true` column's
+# test hashes the quoted name, "key" vs `key`), and its row counts queried
+# "ol_data_lake_production"."ol_warehouse_production_staging"... in Trino's
+# quoting.
+BAKED_MANIFEST_TARGET_PATHS: Mapping[str, str] = {
+    "production": "target",
+    "starrocks_qa_lake": "target/starrocks_qa_lake",
+}
+
+
+def dbt_manifest_target_path(target: str, dagster_env: str) -> str:
+    """Return the target path holding the manifest parsed for *target*.
+
+    dev parses its own manifest at load (prepare_if_dev), so it takes dbt's
+    default path whatever the target.
+
+    :raises KeyError: when a deployed environment's target has no baked
+        manifest, rather than loading one parsed for some other target.
+    """
+    if dagster_env == "dev":
+        return "target"
+    try:
+        return BAKED_MANIFEST_TARGET_PATHS[target]
+    except KeyError:
+        msg = (
+            f"The image bakes no manifest for dbt target {target!r} "
+            f"(DAGSTER_ENVIRONMENT={dagster_env!r}; baked: "
+            f"{sorted(BAKED_MANIFEST_TARGET_PATHS)}). Add a parse step for it to "
+            f"dg_projects/lakehouse/Dockerfile and an entry here."
+        )
+        raise KeyError(msg) from None
+
+
+DBT_PROFILE_NAME = "open_learning"
+
+
+VAULT_LOGIN_VARIABLE = "DBT_STARROCKS_USERNAME"
+
+
+def dbt_target_reads_vault_login(profiles_path: Path, target: str) -> bool:
+    """Return whether *target* logs in with the DBT_STARROCKS_* variables.
+
+    Those are the profiles a Vault dynamic login has to be exported for. Trino
+    profiles, the local profiles (a passwordless root) and starrocks_qa (an
+    OIDC token file) don't read them, and exporting one would only overwrite
+    the host they connect to. Read from the profile rather than declared in
+    another map, so it cannot disagree with how dbt connects, including under
+    a DAGSTER_DBT_TARGET override.
+
+    :raises KeyError: when profiles.yml has no output named *target*.
+    """
+    profiles = yaml.safe_load(profiles_path.read_text())
+    output = profiles[DBT_PROFILE_NAME]["outputs"][target]
+    return output["type"] == "starrocks" and VAULT_LOGIN_VARIABLE in output["username"]
+
+
 STARROCKS_DBT_TARGET = resolve_for_environment(
     STARROCKS_DBT_TARGET_MAP,
     override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
@@ -266,8 +358,8 @@ DATA_LAKE_ENV = resolve_for_environment(
 
 # Which engine compacts and analyzes the dbt-built Iceberg tables in
 # iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
-# (ol-infrastructure ADR 0012), against the same Glue tables Trino still
-# builds there, so the StarRocks path is proven before production needs it.
+# (ol-infrastructure ADR 0012), against the Glue tables StarRocks builds
+# there, so the StarRocks path is proven before production needs it.
 # The nightly schedule is production-only (lib/scheduled_automation.py), so in
 # qa the asset runs when materialized by hand.
 # Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE

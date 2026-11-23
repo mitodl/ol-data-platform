@@ -1,5 +1,7 @@
+{% set raw_content = source('ol_warehouse_raw_data', 'raw__ocw__s3__course_content') %}
+
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__ocw__s3__course_content') }}
+    select * from {{ raw_content }}
 )
 
 -- The load appends a full set of rows each time a course changes, all stamped
@@ -74,6 +76,12 @@ select
     , {{ json_extract_scalar('source.data_json', "'$.legacy_uid'") }} as course_legacy_uid
     , case when source.content_kind = 'course' then source.data_json end as course_data_json
     , source.file_key as coursecontent_text_file_key
+    -- Transcript rows, and these columns, are newer than the table: dlt adds
+    -- the columns on the first load that has them.
+    , {{ 'source.transcript_index' if relation_has_column(raw_content, 'transcript_index')
+        else 'cast(null as bigint)' }} as coursecontent_transcript_index
+    , {{ 'source.transcript_language' if relation_has_column(raw_content, 'transcript_language')
+        else 'cast(null as varchar)' }} as coursecontent_transcript_language
     , coalesce(extracted.content, source.content) as coursecontent_text
     , case when extracted.content is not null then 'extracted' else source.extraction_status end
         as coursecontent_text_extraction_status

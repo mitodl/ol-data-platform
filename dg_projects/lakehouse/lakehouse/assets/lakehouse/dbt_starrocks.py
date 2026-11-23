@@ -1,6 +1,5 @@
 import json
 import os
-import threading
 import time
 
 from dagster import AssetExecutionContext
@@ -30,10 +29,11 @@ from lakehouse.lib.starrocks_dbt import (
     live_columns,
     looks_retriable,
     retry_delay,
+    starrocks_credentials,
     unreadable_base_tables,
 )
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
-from lakehouse.resources.starrocks import StarRocksResource
+from lakehouse.resources.starrocks import LoginNotPropagatedError, StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
 # `+enabled: "{{ target.type == 'starrocks' }}"`, so they only exist in a
@@ -70,18 +70,10 @@ starrocks_dbt_project.prepare_if_dev()
 # Passing a DbtProject to project_dir makes DbtCliResource pick up its target/
 # profiles_dir automatically (see dagster_dbt.core.resource.DbtCliResource).
 # This must be a SEPARATE resource from the shared "dbt" key used by
-# full_dbt_project, which is pinned to a Trino target -- reusing that one here
-# would silently run `dbt build --target production` and build nothing, since
-# b2b_analytics is disabled for any non-starrocks target.
+# full_dbt_project, which is pinned to DBT_TARGET (Trino, or a StarRocks lake
+# target in ci and qa) -- reusing that one here would build nothing, since
+# b2b_analytics is enabled only on StarRocks targets in default_catalog.
 starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
-
-# Serializes credential-injection + dbt subprocess spawn so two b2b_analytics
-# builds materializing in the same process (e.g. a manual run overlapping the
-# schedule) can't clobber each other's DBT_STARROCKS_* env vars between the
-# assignment below and the subprocess spawn -- NOT held across the actual
-# build (dbt.cli() spawns the subprocess synchronously and it inherits
-# os.environ at that point; nothing after that call can still race).
-_ENV_LOCK = threading.Lock()
 
 # Retry knobs, the retriable-error classifier, and the column-drift comparison
 # live in lakehouse.lib so they can be unit-tested without a parsed dbt manifest
@@ -194,7 +186,7 @@ def starrocks_dbt_assets(
         )
         build_args.append("--full-refresh")
 
-    last_exc: DagsterDbtCliRuntimeError | None = None
+    last_exc: DagsterDbtCliRuntimeError | LoginNotPropagatedError | None = None
     for attempt in range(MAX_BUILD_ATTEMPTS):
         if attempt:
             delay = retry_delay(attempt)
@@ -208,18 +200,21 @@ def starrocks_dbt_assets(
             )
             time.sleep(delay)
 
-        username, password = starrocks.generate_credentials()
-        with _ENV_LOCK:
-            os.environ["DBT_STARROCKS_USERNAME"] = username
-            os.environ["DBT_STARROCKS_PASSWORD"] = password
-            os.environ["DBT_STARROCKS_HOST"] = starrocks.host
-            invocation = starrocks_dbt.cli(build_args, context=context)
+        # A login some FE still refuses after the wait is the same transient
+        # failure the build retries on 1045, so it gets the same retry.
+        try:
+            with starrocks_credentials(starrocks):
+                invocation = starrocks_dbt.cli(build_args, context=context)
+        except LoginNotPropagatedError as not_propagated:
+            if attempt == MAX_BUILD_ATTEMPTS - 1:
+                raise
+            last_exc = not_propagated
+            continue
 
-        # The subprocess above is already spawned (and has already inherited
-        # the env set under the lock) by the time .cli() returns -- streaming
-        # its output takes minutes and must happen outside the lock, or a
-        # second concurrent build would be blocked from even starting until
-        # this one finishes instead of just for the moment of env injection.
+        # The subprocess is already spawned, with the credentials in its
+        # environment, by the time .cli() returns. Streaming takes minutes and
+        # happens outside the lock, so a concurrent build is held back only for
+        # the moment of injection.
         try:
             events = list(invocation.stream())
         except DagsterDbtCliRuntimeError as exc:

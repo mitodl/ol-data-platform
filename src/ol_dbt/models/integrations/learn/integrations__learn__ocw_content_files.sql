@@ -14,10 +14,86 @@
   with neither uid, and keeps a resource only when its text file is a path in
   the bucket (has_text_file, false for a video whose transcript list Learn
   cannot read) and the file is there, and never a 3Play caption or PDF file.
+
+  Learn makes the key it reads by splitting a path that does not start with
+  "courses" on "courses" and keeping what lies between the first two, so a
+  file whose name holds "courses" is cut short. The platform reads the whole
+  path. Learn reads the cut key only when its extension is one it extracts
+  (VALID_FILE_TYPES, Path(key).suffix in learning_resources/etl/ocw.py). A cut
+  key ends inside the real path, so it names no file: with an extension Learn
+  reads, the file is missing and Learn drops the resource; without one, Learn
+  keeps the resource with no text (the one production case on 2026-11-20, a
+  24.908 PDF named ..._Discourses.pdf).
+
+  The platform reads more file types than Learn (ol_file_types: .epub, .ipynb,
+  .tex and others besides Learn's list). Learn never reads a file whose
+  extension is not in VALID_FILE_TYPES, so such a resource keeps its row here
+  with no text and no extraction status, as it has in Learn.
 #}
 
-with content_files as (
-    select * from {{ ref('int__ocw__content_files') }}
+{% set learn_text_extensions = [
+    '.csv', '.doc', '.docx', '.htm', '.html', '.json', '.m', '.mat', '.md', '.pdf', '.ppt',
+    '.pptx', '.ps', '.py', '.r', '.rtf', '.sjson', '.srt', '.txt', '.vtt', '.xls', '.xlsx', '.xml',
+] %}
+
+with int_content_files as (
+    select
+        *
+        , coalesce(
+            text_file_path not like 'courses%'
+            and length(text_file_path) - length(replace(text_file_path, 'courses', '')) >= 2 * length('courses')
+            , false
+        ) as learn_cuts_path
+        -- What Learn's cut key holds after "courses", up to the next "courses".
+        , {{ regexp_extract_or_null('text_file_path', "'courses(.*?)courses'", 1) }} as learn_cut_rest
+        -- Path.suffix of the text file, as Learn tests the key it would read.
+        -- A page has no text file and keeps its content.
+        , coalesce(
+            lower(
+                {{ regexp_extract_or_null(regexp_replace_all('text_file_path', "'/+$'", "''"), "'\\.[^./]+$'") }}
+            ) in ('{{ learn_text_extensions | join("', '") }}')
+            , text_file_path is null
+        ) as learn_reads_text_file
+    from {{ ref('int__ocw__content_files') }}
+)
+
+, learn_cut_keys as (
+    select
+        *
+        -- Path.suffix of the cut key: its last segment's extension, trailing
+        -- slashes ignored.
+        , lower(
+            {{ regexp_extract_or_null(regexp_replace_all('learn_cut_rest', "'/+$'", "''"), "'\\.[^./]+$'") }}
+        ) in ('{{ learn_text_extensions | join("', '") }}') as learn_reads_cut_key
+    from int_content_files
+)
+
+, content_files as (
+    select
+        courserun_readable_id
+        , content_file_key
+        , title
+        , description
+        , url
+        , file_type
+        , case when not learn_cuts_path and learn_reads_text_file then content end as content
+        , content_type
+        , image_src
+        , file_extension
+        , case
+            when learn_cuts_path and learn_reads_cut_key then 'missing'
+            when not learn_cuts_path and learn_reads_text_file then extraction_status
+        end as extraction_status
+        , retrieved_on
+        , content_tags
+        , youtube_id
+        , has_text_file
+        , is_3play_artifact
+    from learn_cut_keys
+)
+
+, learn_content_files as (
+    select * from content_files
     where
         courserun_readable_id is not null
         and (
@@ -54,4 +130,4 @@ select
     , retrieved_on as last_modified
     , content_tags
     , youtube_id
-from content_files
+from learn_content_files

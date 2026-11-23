@@ -11,6 +11,8 @@ dependencies = [
     "defusedxml>=0.7.1",
     "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
+    # ol_file_types: the file types read for text, shared with OCW
+    "ol-dlt",
     "ol-orchestrate-lib",
     "universal-pathlib ~= 0.3.1",
 ]
@@ -46,6 +48,7 @@ root_module = "openedx"
 exclude=["openedx_tests"]
 
 [tool.uv.sources]
+ol-dlt = { path = "../../src/ol_dlt", editable = true }
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
 
 # Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py

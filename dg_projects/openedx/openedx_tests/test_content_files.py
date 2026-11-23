@@ -12,8 +12,8 @@ from pathlib import Path
 
 import httpx2 as httpx
 import pytest
+from ol_file_types import STATUS_SKIPPED_UNSUPPORTED, TEXT_FILE_EXTENSIONS
 from ol_orchestrate.lib.openedx import STATIC_BUNDLE_SUFFIX
-from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES
 from openedx.assets.content_files import (
     EMPTY_SNAPSHOT_NULL_FIELDS,
     MIN_DOCUMENTS_FOR_RATE_CHECK,
@@ -21,22 +21,12 @@ from openedx.assets.content_files import (
     _content_type,
     assert_extraction_healthy,
     build_document_rows,
-    file_extension,
     open_bundle_members,
     stamp_static_assets_version,
     static_references,
     write_text_snapshot,
 )
 from upath import UPath
-
-
-def fake_is_supported(content_type):
-    """Gate on the real supported set rather than a hand-picked subset.
-
-    A local subset would keep passing while the real one drifted, which is the
-    exact failure these tests exist to catch.
-    """
-    return content_type in SUPPORTED_CONTENT_TYPES
 
 
 def fake_extract(_file_bytes, _content_type):
@@ -55,7 +45,6 @@ def rows_for(members, extract=fake_extract):
         course_id="course-v1:MITx+6.00.1x+2T2024",
         source_system="mitx",
         extract=extract,
-        is_supported=fake_is_supported,
     )
 
 
@@ -155,12 +144,22 @@ def test_empty_files_do_not_drag_the_health_guard():
 
 
 def test_unsupported_files_are_skipped_not_failed():
-    """Images and archives are normal course content, not extraction errors."""
+    """Images and archives are normal course content, not extraction errors.
+
+    Each still gets a row, so the snapshot lists every file of the course.
+    """
     rows, counters = rows_for(
         [("static/logo.png", b"fake png"), ("static/data.zip", b"fake zip")]
     )
 
-    assert rows == []
+    assert [
+        (r["file_path"], r["extraction_status"], r["content"], r["size_bytes"])
+        for r in rows
+    ] == [
+        ("static/logo.png", STATUS_SKIPPED_UNSUPPORTED, None, None),
+        ("static/data.zip", STATUS_SKIPPED_UNSUPPORTED, None, None),
+    ]
+    assert [r["content_type"] for r in rows] == ["image/png", "application/zip"]
     assert counters["skipped"] == 2
     assert counters["candidates"] == 0
     assert counters["failed"] == 0
@@ -224,6 +223,7 @@ def test_every_row_status_has_the_same_keys():
             ("static/blank.txt", b"   "),
             ("about/overview.html", b""),
             ("static/page.html", b"<p>hi</p>"),
+            ("static/logo.png", b"fake png"),
         ],
         extract=by_path,
     )
@@ -233,9 +233,16 @@ def test_every_row_status_has_the_same_keys():
         "empty",
         "empty",
         "extracted",
+        STATUS_SKIPPED_UNSUPPORTED,
     ]
     assert len({frozenset(row) for row in rows}) == 1
-    assert [r["file_extension"] for r in rows] == [".pdf", ".txt", ".html", ".html"]
+    assert [r["file_extension"] for r in rows] == [
+        ".pdf",
+        ".txt",
+        ".html",
+        ".html",
+        ".png",
+    ]
 
 
 def test_empty_extraction_is_recorded_not_dropped():
@@ -452,7 +459,6 @@ def test_filtered_out_members_are_never_read():
         course_id="course-v1:MITx+6.00.1x+2T2024",
         source_system="mitx",
         extract=fake_extract,
-        is_supported=fake_is_supported,
     )
 
     assert reads == ["static/syllabus.pdf"]
@@ -555,48 +561,27 @@ VALID_TEXT_FILE_TYPES = frozenset(
     }
 )
 
-# Subtitles belong to the sibling transcript asset, so they are expected NOT to
-# be Tika-supported here. `.vtt` is in that set deliberately: MIT Learn sends it
-# to Tika and stores the cue timings, and routing it to the parser instead is a
-# considered divergence rather than an oversight.
-_HANDLED_ELSEWHERE = {".srt", ".sjson", ".vtt"}
 
-# `.xml` never reaches the MIME gate at all: process_course_xml_blocks collects
-# only non-XML members, so no XML file is in the bundle this asset reads. Course
-# XML travels as blocks with its raw_xml intact. Asserting a MIME type for it
-# here would be a check that cannot fail.
-_NEVER_IN_THE_BUNDLE = {".xml"}
-
-
-@pytest.mark.parametrize(
-    "extension",
-    sorted(VALID_TEXT_FILE_TYPES - _HANDLED_ELSEWHERE - _NEVER_IN_THE_BUNDLE),
-)
-def test_every_extension_mit_learn_extracts_is_supported(extension):
+@pytest.mark.parametrize("extension", sorted(VALID_TEXT_FILE_TYPES))
+def test_every_extension_mit_learn_extracts_is_read(extension):
     """Nothing MIT Learn extracts today may be silently dropped by this asset.
 
-    The two systems filter by different mechanisms -- MIT Learn by extension,
-    this asset by MIME type -- so agreement between them is a coincidence
-    unless it is asserted. `.json` was genuinely lost before this check
-    existed: four files in a real course-v1:MITx+14.310x+3T2021 export. `.tex`
-    did not appear in the archives sampled, but maps to `application/x-tex`,
-    which was missing from the supported set for the same reason.
+    The platform's list is wider than Learn's, and integrations__learn__content_files
+    narrows it back to Learn's from file_extension, so Learn's has to be inside
+    it. Subtitles are in it too; this asset still leaves them to the transcript
+    asset (test_subtitles_are_not_treated_as_documents).
     """
-    content_type = _content_type("problem_set" + extension)
-    assert content_type in SUPPORTED_CONTENT_TYPES, (
-        f"{extension} maps to {content_type}, which Tika will refuse; "
-        "MIT Learn extracts this extension, so the file would be lost"
-    )
+    assert extension in TEXT_FILE_EXTENSIONS
 
 
 def test_the_mime_lookup_does_not_depend_on_the_host():
-    """The parity check above is only worth anything if it runs prod's table.
+    """A row's content_type is the same in dev and in production.
 
     `mimetypes.guess_type` reads /etc/mime.types when the host has one. A dev
     machine and ubuntu-latest do; the python:3.14-slim runtime image does not.
     `.rtf` is where that bit: the host table answers `application/rtf` and the
-    builtin answers `text/rtf`, so every RTF extracted in dev and was skipped in
-    production with no row and no error, while this test passed.
+    builtin answers `text/rtf`, and while this asset chose files by MIME type
+    every RTF was extracted in dev and skipped in production.
     """
     assert _content_type("notes.rtf") == "text/rtf"
     assert (
@@ -605,22 +590,105 @@ def test_the_mime_lookup_does_not_depend_on_the_host():
     )
 
 
-def test_csv_stays_out_of_the_document_set():
-    """`.csv` is excluded from VALID_TEXT_FILE_TYPES and must stay excluded.
+def test_files_learn_does_not_read_are_read_for_the_platform():
+    """Data files, code and notebooks a course links are read, not skipped.
 
-    It appears only in VALID_TUTOR_PROBLEM_FILE_TYPES, which exists because
-    Canvas needs an explicit mapping of which assets to process for tutor -- its
-    export is structurally different. Open edX problems are a first-class OLX
-    block type and are already carried as blocks, so nothing here needs `.csv`,
-    and extracting it would publish course data files as course text.
+    Learn's VALID_TEXT_FILE_TYPES leaves them out, and its view applies that
+    list; the platform's consumers (courseware extraction) get their text.
     """
+    seen = []
+
+    def extract(_file_bytes, content_type):
+        seen.append(content_type)
+        return "text"
+
     rows, counters = rows_for(
-        [("course/static/gradebook.csv", b"student,score\nalice,90\n")]
+        [
+            ("course/static/gradebook.csv", b"student,score\nalice,90\n"),
+            ("course/static/model.r", b"x <- 1"),
+            ("course/static/fit.m", b"y = polyfit(x, y, 1);"),
+        ],
+        extract=extract,
     )
 
-    assert rows == []
-    assert counters["skipped"] == 1
+    assert [r["extraction_status"] for r in rows] == ["extracted"] * 3
+    assert counters["skipped"] == 0
+    # The builtin table has no .r or .m; Tika gets no type and detects it, and
+    # the row says octet-stream.
+    assert seen == ["text/csv", None, None]
+    assert [r["content_type"] for r in rows] == [
+        "text/csv",
+        "application/octet-stream",
+        "application/octet-stream",
+    ]
+
+
+def test_notebooks_are_read_without_tika():
+    """A notebook's cell sources are its text; Tika would return the raw JSON."""
+    notebook = {
+        "cells": [
+            {"cell_type": "markdown", "source": ["# Gradient descent\n", "Intro"]},
+            {
+                "cell_type": "code",
+                "source": "import numpy as np",
+                "outputs": [{"data": {"image/png": "iVBORw0KGgo="}}],
+            },
+        ],
+        "nbformat": 4,
+    }
+
+    def extract(_file_bytes, _content_type):
+        msg = "a notebook must not be sent to Tika"
+        raise AssertionError(msg)
+
+    rows, counters = rows_for(
+        [("course/static/lab1.ipynb", json.dumps(notebook).encode())],
+        extract=extract,
+    )
+
+    assert rows[0]["extraction_status"] == "extracted"
+    assert rows[0]["content"] == "# Gradient descent\nIntro\n\nimport numpy as np"
+    assert counters["notebook_extracted"] == 1
+
+
+def test_a_broken_notebook_is_a_failed_row():
+    rows, counters = rows_for([("course/static/lab1.ipynb", b"not json")])
+
+    assert rows[0]["extraction_status"] == "failed"
+    assert counters["notebook_failed"] == 1
+
+
+def test_broken_notebooks_do_not_trip_the_health_guard():
+    """The guard judges Tika, which never sees a notebook."""
+    rows, counters = rows_for(
+        [
+            ("course/static/lab1.ipynb", b"not json"),
+            ("course/static/lab2.ipynb", b""),
+        ]
+    )
+
+    assert [r["extraction_status"] for r in rows] == ["failed", "empty"]
     assert counters["candidates"] == 0
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_read_notebooks_do_not_hide_failed_documents():
+    notebook = {"cells": [{"cell_type": "code", "source": "import numpy"}]}
+
+    def extract(_file_bytes, _content_type):
+        msg = "slow parse"
+        raise httpx.ReadTimeout(msg)
+
+    _rows, counters = rows_for(
+        [
+            ("course/static/lab1.ipynb", json.dumps(notebook).encode()),
+            ("course/static/syllabus.pdf", b"%PDF-fake"),
+        ],
+        extract=extract,
+    )
+
+    with pytest.raises(RuntimeError, match="all 1 candidate documents failed"):
+        assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
 
 
 def test_vtt_stays_out_of_the_document_set():
@@ -661,12 +729,6 @@ def test_rows_carry_the_extension_consumers_filter_on():
         "course/tabs/overview.html": ".html",
     }
     assert all(row["file_extension"] in VALID_TEXT_FILE_TYPES for row in rows)
-
-
-def test_extensionless_files_report_an_empty_extension():
-    """A bare `LICENSE` has no suffix; it must not become the whole filename."""
-    assert file_extension("course/static/LICENSE") == ""
-    assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"
 
 
 def test_static_references_cover_both_link_spellings():
