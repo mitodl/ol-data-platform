@@ -179,8 +179,10 @@ DOCUMENT_TEXT_FIELDS = (
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
 # extracted_at is absent from files written before the asset stamped it,
-# release_date from files written before it dated files, and content_file_key
-# from files written before it keyed them.
+# release_date from files written before it dated files, content_file_key
+# from files written before it keyed them, and the platform's own flags
+# (learner_visibility, static_reference, non_content_kind) from files written
+# before it set them.
 FILE_EXCLUSION_FIELDS = (
     "course_id",
     "source_system",
@@ -191,6 +193,12 @@ FILE_EXCLUSION_FIELDS = (
     "extracted_at",
     "release_date",
     "content_file_key",
+    "learner_visibility",
+    "static_reference",
+    "non_content_kind",
+)
+FILE_EXCLUSION_PLATFORM_FIELDS = frozenset(
+    {"learner_visibility", "static_reference", "non_content_kind"}
 )
 # The row the file exclusions asset writes for each unit. content_files is a
 # list of [key, relation] pairs, which lands as JSON text.
@@ -366,7 +374,10 @@ OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=FILE_EXCLUSION_FIELDS,
-    optional_fields=frozenset({"extracted_at", "release_date", "content_file_key"}),
+    optional_fields=frozenset(
+        {"extracted_at", "release_date", "content_file_key"}
+        | FILE_EXCLUSION_PLATFORM_FIELDS
+    ),
     pipeline_name="course_file_exclusions__openedx",
 )
 OPENEDX_COURSE_UNITS = XmlBlocksTable(

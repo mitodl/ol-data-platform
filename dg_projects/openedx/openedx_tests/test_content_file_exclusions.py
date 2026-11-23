@@ -196,6 +196,122 @@ def test_kept_files_include_what_visible_content_uses(rows):
         assert rows[path]["exclusion_reason"] is None
 
 
+def test_learner_visibility_names_why_a_learner_cannot_reach_a_file(rows):
+    assert {
+        path: row["learner_visibility"]
+        for path, row in rows.items()
+        if row["learner_visibility"] != "visible"
+    } == {
+        "chapter/answers.xml": "staff_only",
+        "sequential/key.xml": "staff_only",
+        "vertical/key_unit.xml": "staff_only",
+        "html/solutions.xml": "staff_only",
+        "html/solutions_body.html": "staff_only",
+        "video/hidden_lecture.xml": "staff_only",
+        "tabs/staff_notes.html": "unreachable_tab",
+        "tabs/old.html": "unreachable_tab",
+        "tabs/orphan.html": "unreachable_tab",
+        "about/overview.html": "about_page_not_served",
+        "about/effort.html": "about_page_not_served",
+    }
+    # The hidden video's transcript is the visible one's too, as in Learn.
+    assert rows["static/shared-en.srt"]["learner_visibility"] == "visible"
+
+
+def test_static_reference_says_whether_learner_text_links_a_static_file(rows):
+    assert {
+        path: row["static_reference"]
+        for path, row in rows.items()
+        if row["static_reference"] is not None
+    } == {
+        "static/handout.pdf": "referenced",
+        "static/announced.pdf": "referenced",
+        "static/shared-en.srt": "referenced",
+        "static/subs_abc123.srt.sjson": "referenced",
+        "static/textbook.pdf": "referenced",
+        "static/notes_only.pdf": "unreferenced",
+        "static/answer_key.pdf": "unreferenced",
+        "static/unused.pdf": "unreferenced",
+        "static/withdrawn.pdf": "unreferenced",
+        "static/subs_gone999.srt.sjson": "unreferenced",
+        "static/out.pdf": "unreferenced",
+    }
+    # Unreferenced is a flag, not unreachability: the file is served by URL.
+    assert rows["static/unused.pdf"]["learner_visibility"] == "visible"
+
+
+def test_non_content_kind_names_what_a_non_content_file_is(rows):
+    assert {
+        path: row["non_content_kind"]
+        for path, row in rows.items()
+        if row["non_content_kind"] is not None
+    } == {
+        "policies/assets.json": "asset_manifest",
+        "policies/2T2026/policy.json": "course_settings",
+        "info/updates.items.json": "announcements",
+        "info/updates.html": "legacy_announcements",
+    }
+
+
+def test_an_unpublished_draft_is_not_visible(tmp_path):
+    files = {**COURSE_FILES, "drafts/vertical/next_week.xml": "<vertical/>"}
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    row = {
+        row["file_path"]: row
+        for row in build_file_rows(
+            OlxArchive(olx_root, "mitxonline"), course_id="c", course_xml_version="abc"
+        )
+    }["drafts/vertical/next_week.xml"]
+    assert row["learner_visibility"] == "draft"
+    # Learn never reads a draft, so it has no reason to exclude one.
+    assert not row["excluded"]
+
+
+def test_platform_flags_keep_every_rule_that_holds(tmp_path):
+    """Learn's exclusion_reason names the first rule; the flags keep each."""
+    files = {
+        **COURSE_FILES,
+        "vertical/key_unit.xml": (
+            '<vertical><html url_name="solutions"/>'
+            '<video url_name="hidden_lecture">'
+            '<transcript language="en" src="shared-en.srt"/></video>'
+            '<video url_name="hidden_only"/>'
+            "</vertical>"
+        ),
+        "video/hidden_only.xml": (
+            '<video><transcript language="en" src="hidden-only-en.srt"/></video>'
+        ),
+        "static/hidden-only-en.srt": "1\n00:00 --> 00:01\nHidden",
+    }
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    row = {
+        row["file_path"]: row
+        for row in build_file_rows(
+            OlxArchive(olx_root, "mitxonline"), course_id="c", course_xml_version="abc"
+        )
+    }["static/hidden-only-en.srt"]
+    assert row["exclusion_reason"] == "staff_only"
+    assert row["learner_visibility"] == "staff_only"
+    assert row["static_reference"] == "unreferenced"
+
+
+def test_a_tree_without_course_xml_has_no_platform_flags(tmp_path):
+    files = {"static/unused.pdf": "%PDF", "policies/assets.json": "{}"}
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    for row in build_file_rows(
+        OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
+    ):
+        assert row["learner_visibility"] is None
+        assert row["static_reference"] is None
+        assert row["non_content_kind"] is None
+
+
 def test_static_files_are_unpacked_empty(tmp_path):
     tree = tmp_path / "tree"
     tree.mkdir()

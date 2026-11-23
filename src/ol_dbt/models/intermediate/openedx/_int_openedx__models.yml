@@ -84,6 +84,21 @@ models:
     description: str, why the file is excluded (staff_only, unreachable_tab, about_page,
       course_settings, non_content, legacy_announcements, unreferenced_static); null
       when it is not
+  - name: learner_visibility
+    description: str, the platform's reading of whether a learner can reach the file
+      (visible, draft, staff_only, unreachable_tab, about_page_not_served), each rule
+      applied on its own; null when is_exclusion_checked is false, when the exclusion
+      rows predate the column, and for a file of a checked run with no exclusion row
+      of its own (which is_excluded calls not excluded). Read this, not is_excluded,
+      outside the Learn views
+  - name: static_reference
+    description: str, for a static/ file, whether text a learner reaches links it
+      (referenced, unreferenced); a relevance flag, since an unreferenced file is
+      still served by URL. Null outside static/ and where learner_visibility is null
+  - name: non_content_kind
+    description: str, what a file that is not course content is instead (asset_manifest,
+      announcements, course_settings, legacy_announcements); null for course content
+      and where learner_visibility is null
 
 unit_tests:
 - name: test_int__openedx__content_files_matches_learn_derivations
