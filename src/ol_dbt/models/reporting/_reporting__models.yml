@@ -2262,6 +2262,75 @@ models:
       arguments:
         column_list: ["source", "conversation_id"]
 
+- name: courserun_enrollment_activity_report
+  description: Course enrollment activity per course run and day, with no learner
+    columns. Each count is of distinct enrollments whose event (enrolling, upgrading
+    or earning a certificate) falls on activity_date, so summing over dates gives
+    a run's total and a running sum the cumulative view. Verified status reads tfact_enrollment.is_verified.
+    Global Alumni records no enrollment time, so its runs show certificates but no
+    enrollments. Backs the course-run enrollment trends dashboard.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: platform
+    description: str, the platform's display name, e.g. MITx Online, edX.org, xPro.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, readable ID of the course run.
+    tests:
+    - not_null
+  - name: activity_date
+    description: date, the day the counted events happened.
+    tests:
+    - not_null
+  - name: course_readable_id
+    description: str, readable ID of the course the run belongs to.
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_title
+    description: str, title of the course run.
+  - name: courserun_start_on
+    description: str, start of the course run, as ISO 8601.
+  - name: courserun_end_on
+    description: str, end of the course run, as ISO 8601.
+  - name: courserun_is_current
+    description: boolean, whether the course run is currently running.
+  - name: enrollments
+    description: int, enrollments created on activity_date, whether or not they are
+      still active.
+    tests:
+    - not_null
+  - name: active_enrollments
+    description: int, enrollments created on activity_date that are still active.
+  - name: unenrolled_enrollments
+    description: int, enrollments created on activity_date that are no longer active.
+      Dated by enrollment, since no unenrollment time is recorded.
+  - name: verified_enrollments
+    description: int, active verified enrollments, dated by when the enrollment was
+      created.
+  - name: audit_enrollments
+    description: int, active enrollments in the audit mode, dated by when the enrollment
+      was created.
+  - name: upgrades
+    description: int, active verified enrollments, dated by the upgrade payment (or
+      the enrollment when none is recorded). A run's total equals that of verified_enrollments;
+      only the dating differs, so the two cumulative curves can differ before the
+      end.
+  - name: certificates
+    description: int, certificates earned, dated by when the certificate was created.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "courserun_readable_id", "activity_date"]
+
 unit_tests:
 - name: test_program_summary_report_counts_verified_from_the_fact
   description: >
