@@ -8,8 +8,10 @@
     user_activity models gaining useractivity_load_id, QA, 2026-11-17).
     A string column longer than StarRocks allows, or with no length, is added
     as `string` instead. Every other type is rendered as before.
-    Upstream: https://github.com/StarRocks/dbt-starrocks/issues/41 fixed the
-    type name, not the length. Remove this override once dbt-starrocks maps it.
+    Snapshots add columns through create_columns, whose default renders the same
+    expanded_data_type, so starrocks__create_columns below gets the same mapping.
+    Upstream: https://github.com/StarRocks/dbt-starrocks/issues/139. Remove these
+    overrides once dbt-starrocks maps it.
 #}
 {% macro starrocks__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
   {% set add_columns = add_columns or [] %}
@@ -24,6 +26,15 @@
             {% endfor %}
   {%- endset -%}
   {% do run_query(sql) %}
+{% endmacro %}
+
+
+{% macro starrocks__create_columns(relation, columns) %}
+  {% for column in columns %}
+    {% call statement() %}
+      alter table {{ relation.render() }} add column {{ adapter.quote(column.name) }} {{ starrocks_column_ddl_type(column) }}
+    {% endcall %}
+  {% endfor %}
 {% endmacro %}
 
 
