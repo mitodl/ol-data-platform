@@ -40,7 +40,14 @@ with enrollment_detail as (
         ]) }} as enrollment_key
         , enrollment_detail.courserunenrollment_enrollment_mode as enrollment_mode
         , enrollment_detail.courserunenrollment_is_active as is_active
-        , coalesce(verified_course_enrollments.is_verified, false) as is_verified
+        -- tfact_enrollment.is_verified excludes the unenrolled status, so a learner who
+        -- unenrolled counts as verified by the mode they left with. Active enrollments
+        -- follow the fact's rule exactly.
+        , coalesce(verified_course_enrollments.is_verified, false)
+            or (
+                not enrollment_detail.courserunenrollment_is_active
+                and enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+            ) as is_verified
         , enrollment_detail.courseruncertificate_is_earned as has_certificate
         , enrollment_detail.courserunenrollment_created_on as enrolled_on
         -- Falls back to the enrollment for a platform that records no upgrade time
@@ -81,38 +88,41 @@ with enrollment_detail as (
     where has_certificate
 )
 
+-- enrollment_status is part of the grain so a dashboard filter on it switches every
+-- count between active enrollments only and all enrollments, unenrolled included.
 , daily_activity as (
     select
         platform
         , courserun_readable_id
         , activity_date
+        , case when is_active then 'active' else 'unenrolled' end as enrollment_status
         , count(distinct case when activity_type = 'enrollment' then enrollment_key end)
             as enrollments
-        , count(distinct case when activity_type = 'enrollment' and is_active then enrollment_key end)
-            as active_enrollments
-        , count(distinct case when activity_type = 'enrollment' and not is_active then enrollment_key end)
-            as unenrolled_enrollments
         , count(distinct case
-            when activity_type = 'enrollment' and is_active and is_verified then enrollment_key
+            when activity_type = 'enrollment' and is_verified then enrollment_key
         end) as verified_enrollments
         , count(distinct case
-            when activity_type = 'enrollment' and is_active and enrollment_mode = 'audit'
-                then enrollment_key
+            when activity_type = 'enrollment' and enrollment_mode = 'audit' then enrollment_key
         end) as audit_enrollments
-        , count(distinct case when activity_type = 'upgrade' and is_active then enrollment_key end)
+        , count(distinct case when activity_type = 'upgrade' then enrollment_key end)
             as upgrades
         , count(distinct case when activity_type = 'certificate' then enrollment_key end)
             as certificates
     from activity
     -- Global Alumni records no enrollment time, so its enrollments have no day.
     where activity_date is not null
-    group by platform, courserun_readable_id, activity_date
+    group by
+        platform
+        , courserun_readable_id
+        , activity_date
+        , case when is_active then 'active' else 'unenrolled' end
 )
 
 select
     daily_activity.platform
     , daily_activity.courserun_readable_id
     , daily_activity.activity_date
+    , daily_activity.enrollment_status
     , course_run.course_readable_id
     , course_run.course_title
     , course_run.courserun_title
@@ -120,8 +130,6 @@ select
     , course_run.courserun_end_on
     , course_run.courserun_is_current
     , daily_activity.enrollments
-    , daily_activity.active_enrollments
-    , daily_activity.unenrolled_enrollments
     , daily_activity.verified_enrollments
     , daily_activity.audit_enrollments
     , daily_activity.upgrades
