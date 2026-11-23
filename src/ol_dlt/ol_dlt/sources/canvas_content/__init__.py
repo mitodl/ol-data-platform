@@ -48,7 +48,6 @@ import io
 import json
 import logging
 import mimetypes
-import re
 import zipfile
 import zlib
 from collections.abc import Iterator
@@ -76,6 +75,7 @@ from ol_dlt.extraction import (
     record_read,
 )
 from ol_dlt.sources.canvas_content import cartridge
+from ol_file_types.srt import text_from_srt
 
 logger = logging.getLogger(__name__)
 
@@ -203,22 +203,6 @@ def derived_title(source_path: str) -> str:
     """Return the title Learn falls back to, from a file's name."""
     stem = PurePosixPath(source_path).stem
     return stem.replace("_", " ").replace("-", " ").title()
-
-
-_SRT_TIMING = r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}"
-
-
-def text_from_srt(content: str) -> str:
-    r"""Remove the timings and sequence numbers of an SRT transcript.
-
-    As Learn does, except that a sequence number is only a line of digits
-    directly above a cue timing. Learn's bare ``\d+\n`` also drops a caption of
-    only digits and the number at the end of a caption line. Same rule as
-    openedx.assets.transcripts.text_from_srt_content.
-    """
-    content = re.sub(r"^\d+\n(?=" + _SRT_TIMING + ")", "", content, flags=re.MULTILINE)
-    content = re.sub(_SRT_TIMING + r"(\n|$)", "", content)
-    return re.sub(r"\n\s*\n", " ", content)
 
 
 def text_from_sjson(content: str) -> str | None:

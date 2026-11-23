@@ -9,15 +9,13 @@ this implementation pass -- fix the implementation, or change both repos
 together.
 """
 
-import re
-
 import pytest
+from ol_file_types.srt import text_from_srt
 from openedx.assets.transcripts import (
     assert_parsing_healthy,
     build_transcript_rows,
     is_transcript,
     text_from_sjson_content,
-    text_from_srt_content,
     text_from_vtt_content,
     transcript_text,
 )
@@ -35,16 +33,6 @@ MIT_LEARN_SRT_CONTENT = (
 )
 MIT_LEARN_SRT_EXPECTED = "This is the first subtitle.\nThis is the second subtitle."
 
-
-def mit_learn_text_from_srt(content: str) -> str:
-    """mit-learn's text_from_srt_content, as of mit-learn main 5b8efb234."""
-    content = re.sub(
-        r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)", "", content
-    )
-    content = re.sub(r"\d+\n", "", content)
-    return re.sub(r"\n\s*\n", " ", content)
-
-
 MIT_LEARN_SJSON_CONTENT = """
     {
         "start": [0,2],
@@ -58,7 +46,7 @@ MIT_LEARN_SJSON_EXPECTED = "This is the first subtitle. This is the second subti
 
 
 def test_srt_parses_exactly_as_mit_learn_does():
-    assert text_from_srt_content(MIT_LEARN_SRT_CONTENT) == MIT_LEARN_SRT_EXPECTED
+    assert text_from_srt(MIT_LEARN_SRT_CONTENT) == MIT_LEARN_SRT_EXPECTED
 
 
 def test_sjson_parses_exactly_as_mit_learn_does():
@@ -77,34 +65,13 @@ def test_sjson_without_text_key_is_empty():
     assert text_from_sjson_content('{"start": [0], "end": [2]}') == ""
 
 
-def test_srt_keeps_numbers_in_captions():
-    """Only a digits line directly above a cue timing is a sequence number.
+def test_srt_digit_only_caption_is_kept():
+    """mit-learn's bare ``\\d+\\n`` removes a caption reading "1984"; this keeps it.
 
-    mit-learn's bare ``\\d+\\n`` drops a caption reading "1984" and the "42" at
-    the end of a caption line. Both are kept here.
+    The rest of Learn's SRT handling is kept; see ol_file_types.srt and its tests.
     """
-    srt = (
-        "1\n00:00:00,000 --> 00:00:02,000\n1984\nThe year it began.\n\n"
-        "2\n00:00:02,000 --> 00:00:04,000\nThe answer is 42\nor 43.\n\n"
-        "3\n00:00:04,000 --> 00:00:06,000\n7"
-    )
-    assert text_from_srt_content(srt) == (
-        "1984\nThe year it began. The answer is 42\nor 43. 7"
-    )
-
-
-def test_srt_without_digit_captions_matches_mit_learns_regex():
-    """Every other transcript parses to the same text as Learn's, byte for byte.
-
-    The divergence is limited to captions with numbers, so the Learn checksum of
-    any other transcript doesn't change.
-    """
-    srt = (
-        "1\n00:00:00,000 --> 00:00:02,000\nFirst line\nsecond line\n\n"
-        "2\n00:00:02,000 --> 00:00:04,000\n\n\n"
-        "10\n00:00:04,000 --> 00:00:06,000\nLast."
-    )
-    assert text_from_srt_content(srt) == mit_learn_text_from_srt(srt)
+    srt = "1\n00:00:00,000 --> 00:00:02,000\n1984\nThe year it began."
+    assert transcript_text("static/x.srt", srt.encode()) == ("1984\nThe year it began.")
 
 
 @pytest.mark.parametrize(
@@ -433,7 +400,7 @@ def test_srt_blank_lines_between_blocks_collapse_to_a_space():
         "00:00:02,000 --> 00:00:04,000\n"
         "Second caption.\n"
     )
-    text = text_from_srt_content(srt)
+    text = text_from_srt(srt)
 
     assert "-->" not in text
     assert "First caption." in text

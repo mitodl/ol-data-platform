@@ -10,12 +10,12 @@ Data flow:
             -> openedx/processed_data/course_transcript_text  (JSONL in S3)
                 -> integrations__learn__content_files         (dbt)
 
-The SRT and SJSON parsers below reproduce mit-learn's
-``learning_resources/etl/utils.py:text_from_srt_content`` and
-``text_from_sjson_content``, and their test table is ported verbatim into this
-project's tests so the parity is enforced rather than asserted. The SRT parser
-departs from Learn's in one place: Learn drops numbers from captions along with
-sequence numbers, and this parser keeps them (see ``text_from_srt_content``).
+The SJSON parser below reproduces mit-learn's
+``learning_resources/etl/utils.py:text_from_sjson_content``, and SRT goes through
+``ol_file_types.srt.text_from_srt``, which reproduces ``text_from_srt_content``
+except that it keeps the numbers Learn drops from captions. Learn's test table
+for both is ported verbatim into this project's tests so the parity is enforced
+rather than asserted.
 
 The WebVTT parser is the one deliberate exception. MIT Learn has no VTT
 transformer, so it stores whatever Tika returns for a `.vtt`: the `WEBVTT`
@@ -43,6 +43,7 @@ from dagster import (
     asset,
 )
 from ol_file_types import file_extension
+from ol_file_types.srt import text_from_srt
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
 
@@ -70,28 +71,6 @@ log = logging.getLogger(__name__)
 # Change it when a parser's output changes, and every course run's transcripts
 # are parsed again.
 TRANSCRIPT_TEXT_CODE_VERSION = "srt-keep-caption-numbers-1"
-
-_SRT_TIMING = r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}"
-_SRT_TIMESTAMP = re.compile(_SRT_TIMING + r"(\n|$)")
-_SRT_SEQUENCE = re.compile(r"^\d+\n(?=" + _SRT_TIMING + ")", re.MULTILINE)
-_SRT_BLANK_LINES = re.compile(r"\n\s*\n")
-
-
-def text_from_srt_content(content: str) -> str:
-    """Strip timestamps and sequence numbers from SRT subtitle content.
-
-    Matches mit-learn's ``text_from_srt_content`` except for its sequence-number
-    rule, a bare ``\\d+\\n``. That rule removes any run of digits followed by a
-    newline: a caption of only digits ("1984"), and the number at the end of a
-    caption line ("the answer is 42"). Here a sequence number is a line of only
-    digits directly above a cue timing, so captions keep their numbers. The text
-    differs from Learn's only for transcripts that have such captions;
-    whitespace and line joining are unchanged, so every other transcript, and
-    its checksum, is the same as Learn's.
-    """
-    content = _SRT_SEQUENCE.sub("", content)
-    content = _SRT_TIMESTAMP.sub("", content)
-    return _SRT_BLANK_LINES.sub(" ", content)
 
 
 def text_from_sjson_content(content: str) -> str | None:
@@ -213,7 +192,7 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     if suffix == SJSON_SUFFIX:
         return text_from_sjson_content(content)
     if suffix == SRT_SUFFIX:
-        return text_from_srt_content(content)
+        return text_from_srt(content)
     if suffix == VTT_SUFFIX:
         return text_from_vtt_content(content)
     return None

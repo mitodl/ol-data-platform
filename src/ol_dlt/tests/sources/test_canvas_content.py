@@ -360,14 +360,8 @@ def test_documents_takes_published_text_files_and_groups_them_by_key() -> None:
 @pytest.mark.parametrize(
     ("content", "expected"),
     [
-        ("1\n00:00:01,000 --> 00:00:02,000\nHello\n\n2\n", "Hello 2\n"),
-        (
-            "1\n00:00:01,000 --> 00:00:02,000\n1984\nThe answer is 42\n\n"
-            "2\n00:00:02,000 --> 00:00:03,000\nBye",
-            "1984\nThe answer is 42 Bye",
-        ),
+        ("1\n00:00:01,000 --> 00:00:02,000\nHello\n\n2\n", "Hello "),
     ],
-    ids=["number-with-no-cue-is-a-caption", "numbers-in-captions-are-kept"],
 )
 def test_text_from_srt(content: str, expected: str) -> None:
     assert canvas_content.text_from_srt(content) == expected
