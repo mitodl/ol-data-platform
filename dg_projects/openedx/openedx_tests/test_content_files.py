@@ -649,14 +649,47 @@ def test_notebooks_are_read_without_tika():
 
     assert rows[0]["extraction_status"] == "extracted"
     assert rows[0]["content"] == "# Gradient descent\nIntro\n\nimport numpy as np"
-    assert counters["extracted"] == 1
+    assert counters["notebook_extracted"] == 1
 
 
 def test_a_broken_notebook_is_a_failed_row():
     rows, counters = rows_for([("course/static/lab1.ipynb", b"not json")])
 
     assert rows[0]["extraction_status"] == "failed"
-    assert counters["failed"] == 1
+    assert counters["notebook_failed"] == 1
+
+
+def test_broken_notebooks_do_not_trip_the_health_guard():
+    """The guard judges Tika, which never sees a notebook."""
+    rows, counters = rows_for(
+        [
+            ("course/static/lab1.ipynb", b"not json"),
+            ("course/static/lab2.ipynb", b""),
+        ]
+    )
+
+    assert [r["extraction_status"] for r in rows] == ["failed", "empty"]
+    assert counters["candidates"] == 0
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_read_notebooks_do_not_hide_failed_documents():
+    notebook = {"cells": [{"cell_type": "code", "source": "import numpy"}]}
+
+    def extract(_file_bytes, _content_type):
+        msg = "slow parse"
+        raise httpx.ReadTimeout(msg)
+
+    _rows, counters = rows_for(
+        [
+            ("course/static/lab1.ipynb", json.dumps(notebook).encode()),
+            ("course/static/syllabus.pdf", b"%PDF-fake"),
+        ],
+        extract=extract,
+    )
+
+    with pytest.raises(RuntimeError, match="all 1 candidate documents failed"):
+        assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
 
 
 def test_vtt_stays_out_of_the_document_set():

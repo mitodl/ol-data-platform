@@ -413,7 +413,9 @@ def build_document_rows(
     size -- images and archives are normal course content, not errors. A file
     that is read but fails is counted as a failure, feeds the success-rate
     guard, and still gets a row carrying `extraction_status: "failed"` and null
-    content -- an absent row reads downstream as a deleted file.
+    content -- an absent row reads downstream as a deleted file. A notebook is
+    counted under ``notebook_*`` instead: the guard judges Tika, which never
+    sees one.
 
     Subtitles are skipped with no row even though Tika would accept them,
     because the transcript asset owns those and Tika's output for one is
@@ -425,6 +427,10 @@ def build_document_rows(
         "extracted": 0,
         "empty": 0,
         "failed": 0,
+        "notebook_candidates": 0,
+        "notebook_extracted": 0,
+        "notebook_empty": 0,
+        "notebook_failed": 0,
         "skipped": 0,
         "transcripts": 0,
     }
@@ -461,6 +467,8 @@ def build_document_rows(
             continue
 
         file_bytes = read_bytes()
+        is_notebook = file_extension(relative_path) == NOTEBOOK_EXTENSION
+        tally = "notebook_" if is_notebook else ""
 
         # A zero-byte file has no text, which is a fact rather than a failure.
         # Tika answers 422 for an empty body, and counting that as a failed
@@ -468,8 +476,8 @@ def build_document_rows(
         # the health guard divides by -- an Open edX export ships a stack of
         # empty about/ placeholders, so this is common enough to matter.
         if not file_bytes:
-            counters["candidates"] += 1
-            counters["empty"] += 1
+            counters[f"{tally}candidates"] += 1
+            counters[f"{tally}empty"] += 1
             add_row(
                 relative_path, content_type, size_bytes=0, extraction_status="empty"
             )
@@ -478,15 +486,15 @@ def build_document_rows(
         linked = (
             static_references(file_bytes) if content_type == HTML_CONTENT_TYPE else None
         )
-        counters["candidates"] += 1
+        counters[f"{tally}candidates"] += 1
         try:
-            if file_extension(relative_path) == NOTEBOOK_EXTENSION:
+            if is_notebook:
                 text = notebook_text(file_bytes)
             else:
                 text = extract(file_bytes, content_type)
         except Exception as error:
             raise_if_service_failure(error, relative_path)
-            counters["failed"] += 1
+            counters[f"{tally}failed"] += 1
             log.exception("Text extraction failed for %s", relative_path)
             # A failed document still gets a row. Emitting nothing makes a
             # transient Tika failure indistinguishable, downstream, from the
@@ -506,12 +514,12 @@ def build_document_rows(
             continue
 
         if text:
-            counters["extracted"] += 1
+            counters[f"{tally}extracted"] += 1
         else:
             # Tika answered but produced nothing. Common for scanned PDFs with
             # no OCR; recorded as a row so the absence is visible downstream
             # rather than looking like the file was never seen.
-            counters["empty"] += 1
+            counters[f"{tally}empty"] += 1
 
         add_row(
             relative_path,
