@@ -16,13 +16,19 @@ models:
       - is_current
       where: "is_current = true"
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitx/mysql
       - mitxonline/app_postgres
-      - xpro/app_postgres
       - ocw/app_postgres
+      - ocw/s3
+      - xpro/app_postgres
   columns:
   - name: courserun_pk
     description: >

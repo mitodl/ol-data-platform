@@ -9,6 +9,7 @@ models:
     clients (companies that purchase bulk access). Grain: one row per unique
     organization per platform.
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
       - mitxonline/app_postgres
@@ -56,10 +57,19 @@ models:
       - contract_fk
       - courserun_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
+      - mitx/mysql
       - mitxonline/app_postgres
+      - ocw/app_postgres
+      - ocw/s3
+      - xpro/app_postgres
   columns:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.

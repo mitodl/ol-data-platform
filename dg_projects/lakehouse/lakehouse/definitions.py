@@ -738,9 +738,14 @@ non_airbyte_staging_schedules = (
 # before its cutover. Production builds them through dbt_automation_sensor (the
 # OCW ones through ocw_learn_automation_sensor); QA
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
+# The same holds for the dimensional tables the b2b StarRocks views read, so the
+# job builds those too.
 #
-# Selects the models tagged qa_scheduled (the Learn views whose every QA raw
-# input exists) with their upstream staging and intermediate models. `ol-dbt
+# Selects the models tagged qa_scheduled with their upstream models: the Learn
+# views whose every QA raw input exists, and the dimensional tables the b2b
+# StarRocks views read (_b2b_analytics__sources.yml), which have no other QA
+# build. bridge_user_contract is left out: it reads a check-strategy snapshot,
+# which dbt-starrocks 1.12.2 cannot build. `ol-dbt
 # validate`'s qa_branch_contract check fails a tagged model that reads more than
 # one ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held, so a QA build is complete relative

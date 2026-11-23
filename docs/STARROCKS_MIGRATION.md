@@ -14,7 +14,8 @@ assets in the lakehouse code location run dbt-trino against the `production`
 profile and write each layer as Iceberg tables (and Trino views) registered in AWS
 Glue. In QA, Dagster builds on StarRocks instead: the `starrocks_qa_lake` profile
 writes the canonical `ol_warehouse_qa_<layer>` schemas through the QA cluster, so
-the QA runs (the staging models and the `qa_scheduled` MIT Learn integration models)
+the QA runs (the staging models, and the `qa_scheduled` MIT Learn integration models
+and b2b dimensional tables with their upstream)
 surface StarRocks build failures before production moves. Nothing builds QA on
 Trino any more.
 

@@ -180,7 +180,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # in QA; this is a report, and it can only describe one workspace.
     "airbyte_inventory_drift_daily": frozenset({"production"}),
     # The dbt models tagged qa_scheduled (MIT Learn integrations views QA has
-    # every raw input for), plus their upstream. QA only: production builds
+    # every raw input for, and the dimensional tables the b2b views read), plus
+    # their upstream. QA only: production builds
     # them through the automation sensor. The one dbt schedule QA runs, and an
     # exception to "QA does not build" that holds only because none of its
     # models is a cross-source union QA is not shown to hold, which ol-dbt

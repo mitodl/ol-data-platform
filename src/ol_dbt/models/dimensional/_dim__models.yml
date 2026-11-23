@@ -337,12 +337,16 @@ models:
     It will contain one record for a user that's potentially a part of different platforms
     where we are able to see they are the same person.
   config:
+    tags: [qa_scheduled]
     meta:
       # Tier1 because it carries a data contract (contracts/dim_user.yaml).
       openmetadata:
         owner: data-platform
         tier: Tier.Tier1
       qa_branches:
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql
@@ -1764,8 +1768,13 @@ models:
         - courserun_readable_id
         - activity_date_key
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - learn_ai/app_postgres
       - micromasters/app_postgres
       - mitlearn/app_postgres
@@ -1774,9 +1783,15 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - ocw/s3
       - xpro/app_postgres
       - xpro/mysql
       - xpro/tracking_logs
+      # Residential MITx state history, empty in QA. The b2b views read only
+      # platform = 'mitxonline' rows of this table, so they lose nothing.
+      qa_partial_tables:
+      - raw__mitx__openedx__mysql__courseware_studentmodulehistory
   columns:
   - name: activity_key
     description: string, surrogate key over (platform, user_fk, courserun_readable_id,
@@ -1919,19 +1934,36 @@ models:
         # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
         error_if: ">0"
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - edxorg/course_xml
+      - edxorg/program_reports
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - learn_ai/app_postgres
       - micromasters/app_postgres
       - mitlearn/app_postgres
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - ocw/s3
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
+      # Residential MITx state history, empty in QA. The b2b views read only
+      # rows enrolled under a MITx Online contract, which residential MITx rows
+      # never are.
+      qa_partial_tables:
+      - raw__mitx__openedx__mysql__courseware_studentmodulehistory
   columns:
   - name: user_fk
     description: string, foreign key to dim_user.

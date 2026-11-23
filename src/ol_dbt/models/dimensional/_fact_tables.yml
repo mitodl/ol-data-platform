@@ -13,13 +13,20 @@ models:
       - platform
       - enrollment_type
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
+      - ocw/app_postgres
+      - ocw/s3
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -612,13 +619,21 @@ models:
         # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
         error_if: ">0"
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - edxorg/program_reports
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
+      - ocw/app_postgres
+      - ocw/s3
       - xpro/app_postgres
       - xpro/mysql
   columns:
