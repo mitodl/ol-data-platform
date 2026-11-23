@@ -196,11 +196,13 @@ def test_non_trino_database_needs_its_own_id():
         build_superset_dataset_assets(DBT_KEYS, database_name="starrocks")
 
 
-def _model(name: str, layer: str, meta: dict[str, Any]) -> dict[str, Any]:
+def _model(
+    name: str, layer: str, meta: dict[str, Any], resource_type: str = "model"
+) -> dict[str, Any]:
     return {
-        "resource_type": "model",
+        "resource_type": resource_type,
         "name": name,
-        "unique_id": f"model.open_learning.{name}",
+        "unique_id": f"{resource_type}.open_learning.{name}",
         "fqn": ["open_learning", layer, name],
         "config": {"meta": meta},
         "meta": meta,
@@ -233,3 +235,71 @@ def test_superset_dataset_keys_skip_models_that_opt_out():
     )
 
     assert selected == [AssetKey(["dimensional", "dim_a"])]
+
+
+def test_superset_dataset_keys_publish_opt_in_layers_only_when_asked():
+    manifest = {
+        "nodes": {
+            "model.open_learning.dim_a": _model("dim_a", "dimensional", {}),
+            "model.open_learning.dim_b": _model(
+                "dim_b", "dimensional", {"superset_dataset": True}
+            ),
+            "snapshot.open_learning.snapshot_c": _model(
+                "snapshot_c", "dimensional", {}, resource_type="snapshot"
+            ),
+            "snapshot.open_learning.snapshot_d": _model(
+                "snapshot_d",
+                "dimensional",
+                {"superset_dataset": True},
+                resource_type="snapshot",
+            ),
+            "model.open_learning.report_e": _model("report_e", "reporting", {}),
+            "snapshot.open_learning.snapshot_f": _model(
+                "snapshot_f",
+                "reporting",
+                {"superset_dataset": False},
+                resource_type="snapshot",
+            ),
+        }
+    }
+    keys = [
+        AssetKey(["dimensional", "dim_a"]),
+        AssetKey(["dimensional", "dim_b"]),
+        AssetKey(["dimensional", "snapshot_c"]),
+        AssetKey(["dimensional", "snapshot_d"]),
+        AssetKey(["reporting", "report_e"]),
+        AssetKey(["reporting", "snapshot_f"]),
+    ]
+
+    selected = superset_dataset_keys(
+        keys,
+        manifest,
+        LayerKeyTranslator(),
+        layers={"dimensional", "reporting"},
+        opt_in_layers={"dimensional"},
+    )
+
+    assert selected == [
+        AssetKey(["dimensional", "dim_b"]),
+        AssetKey(["dimensional", "snapshot_d"]),
+        AssetKey(["reporting", "report_e"]),
+    ]
+
+
+def test_superset_dataset_keys_reject_a_quoted_boolean():
+    manifest = {
+        "nodes": {
+            "model.open_learning.dim_a": _model(
+                "dim_a", "dimensional", {"superset_dataset": "true"}
+            ),
+        }
+    }
+
+    with pytest.raises(ValueError, match="dimensional/dim_a"):
+        superset_dataset_keys(
+            [AssetKey(["dimensional", "dim_a"])],
+            manifest,
+            LayerKeyTranslator(),
+            layers={"dimensional"},
+            opt_in_layers={"dimensional"},
+        )

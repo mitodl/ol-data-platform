@@ -375,6 +375,12 @@ dbt_models_for_superset_datasets = {
     "reporting",
     "dimensional",
 }  # relevant dbt models to sync with superset
+# The dimensional layer is what reporting models are built on, not an end-user
+# surface, and its facts carry user keys and free text with no RLS. Published by
+# default, tfact_feedback reached Superset and ad-hoc charts read it. Dropping a
+# table from this set only stops refreshing its dataset; deleting the dataset in
+# Superset is a separate, manual step.
+superset_opt_in_layers = {"dimensional"}
 
 # Freshness policies on the layers the business actually reads. Deliberately not
 # applied to every dbt asset: staging and intermediate models are refreshed on
@@ -423,6 +429,7 @@ superset_model_keys = superset_dataset_keys(
     dbt_model_keys,
     *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
     layers=dbt_models_for_superset_datasets,
+    opt_in_layers=superset_opt_in_layers,
 )
 superset_assets = build_superset_dataset_assets(
     superset_model_keys,

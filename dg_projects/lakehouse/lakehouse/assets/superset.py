@@ -54,27 +54,49 @@ def superset_dataset_keys(
     manifest: Mapping[str, Any],
     translator: DagsterDbtTranslator,
     layers: Collection[str],
+    opt_in_layers: Collection[str] = (),
 ) -> list[AssetKey]:
-    """Return the dbt model keys to build Superset datasets for.
+    """Return the dbt model and snapshot keys to build Superset datasets for.
 
-    A model in one of layers gets a dataset unless its dbt meta sets
-    ``superset_dataset: false``, e.g. a model holding verbatim course text that no
-    source-visibility policy covers yet.
+    A model or snapshot in one of layers gets a dataset unless its dbt meta sets
+    ``superset_dataset: false``. In one of opt_in_layers it gets a dataset only
+    when its meta sets ``superset_dataset: true``. A layer whose tables carry
+    user keys, free text or row-level PII with no RLS policy belongs in
+    opt_in_layers, so that a new table there is not queryable in Superset until
+    someone decides it should be.
 
     :param asset_keys: the dbt project's asset keys
     :param manifest: the dbt manifest the keys come from
     :param translator: the translator that keyed the manifest's nodes
     :param layers: the first key segments (dbt layers) that get datasets
+    :param opt_in_layers: the layers, among layers, whose tables are published
+        only when they opt in
     :returns: the keys to build datasets for
     :rtype: list[AssetKey]
     """
-    opted_out = {
-        translator.get_asset_key(node)
+    superset_dataset_meta = {
+        translator.get_asset_key(node): node["config"]
+        .get("meta", {})
+        .get("superset_dataset")
         for node in manifest["nodes"].values()
-        if node["resource_type"] == "model"
-        and node["config"].get("meta", {}).get("superset_dataset") is False
+        if node["resource_type"] in {"model", "snapshot"}
     }
-    return [key for key in asset_keys if key.path[0] in layers and key not in opted_out]
+    # A quoted "true" would otherwise leave a model unpublished without a word.
+    not_bool = sorted(
+        key.to_user_string()
+        for key, value in superset_dataset_meta.items()
+        if value is not None and not isinstance(value, bool)
+    )
+    if not_bool:
+        msg = f"superset_dataset meta must be a YAML boolean: {not_bool}"
+        raise ValueError(msg)
+
+    def is_published(key: AssetKey) -> bool:
+        if key.path[0] in opt_in_layers:
+            return superset_dataset_meta.get(key) is True
+        return superset_dataset_meta.get(key) is not False
+
+    return [key for key in asset_keys if key.path[0] in layers and is_published(key)]
 
 
 def _dataset_key(database_name: str, dbt_model_name: str) -> AssetKey:
