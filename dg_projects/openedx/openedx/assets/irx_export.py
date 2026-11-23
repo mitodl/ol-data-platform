@@ -51,7 +51,7 @@ from upath import UPath
 from openedx.assets.openedx import course_xml
 
 IRX_EXPORT_GROUP = "irx_export"
-IRX_EXPORT_CODE_VERSION = "irx_export_v4"
+IRX_EXPORT_CODE_VERSION = "irx_export_v5"
 IRX_GLUE_DATABASE = "ol_warehouse_production_external"
 
 # end_offset=1 makes today the latest partition, so the scheduled run on
@@ -207,10 +207,20 @@ def legacy_csv_columns(schema: pl.Schema, columns: Sequence[str]) -> list[pl.Exp
 def legacy_batch(
     batch: pl.DataFrame, export: IrxExportFile, course_ids: Sequence[str]
 ) -> pl.DataFrame:
-    """Cut one batch of an irx model down to its legacy CSV's rows and columns."""
+    """Cut one batch of an irx model down to its legacy CSV's rows and columns.
+
+    Course ids match case-insensitively, as legacy's MySQL IN did under the
+    edxapp tables' _ci collation: e.g. enrollments stored under
+    course-v1:MITx+20.309r_8+2024_fall were delivered for the listed
+    course-v1:MITx+20.309r_8+2024_Fall. Each row keeps its own spelling.
+    """
     batch = (
         batch.rename(dict(export.renames))
-        .filter(pl.col("course_id").is_in(course_ids))
+        .filter(
+            pl.col("course_id")
+            .str.to_lowercase()
+            .is_in([course_id.lower() for course_id in course_ids])
+        )
         .drop_nulls(list(export.required))
     )
     return batch.select(legacy_csv_columns(batch.schema, export.columns))

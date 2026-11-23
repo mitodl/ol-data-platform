@@ -26,5 +26,8 @@ select
     , organization.name as org
 from dccr
 inner join dccru on dccr.id = dccru.role_id
-left join organizationcourse on dccr.course_id = organizationcourse.course_id
+-- edxapp compares course ids under a case-insensitive collation, and some
+-- organizationcourse rows spell the run differently from the role
+-- (course-v1:MITxt+3.012Tx+2T2024 vs. MITxT).
+left join organizationcourse on lower(dccr.course_id) = lower(organizationcourse.course_id)
 left join organization on organizationcourse.organization_id = organization.id
