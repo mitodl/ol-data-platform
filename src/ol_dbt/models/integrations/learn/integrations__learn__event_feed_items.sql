@@ -22,8 +22,10 @@ with ol_events as (
     select * from {{ ref('stg__mitpe__api__events') }}
 )
 
+-- Learn's parse of MIT PE times, defects included, for parity with what Learn
+-- holds. int__news_events__mitpe_event_times is the platform's.
 , mitpe_event_times as (
-    select * from {{ ref('int__news_events__mitpe_event_times') }}
+    select * from {{ ref('int__news_events__mitpe_event_times_learn') }}
 )
 
 , ol_items as (
