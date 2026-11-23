@@ -109,8 +109,9 @@
 {%- endmacro %}
 
 {#
-    iso8601_with_utc_default: an ISO 8601 string that ends in a bare time gets 'Z', and a bare
-    date gets 'T00:00:00Z'. Anything else, e.g. a string with a zone, is unchanged.
+    iso8601_with_utc_default: an ISO 8601 date-time ('T' or space between date and time) with
+    no zone gets 'Z', and a bare date gets 'T00:00:00Z'. Anything else, e.g. a string with a
+    zone, is unchanged.
     Nested regexp_replace keeps the argument (often itself a regexp_replace over a
     billion-row column) to a single evaluation.
 #}
@@ -179,9 +180,9 @@
     zone the source ISO 8601 string gave ('-04:00' stays '-04:00'; 'Z' and '+00:00' are UTC).
     StarRocks' datetime casts to '2026-11-19 00:08:16.156297', so the same event hashed to a
     different key. iso8601_expr is the staged ISO 8601 string, for its zone; a string with
-    no zone (e.g. a studentmodule row's, built from a UTC timestamp) is UTC. Only rows Trino
-    staged carry a -04:00/-05:00 label: StarRocks staging always writes Z, so a raw row
-    staged by both engines would still hash differently.
+    no zone (e.g. a studentmodule row's, built from a UTC timestamp) is UTC. Both engines
+    now stage a zone-less raw time as Z, so the -04:00/-05:00 labels came only from Trino
+    builds run in an Eastern session before from_iso8601_timestamp_nanos defaulted to UTC.
 
     StarRocks keeps microseconds, so its text matches Trino's only while the 7th-9th
     fractional digits are 000. They were 000 on all 617,084 tfact_problem_events rows of
