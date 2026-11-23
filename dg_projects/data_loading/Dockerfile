@@ -1,7 +1,7 @@
 # Based on: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
 
 # First, build the application in the `/app` directory.
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Disable Python downloads, because we want to use the system interpreter
@@ -78,7 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         opentelemetry-instrumentation-urllib3==0.66b2
 
 # Then, use a final image without uv
-FROM python:3.14-slim-bookworm
+FROM python:3.14-slim-bookworm@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 

@@ -312,7 +312,7 @@ services:
     - ./dg_projects/data_loading/data_loading:/app/data_loading
 
   postgres:
-    image: postgres
+    image: postgres@sha256:fe9ef8058929c976110d4b75d9b939e61a590ba1e105e609e891c71bb39a8944
     command: ["postgres", "-c", "max_connections=300"]
     healthcheck:
       test: ["CMD", "pg_isready"]
