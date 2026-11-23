@@ -52,6 +52,7 @@ from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.glue import GlueCatalog
 from pyiceberg.table.metadata import TableMetadata
 from pyiceberg.table.refs import SnapshotRefType
+from pyiceberg.table.snapshots import Operation, Snapshot
 
 log = logging.getLogger(__name__)
 
@@ -361,6 +362,42 @@ def stale_branches(
     )
 
 
+def _is_compaction(snapshot: Snapshot) -> bool:
+    return (
+        snapshot.summary is not None and snapshot.summary.operation == Operation.REPLACE
+    )
+
+
+def _newest_data_ancestor_id(metadata: TableMetadata) -> int | None:
+    """Return the newest snapshot, from the current one back, that is not a compaction.
+
+    An expiry cuts the chain: pyiceberg clears ``parent_snapshot_id`` on a
+    snapshot whose parent it removed. So when the walk ends on a compaction, the
+    newest non-compaction snapshot older than it stands in for the parent,
+    otherwise a second compaction would leave the data snapshot unprotected one
+    night later.
+    """
+    by_id = {s.snapshot_id: s for s in metadata.snapshots}
+    seen: set[int] = set()
+    oldest_compaction: Snapshot | None = None
+    snapshot_id = metadata.current_snapshot_id
+    while snapshot_id is not None and snapshot_id in by_id and snapshot_id not in seen:
+        seen.add(snapshot_id)
+        snapshot = by_id[snapshot_id]
+        if not _is_compaction(snapshot):
+            return snapshot_id
+        oldest_compaction = snapshot
+        snapshot_id = snapshot.parent_snapshot_id
+    if oldest_compaction is None:
+        return None
+    older = [
+        s
+        for s in metadata.snapshots
+        if not _is_compaction(s) and s.timestamp_ms < oldest_compaction.timestamp_ms
+    ]
+    return max(older, key=lambda s: s.timestamp_ms).snapshot_id if older else None
+
+
 def expirable_snapshot_ids(
     metadata: TableMetadata, cutoff_ms: int, dropped_refs: Collection[str] = ()
 ) -> set[int]:
@@ -371,6 +408,14 @@ def expirable_snapshot_ids(
     pyiceberg protects ref heads only, and on a table whose ``main`` ref and
     ``current-snapshot-id`` disagree (see ``find_snapshot_pointer_lag``) it
     would expire the snapshot readers are on.
+
+    The newest ancestor of the current snapshot that wrote data is kept too.
+    Compaction commits a ``replace`` snapshot with no new data, so on a table
+    whose builds have stopped, expiring that ancestor would leave nothing that
+    says when it was last built. The Superset ``data_freshness`` dataset reads
+    it for the dashboards' freshness tiles. The cost: on a table that stopped
+    rebuilding, that snapshot's pre-compaction data files stay until the next
+    build, where before they were swept once it expired.
     """
     protected = {
         ref.snapshot_id
@@ -379,6 +424,9 @@ def expirable_snapshot_ids(
     }
     if metadata.current_snapshot_id is not None:
         protected.add(metadata.current_snapshot_id)
+    data_snapshot_id = _newest_data_ancestor_id(metadata)
+    if data_snapshot_id is not None:
+        protected.add(data_snapshot_id)
     return {
         s.snapshot_id
         for s in metadata.snapshots

@@ -29,6 +29,12 @@ from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
 from pyiceberg.table import Table
 from pyiceberg.table.refs import SnapshotRef, SnapshotRefType
+from pyiceberg.table.snapshots import Operation, Summary
+from pyiceberg.table.update import (
+    RemoveSnapshotRefUpdate,
+    RemoveSnapshotsUpdate,
+    update_table_metadata,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -752,6 +758,71 @@ class TestExpireSnapshots:
 
         assert third in expirable_snapshot_ids(metadata, cutoff_ms)
         assert third not in expirable_snapshot_ids(lagging, cutoff_ms)
+
+    def test_the_newest_snapshot_that_wrote_data_is_kept_after_compaction(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        first, second, third, head = metadata.snapshots
+        compacted = metadata.model_copy(
+            update={
+                "snapshots": [
+                    first,
+                    second,
+                    third.model_copy(update={"summary": Summary(Operation.REPLACE)}),
+                    head.model_copy(update={"summary": Summary(Operation.REPLACE)}),
+                ]
+            }
+        )
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+        branches = (self.STALE, "airbyte_staging")
+
+        assert expirable_snapshot_ids(compacted, cutoff_ms, branches) == {
+            first.snapshot_id,
+            third.snapshot_id,
+        }
+        # With no compaction the newest data snapshot is the current one.
+        assert expirable_snapshot_ids(metadata, cutoff_ms, branches) == {
+            first.snapshot_id,
+            second.snapshot_id,
+            third.snapshot_id,
+        }
+
+    def test_the_data_snapshot_survives_a_second_night_after_its_parent_link_is_cut(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        first, data, compaction, head = metadata.snapshots
+        compacted = metadata.model_copy(
+            update={
+                "snapshots": [
+                    first,
+                    data,
+                    compaction.model_copy(
+                        update={"summary": Summary(Operation.REPLACE)}
+                    ),
+                    head.model_copy(update={"summary": Summary(Operation.REPLACE)}),
+                ]
+            }
+        )
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+        branches = (self.STALE, "airbyte_staging")
+
+        night_one = expirable_snapshot_ids(compacted, cutoff_ms, branches)
+        # pyiceberg's expiry clears parent_snapshot_id on the current snapshot.
+        after = update_table_metadata(
+            compacted,
+            (
+                RemoveSnapshotRefUpdate(ref_name=self.STALE),
+                RemoveSnapshotRefUpdate(ref_name="airbyte_staging"),
+                RemoveSnapshotsUpdate(snapshot_ids=list(night_one)),
+            ),
+        )
+        current = after.snapshot_by_id(after.current_snapshot_id)
+
+        assert current.parent_snapshot_id is None
+        assert data.snapshot_id not in night_one
+        assert expirable_snapshot_ids(after, cutoff_ms) == set()
 
     def test_a_branch_whose_head_is_missing_is_left_alone(
         self, catalog: SqlCatalog
