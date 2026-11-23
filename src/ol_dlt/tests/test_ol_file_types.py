@@ -5,7 +5,12 @@ import json
 import pytest
 
 import ol_file_types
-from ol_file_types import TEXT_FILE_EXTENSIONS, is_text_file, notebook_text
+from ol_file_types import (
+    TEXT_FILE_EXTENSIONS,
+    file_extension,
+    is_text_file,
+    notebook_text,
+)
 
 # Verbatim from mit-learn learning_resources/constants.py. The Learn views narrow
 # the platform's list to these, so each has to be inside it or a file Learn
@@ -141,3 +146,9 @@ def test_json_nested_past_the_stack_is_not_a_notebook(
     with pytest.raises(ValueError, match="notebook") as raised:
         notebook_text(b"[[[]]]")
     assert isinstance(raised.value.__cause__, RecursionError)
+
+
+def test_extensionless_files_report_an_empty_extension() -> None:
+    """A bare `LICENSE` has no suffix; it must not become the whole filename."""
+    assert file_extension("course/static/LICENSE") == ""
+    assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"

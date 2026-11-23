@@ -55,6 +55,7 @@ from dagster import (
 from ol_file_types import (
     NOTEBOOK_EXTENSION,
     STATUS_SKIPPED_UNSUPPORTED,
+    file_extension,
     is_text_file,
     notebook_text,
 )
@@ -122,7 +123,7 @@ def is_transcript(relative_path: str) -> bool:
     `subs_<id>.srt.sjson`, which is SJSON despite what the middle of the name
     suggests.
     """
-    return Path(relative_path).suffix.lower() in TRANSCRIPT_SUFFIXES
+    return file_extension(relative_path) in TRANSCRIPT_SUFFIXES
 
 
 @contextmanager
@@ -170,19 +171,6 @@ def open_bundle_members(
                 yield member.name, _read
 
         yield _members()
-
-
-def file_extension(relative_path: str) -> str:
-    """Return a bundle member's lowercased final suffix, or "" if it has none.
-
-    Published on every row for two reasons. It is a `ContentFile` field on MIT
-    Learn's side, carried through `documents_from_olx` metadata, so publishing it
-    saves the consumer re-deriving what this asset already knows. And MIT Learn
-    selects files by EXTENSION where this asset gates by MIME type, so a consumer
-    that needs to apply its own allowlist can do so directly rather than mapping
-    back from a MIME string.
-    """
-    return Path(relative_path).suffix.lower()
 
 
 # Pinned to Python's builtin table rather than the module-level lookup, which

@@ -21,7 +21,6 @@ from openedx.assets.content_files import (
     _content_type,
     assert_extraction_healthy,
     build_document_rows,
-    file_extension,
     open_bundle_members,
     stamp_static_assets_version,
     static_references,
@@ -730,12 +729,6 @@ def test_rows_carry_the_extension_consumers_filter_on():
         "course/tabs/overview.html": ".html",
     }
     assert all(row["file_extension"] in VALID_TEXT_FILE_TYPES for row in rows)
-
-
-def test_extensionless_files_report_an_empty_extension():
-    """A bare `LICENSE` has no suffix; it must not become the whole filename."""
-    assert file_extension("course/static/LICENSE") == ""
-    assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"
 
 
 def test_static_references_cover_both_link_spellings():
