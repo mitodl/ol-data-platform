@@ -9,6 +9,8 @@ this implementation pass -- fix the implementation, or change both repos
 together.
 """
 
+import re
+
 import pytest
 from openedx.assets.transcripts import (
     assert_parsing_healthy,
@@ -32,6 +34,16 @@ MIT_LEARN_SRT_CONTENT = (
     "This is the second subtitle."
 )
 MIT_LEARN_SRT_EXPECTED = "This is the first subtitle.\nThis is the second subtitle."
+
+
+def mit_learn_text_from_srt(content: str) -> str:
+    """mit-learn's text_from_srt_content, as of mit-learn main 5b8efb234."""
+    content = re.sub(
+        r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)", "", content
+    )
+    content = re.sub(r"\d+\n", "", content)
+    return re.sub(r"\n\s*\n", " ", content)
+
 
 MIT_LEARN_SJSON_CONTENT = """
     {
@@ -65,15 +77,34 @@ def test_sjson_without_text_key_is_empty():
     assert text_from_sjson_content('{"start": [0], "end": [2]}') == ""
 
 
-def test_srt_digit_only_caption_is_stripped():
-    """A caption line of only digits is removed -- mit-learn does this too.
+def test_srt_keeps_numbers_in_captions():
+    """Only a digits line directly above a cue timing is a sequence number.
 
-    The sequence-number rule is a bare ``\\d+\\n``, so it cannot tell a caption
-    reading "1984" from a subtitle index. Pinned deliberately: diverging would
-    make every such caption a spurious cutover difference.
+    mit-learn's bare ``\\d+\\n`` drops a caption reading "1984" and the "42" at
+    the end of a caption line. Both are kept here.
     """
-    srt = "1\n00:00:00,000 --> 00:00:02,000\n1984\nThe year it began."
-    assert "1984" not in text_from_srt_content(srt)
+    srt = (
+        "1\n00:00:00,000 --> 00:00:02,000\n1984\nThe year it began.\n\n"
+        "2\n00:00:02,000 --> 00:00:04,000\nThe answer is 42\nor 43.\n\n"
+        "3\n00:00:04,000 --> 00:00:06,000\n7"
+    )
+    assert text_from_srt_content(srt) == (
+        "1984\nThe year it began. The answer is 42\nor 43. 7"
+    )
+
+
+def test_srt_without_digit_captions_matches_mit_learns_regex():
+    """Every other transcript parses to the same text as Learn's, byte for byte.
+
+    The divergence is limited to captions with numbers, so the Learn checksum of
+    any other transcript doesn't change.
+    """
+    srt = (
+        "1\n00:00:00,000 --> 00:00:02,000\nFirst line\nsecond line\n\n"
+        "2\n00:00:02,000 --> 00:00:04,000\n\n\n"
+        "10\n00:00:04,000 --> 00:00:06,000\nLast."
+    )
+    assert text_from_srt_content(srt) == mit_learn_text_from_srt(srt)
 
 
 @pytest.mark.parametrize(

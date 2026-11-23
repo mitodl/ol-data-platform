@@ -205,12 +205,19 @@ def derived_title(source_path: str) -> str:
     return stem.replace("_", " ").replace("-", " ").title()
 
 
+_SRT_TIMING = r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}"
+
+
 def text_from_srt(content: str) -> str:
-    """Remove the timings of an SRT transcript, as Learn does."""
-    content = re.sub(
-        r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)", "", content
-    )
-    content = re.sub(r"\d+\n", "", content)
+    r"""Remove the timings and sequence numbers of an SRT transcript.
+
+    As Learn does, except that a sequence number is only a line of digits
+    directly above a cue timing. Learn's bare ``\d+\n`` also drops a caption of
+    only digits and the number at the end of a caption line. Same rule as
+    openedx.assets.transcripts.text_from_srt_content.
+    """
+    content = re.sub(r"^\d+\n(?=" + _SRT_TIMING + ")", "", content, flags=re.MULTILINE)
+    content = re.sub(_SRT_TIMING + r"(\n|$)", "", content)
     return re.sub(r"\n\s*\n", " ", content)
 
 

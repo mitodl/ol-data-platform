@@ -12,10 +12,10 @@ Data flow:
 
 The SRT and SJSON parsers below reproduce mit-learn's
 ``learning_resources/etl/utils.py:text_from_srt_content`` and
-``text_from_sjson_content`` exactly, including their quirks. Their test table is
-ported verbatim into this project's tests so the parity is enforced rather than
-asserted -- a cutover diff should show a difference in the data, never in how
-the two sides parse it.
+``text_from_sjson_content``, and their test table is ported verbatim into this
+project's tests so the parity is enforced rather than asserted. The SRT parser
+departs from Learn's in one place: Learn drops numbers from captions along with
+sequence numbers, and this parser keeps them (see ``text_from_srt_content``).
 
 The WebVTT parser is the one deliberate exception. MIT Learn has no VTT
 transformer, so it stores whatever Tika returns for a `.vtt`: the `WEBVTT`
@@ -65,24 +65,32 @@ log = logging.getLogger(__name__)
 # _transform_content_by_type keys its transformer map, and how Open edX names
 # subtitles: subs_<id>.srt.sjson is SJSON, not SRT.
 
-_SRT_TIMESTAMP = re.compile(
-    r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)"
-)
-_SRT_SEQUENCE = re.compile(r"\d+\n")
+# As DOCUMENT_TEXT_CODE_VERSION: Dagster ignores an asset's first code version,
+# so this value re-runs nothing (a backfill re-parses the existing snapshots).
+# Change it when a parser's output changes, and every course run's transcripts
+# are parsed again.
+TRANSCRIPT_TEXT_CODE_VERSION = "srt-keep-caption-numbers-1"
+
+_SRT_TIMING = r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}"
+_SRT_TIMESTAMP = re.compile(_SRT_TIMING + r"(\n|$)")
+_SRT_SEQUENCE = re.compile(r"^\d+\n(?=" + _SRT_TIMING + ")", re.MULTILINE)
 _SRT_BLANK_LINES = re.compile(r"\n\s*\n")
 
 
 def text_from_srt_content(content: str) -> str:
     """Strip timestamps and sequence numbers from SRT subtitle content.
 
-    Reproduces mit-learn's ``text_from_srt_content`` exactly, including the
-    sequence-number rule being a bare ``\\d+\\n`` -- which also removes a
-    caption line that happens to be only digits. That is a real quirk, kept on
-    purpose: diverging here would make every such caption a spurious difference
-    during parallel validation. Fix it in both repos together or not at all.
+    Matches mit-learn's ``text_from_srt_content`` except for its sequence-number
+    rule, a bare ``\\d+\\n``. That rule removes any run of digits followed by a
+    newline: a caption of only digits ("1984"), and the number at the end of a
+    caption line ("the answer is 42"). Here a sequence number is a line of only
+    digits directly above a cue timing, so captions keep their numbers. The text
+    differs from Learn's only for transcripts that have such captions;
+    whitespace and line joining are unchanged, so every other transcript, and
+    its checksum, is the same as Learn's.
     """
-    content = _SRT_TIMESTAMP.sub("", content)
     content = _SRT_SEQUENCE.sub("", content)
+    content = _SRT_TIMESTAMP.sub("", content)
     return _SRT_BLANK_LINES.sub(" ", content)
 
 
@@ -192,8 +200,7 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     # Learn strips Tika's output before the SRT transformer runs
     # (_extract_content_with_tika), and the order changes the text. Without it
     # an SRT whose last caption ends in a newline or blank line keeps a trailing
-    # newline or space, and a final caption of only digits is dropped where
-    # Learn keeps it. Stripping the parsed text afterwards is not the same:
+    # newline or space. Stripping the parsed text afterwards is not the same:
     # Learn's text keeps the space an empty cue leaves at either end. Learn's
     # checksum is md5(content), so each such file reads as changed to a
     # checksum-based sync. Learn strips before SJSON parsing too, so an SJSON
@@ -343,6 +350,7 @@ def assert_parsing_healthy(counters: dict[str, int], course_id: str) -> None:
     io_manager_key="s3file_io_manager",
     automation_condition=upstream_or_code_changes(),
     required_resource_keys={"openedx"},
+    code_version=TRANSCRIPT_TEXT_CODE_VERSION,
     description=(
         "Plain text parsed from the video transcripts in a course archive "
         "(SRT and Open edX SJSON). One JSONL row per transcript."
