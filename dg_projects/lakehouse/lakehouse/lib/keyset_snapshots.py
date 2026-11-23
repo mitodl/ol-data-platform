@@ -8,6 +8,9 @@ the snapshot depends on the keyset asset and runs after it, once per load, under
 ``keyset_snapshot_upstream_or_code_changes``. Elsewhere the delete filter reads
 no keyset, so the snapshot keeps the dbt condition every model has.
 
+Every raw history snapshot also waits for its raw table's load guard
+(``lakehouse.lib.history_load_guard``) to pass against the latest load.
+
 Kept apart from ``assets.lakehouse.dbt`` so it can be tested without a parsed
 manifest.
 """
@@ -18,10 +21,14 @@ from typing import Any
 from dagster import AssetKey, AutomationCondition
 from ol_orchestrate.lib.automation_policies import (
     keyset_snapshot_upstream_or_code_changes,
+    raw_load_check_passed,
 )
 
-# The dbt source name of the raw tables, and so the first part of their keys.
-RAW_DATA_SOURCE = "ol_warehouse_raw_data"
+from lakehouse.lib.history_load_guard import (
+    RAW_DATA_SOURCE,
+    is_raw_history_snapshot,
+    load_check_key,
+)
 
 
 def snapshot_keyset_key(
@@ -35,11 +42,10 @@ def snapshot_keyset_key(
         raw history snapshot and its keyset runs in ``data_lake_env``.
     :rtype: AssetKey | None
     """
-    if dbt_resource_props["resource_type"] != "snapshot":
+    if not is_raw_history_snapshot(dbt_resource_props):
         return None
-    # Only the generated raw history snapshots carry this meta.
-    raw_history = dbt_resource_props["config"]["meta"].get("raw_history")
-    if raw_history is None or raw_history["delete_capture"] != "keyset":
+    raw_history = dbt_resource_props["config"]["meta"]["raw_history"]
+    if raw_history["delete_capture"] != "keyset":
         return None
     if data_lake_env not in raw_history["keyset_lakes"]:
         return None
@@ -51,18 +57,21 @@ def dbt_automation_condition(
     data_lake_env: str,
     default: AutomationCondition | None,
 ) -> AutomationCondition | None:
-    """Return a dbt node's condition: the keyset one for a keyset snapshot.
+    """Return a dbt node's condition, with a raw history snapshot's load gate.
 
     :param dbt_resource_props: the manifest node.
     :param data_lake_env: the lake the build reads raw from.
     :param default: every other node's condition; None where automation is off,
-        which holds for keyset snapshots too.
-    :returns: the node's condition.
+        which holds for raw history snapshots too.
+    :returns: the keyset condition for a keyset snapshot in a keyset lake, the
+        default with the load gate appended for any other raw history
+        snapshot, and the default for every other node.
     :rtype: AutomationCondition | None
     """
-    if default is None:
-        return None
+    if default is None or not is_raw_history_snapshot(dbt_resource_props):
+        return default
+    load_check = load_check_key(dbt_resource_props)
     keyset = snapshot_keyset_key(dbt_resource_props, data_lake_env)
-    return (
-        default if keyset is None else keyset_snapshot_upstream_or_code_changes(keyset)
-    )
+    if keyset is not None:
+        return keyset_snapshot_upstream_or_code_changes(keyset, load_check)
+    return default & raw_load_check_passed(load_check)

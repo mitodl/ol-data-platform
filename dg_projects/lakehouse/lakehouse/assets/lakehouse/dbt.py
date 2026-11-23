@@ -100,6 +100,16 @@ def dbt_credentials(starrocks: StarRocksResource) -> AbstractContextManager[None
     )
 
 
+def dbt_dev_vars() -> list[str]:
+    """Return the ``--vars`` that point a dev invocation at the developer's schemas.
+
+    Empty outside dev, where the target's own schemas are the real ones.
+    """
+    if DAGSTER_ENV != "dev":
+        return []
+    return ["--vars", f"schema_suffix: {os.getenv('DBT_SCHEMA_SUFFIX', 'dev')}"]
+
+
 # Built once and reused rather than reconstructed for every dbt node. None
 # outside DBT_AUTOMATION_ENVIRONMENTS -- see that declaration for why the
 # condition, and not dbt_automation_sensor's default_status, is what actually
@@ -386,10 +396,7 @@ def full_dbt_project(
     dbt_s3_artifacts: DbtS3ArtifactsResource,
     starrocks: StarRocksResource,
 ):
-    build_vars: list[str] = []
-    if DAGSTER_ENV == "dev":
-        schema_suffix = os.getenv("DBT_SCHEMA_SUFFIX", "dev")
-        build_vars = ["--vars", f"schema_suffix: {schema_suffix}"]
+    build_vars = dbt_dev_vars()
 
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 

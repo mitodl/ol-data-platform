@@ -1,9 +1,12 @@
-"""A keyset-filtered history snapshot starts from its keyset, where the keyset runs."""
+"""A keyset-filtered history snapshot starts from its keyset, where the keyset runs.
+
+Every raw history snapshot also waits for its raw table's load guard.
+"""
 
 from typing import Any
 
 import pytest
-from dagster import AssetKey, AutomationCondition
+from dagster import AssetCheckKey, AssetKey
 from lakehouse.lib.keyset_snapshots import (
     dbt_automation_condition,
     snapshot_keyset_key,
@@ -11,17 +14,28 @@ from lakehouse.lib.keyset_snapshots import (
 from ol_orchestrate.lib.automation_policies import (
     dbt_upstream_or_code_changes,
     keyset_snapshot_upstream_or_code_changes,
+    raw_load_check_passed,
 )
 
-KEYSET_TABLE = "raw__mitxonline__app__postgres__courses_course__keyset"
+RAW_TABLE = "raw__mitxonline__app__postgres__courses_course"
+KEYSET_TABLE = f"{RAW_TABLE}__keyset"
 KEYSET_KEY = AssetKey(["ol_warehouse_raw_data", KEYSET_TABLE])
+LOAD_CHECK = AssetCheckKey(
+    AssetKey(["ol_warehouse_raw_data", RAW_TABLE]), "history_load_not_short"
+)
+SOURCE = "source.open_learning.ol_warehouse_raw_data."
 
 
 def _node(
     resource_type: str = "snapshot", raw_history: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     meta = {} if raw_history is None else {"raw_history": raw_history}
-    return {"resource_type": resource_type, "config": {"meta": meta}}
+    return {
+        "name": f"snapshot_{RAW_TABLE}",
+        "resource_type": resource_type,
+        "config": {"meta": meta},
+        "depends_on": {"nodes": [SOURCE + RAW_TABLE, SOURCE + KEYSET_TABLE]},
+    }
 
 
 KEYSET_SNAPSHOT = _node(
@@ -63,14 +77,27 @@ def test_keyset_snapshot_takes_the_keyset_condition() -> None:
     condition = dbt_automation_condition(
         KEYSET_SNAPSHOT, "qa", dbt_upstream_or_code_changes()
     )
-    assert isinstance(condition, AutomationCondition)
-    expected = keyset_snapshot_upstream_or_code_changes(KEYSET_KEY)
-    assert condition.get_unique_id() == expected.get_unique_id()
+    assert condition == keyset_snapshot_upstream_or_code_changes(KEYSET_KEY, LOAD_CHECK)
 
 
-def test_other_nodes_keep_the_default_condition() -> None:
+def test_a_history_snapshot_without_its_keyset_waits_for_its_load_check() -> None:
+    """Outside its keyset lakes the snapshot keeps the dbt tree, plus the gate.
+
+    The gate names the raw table's check, not the keyset's.
+    """
     default = dbt_upstream_or_code_changes()
-    assert dbt_automation_condition(KEYSET_SNAPSHOT, "production", default) is default
+    condition = dbt_automation_condition(KEYSET_SNAPSHOT, "production", default)
+    assert condition == default & raw_load_check_passed(LOAD_CHECK)
+    keyset_check = AssetCheckKey(KEYSET_KEY, LOAD_CHECK.name)
+    assert condition != default & raw_load_check_passed(keyset_check)
+
+
+@pytest.mark.parametrize(
+    "node", [_node(), _node(resource_type="model")], ids=["hand-written", "model"]
+)
+def test_other_nodes_keep_the_default_condition(node: dict[str, Any]) -> None:
+    default = dbt_upstream_or_code_changes()
+    assert dbt_automation_condition(node, "qa", default) is default
 
 
 def test_no_condition_where_automation_is_off() -> None:
