@@ -9,6 +9,7 @@ from typing import Any
 import mysql.connector
 import ol_notebook.warehouse as warehouse
 import pytest
+import sqlalchemy
 
 
 def _jwt(claims: dict[str, Any]) -> str:
@@ -142,3 +143,11 @@ def test_engine_uses_the_starrocks_dialect_over_mysql_connector() -> None:
     # marimo's data sources panel lists catalogs only for this name.
     assert dialect.name == "starrocks"
     assert dialect.driver == "mysqlconnector"
+
+
+def test_percent_signs_reach_starrocks_unescaped() -> None:
+    query = "SELECT DATE_FORMAT(dt, '%Y-%m'), 7 % 3 FROM t WHERE n LIKE 'a%'"
+    compiled = sqlalchemy.text(query).compile(dialect=warehouse.engine().dialect)
+    assert str(compiled) == query
+    modulo = sqlalchemy.literal_column("a") % sqlalchemy.literal_column("b")
+    assert str(modulo.compile(dialect=warehouse.engine().dialect)) == "a % b"

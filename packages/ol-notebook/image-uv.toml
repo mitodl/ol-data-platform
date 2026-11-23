@@ -1,0 +1,11 @@
+# Installed as /etc/uv/uv.toml in images/marimo-jupyterlab and
+# images/marimo-runtime, next to this package's wheel. ol-notebook isn't on
+# PyPI, and uv treats find-links as extra candidates next to PyPI's, so a
+# release someone else registered under the name could be chosen over this
+# wheel. An index doesn't mix: under uv's default first-index strategy, a
+# package found here is never looked up on PyPI. Everything else still comes
+# from PyPI.
+[[index]]
+name = "ol-notebook"
+url = "/opt/ol-notebook/wheels"
+format = "flat"

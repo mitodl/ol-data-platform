@@ -57,6 +57,6 @@ COPY gitconfig /etc/gitconfig
 # ol_notebook (packages/ol-notebook), found by uv when a notebook names
 # `ol-notebook` in its /// script header. images/marimo-runtime ships the same
 # wheel, so a notebook that queries the warehouse here runs unchanged once
-# published.
+# published. image-uv.toml says why it's an index rather than find-links.
 COPY --from=ol-notebook-wheel /wheels /opt/ol-notebook/wheels
-ENV UV_FIND_LINKS=/opt/ol-notebook/wheels
+COPY --from=ol-notebook image-uv.toml /etc/uv/uv.toml

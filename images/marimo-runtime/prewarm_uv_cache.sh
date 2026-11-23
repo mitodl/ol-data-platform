@@ -7,7 +7,7 @@
 set -eu
 
 notebook=/home/marimo/notebooks/notebook.py
-marimo_version="$(python -c 'import marimo; print(marimo.__version__)')"
+marimo_version="$(/opt/marimo/bin/python -c 'import marimo; print(marimo.__version__)')"
 
 mkdir -p "$(dirname "${notebook}")"
 cp /usr/local/share/marimo-runtime/prewarm_notebook.py "${notebook}"

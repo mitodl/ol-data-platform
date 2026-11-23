@@ -6,8 +6,10 @@
 #   and fail with "marimo: executable file not found").
 # - It sets UV=/usr/bin/uv, which marimo's sandbox runs, and its setup-venv init
 #   container runs `uv venv /opt/venv` from this image.
-# - It sets PYTHONPATH to /usr/local/lib/python3.13/site-packages, which is
-#   where the python:3.13 image keeps this marimo.
+# - It puts /usr/local/lib/python3.13/site-packages on PYTHONPATH, ahead of the
+#   notebook's own environment. Anything installed there would override the
+#   versions a notebook declares, so marimo gets its own venv instead and that
+#   directory holds only pip.
 FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
 FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS ol-notebook-wheel
@@ -18,17 +20,20 @@ RUN uv build --wheel --out-dir /wheels /src/ol-notebook
 FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 COPY --from=uv /uv /uvx /usr/bin/
 RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
-    pip install --no-cache-dir -r /tmp/requirements.txt
+    uv venv --python /usr/local/bin/python /opt/marimo && \
+    uv pip install --no-cache --python /opt/marimo/bin/python -r /tmp/requirements.txt && \
+    ln -s /opt/marimo/bin/marimo /usr/local/bin/marimo
 
 # Notebooks get ol_notebook by naming `ol-notebook` in their /// script header.
-# It isn't on PyPI, so uv finds it here. Sandbox environments don't see this
-# image's site-packages, which is why it isn't installed alongside marimo.
+# Sandbox environments don't see marimo's venv, so the wheel is served to uv
+# from an index instead; image-uv.toml says why it isn't find-links.
 COPY --from=ol-notebook-wheel /wheels /opt/ol-notebook/wheels
-ENV UV_FIND_LINKS=/opt/ol-notebook/wheels \
-    UV_CACHE_DIR=/var/cache/uv
+COPY --from=ol-notebook image-uv.toml /etc/uv/uv.toml
+ENV UV_CACHE_DIR=/var/cache/uv
 
 # A numeric non-root user, so the pod can set runAsNonRoot under the
-# restricted Pod Security Standard.
+# restricted Pod Security Standard. The pre-built environment below belongs
+# to this UID, so pods have to run as it.
 RUN useradd --uid 1000 --user-group --create-home --home-dir /home/marimo marimo && \
     install -d -o marimo -g marimo "${UV_CACHE_DIR}"
 

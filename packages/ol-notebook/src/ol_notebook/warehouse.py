@@ -43,8 +43,6 @@ ACCESS_TOKEN_HEADER = "x-access-token"  # noqa: S105  # a header name
 # keycloak_jwt integration requires it to equal the login name.
 PRINCIPAL_CLAIM = "starrocks_username"
 DEFAULT_MYSQL_PORT = 9030
-# The Debian/Ubuntu system bundle; the FE certificate is issued by a public CA.
-SYSTEM_CA_BUNDLE = Path("/etc/ssl/certs/ca-certificates.crt")
 
 
 class WarehouseAccessError(RuntimeError):
@@ -160,7 +158,8 @@ def _open(user: str, token_file: Path) -> MySQLConnectionAbstract:
         user=user,
         auth_plugin="authentication_openid_connect_client",
         openid_token_file=str(token_file),
-        ssl_ca=str(SYSTEM_CA_BUNDLE),
+        # The FE certificate is from a public CA, so the system trust store,
+        # which mysql-connector-python always loads, verifies it.
         ssl_verify_cert=True,
         ssl_verify_identity=verify_identity,
         # The C extension crashed under concurrent connections in the dbt trial

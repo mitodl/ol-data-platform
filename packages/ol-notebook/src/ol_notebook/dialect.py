@@ -13,17 +13,42 @@ entry point in this package's pyproject.toml.
 """
 
 from sqlalchemy.dialects.mysql.base import MySQLDialect
-from sqlalchemy.dialects.mysql.mysqlconnector import MySQLDialect_mysqlconnector
-from starrocks.dialect import StarRocksDialect
+from sqlalchemy.dialects.mysql.mysqlconnector import (
+    IdentifierPreparerCommon_mysqlconnector,
+    MySQLCompiler_mysqlconnector,
+    MySQLDialect_mysqlconnector,
+)
+from sqlalchemy.dialects.mysql.types import BIT
+from starrocks.dialect import (
+    StarRocksDialect,
+    StarRocksIdentifierPreparer,
+    StarRocksSQLCompiler,
+)
+
+
+# The PyMySQL preparer and compiler double every % for the driver's format
+# paramstyle, but mysql-connector-python only interpolates when a query has
+# parameters, so a parameterless `LIKE 'a%'` or `7 % 3` reached StarRocks as
+# `%%`. These take mysqlconnector's percent handling over StarRocks' SQL.
+class StarRocksMySQLConnectorIdentifierPreparer(
+    IdentifierPreparerCommon_mysqlconnector, StarRocksIdentifierPreparer
+):
+    pass
+
+
+class StarRocksMySQLConnectorCompiler(StarRocksSQLCompiler):
+    visit_mod_binary = MySQLCompiler_mysqlconnector.visit_mod_binary
 
 
 class StarRocksMySQLConnectorDialect(MySQLDialect_mysqlconnector, StarRocksDialect):
     name = "starrocks"
     supports_statement_cache = True
-    statement_compiler = StarRocksDialect.statement_compiler
+    statement_compiler = StarRocksMySQLConnectorCompiler
     ddl_compiler = StarRocksDialect.ddl_compiler
-    type_compiler_cls = StarRocksDialect.type_compiler_cls
-    preparer = StarRocksDialect.preparer
+    preparer = StarRocksMySQLConnectorIdentifierPreparer
+    colspecs = StarRocksDialect.colspecs | {
+        BIT: MySQLDialect_mysqlconnector.colspecs[BIT]
+    }
     # The MRO reaches these through the PyMySQL and MySQLdb dialects, which
     # assume a MySQLdb-style connection. Use the driver-neutral ones.
     on_connect = MySQLDialect.on_connect
