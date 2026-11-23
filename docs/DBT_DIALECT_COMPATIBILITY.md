@@ -169,6 +169,11 @@ These replace the bare aggregate, array and string calls:
     macros, now used for every bare `try_cast`, `date_diff` and `date_add` in the models.
     StarRocks' `date_diff()` is `date1 - date2`, the reverse of Trino's.
 
+13. **`char_length(string)`** - Number of characters in a string
+    - Trino, DuckDB: `length(str)` (native, counts characters)
+    - StarRocks: `char_length(str)`. Its `length()` counts UTF-8 bytes while `substr()` counts
+      characters, so `substr(s, length(prefix) + 2)` cuts non-ASCII text in the wrong place
+
 ## Known gaps
 
 - SQL in YAML is not dispatched. `loaded_at_field` and test `field:` expressions

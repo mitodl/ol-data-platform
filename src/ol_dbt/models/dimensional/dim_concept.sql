@@ -114,7 +114,7 @@ with registry as (
         , description
         , row_number() over (
             partition by concept_id
-            order by case when teaching_status = 'taught' then 0 else 1 end nulls last, length(description) desc
+            order by case when teaching_status = 'taught' then 0 else 1 end nulls last, {{ char_length('description') }} desc
         ) as description_rank
     from mentions
     where description is not null

@@ -42,7 +42,7 @@ select
     , ticket_tags as source_tags
     , source_metadata
     -- measured before masking so the metric survives redaction
-    , length(text) as feedback_text_chars
+    , {{ char_length('text') }} as feedback_text_chars
 from zendesk
 
 union all
@@ -70,7 +70,7 @@ select
     , updated_at
     , {{ null_varchar_array() }} as source_tags
     , source_metadata
-    , length(text) as feedback_text_chars
+    , {{ char_length('text') }} as feedback_text_chars
 from learn_ai_tutor
 
 union all
@@ -98,7 +98,7 @@ select
     , updated_at
     , {{ null_varchar_array() }} as source_tags
     , source_metadata
-    , length(text) as feedback_text_chars
+    , {{ char_length('text') }} as feedback_text_chars
 from content_feedback
 
 union all
@@ -126,5 +126,5 @@ select
     , updated_at
     , {{ null_varchar_array() }} as source_tags
     , source_metadata
-    , length(text) as feedback_text_chars
+    , {{ char_length('text') }} as feedback_text_chars
 from discussion_forum

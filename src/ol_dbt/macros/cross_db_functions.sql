@@ -1825,6 +1825,24 @@
 
 
 {#
+    char_length: the number of characters in `string_expr`. Trino's and DuckDB's length()
+    count characters; StarRocks' counts UTF-8 bytes (mitxpro problem answers summed 437,985
+    bytes vs 423,312 characters, 2026-11-23), and its substr() counts characters.
+#}
+{% macro char_length(string_expr) -%}
+    {{ adapter.dispatch('char_length', 'open_learning')(string_expr) }}
+{%- endmacro %}
+
+{% macro default__char_length(string_expr) -%}
+    length({{ string_expr }})
+{%- endmacro %}
+
+{% macro starrocks__char_length(string_expr) -%}
+    char_length({{ string_expr }})
+{%- endmacro %}
+
+
+{#
     split_part_or_null: field `index` (1-based) of `string` split on `delimiter`, or NULL
     when `string` or `index` is NULL or `string` has fewer fields than `index`, as Trino's
     split_part() does.
