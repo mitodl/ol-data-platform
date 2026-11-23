@@ -68,6 +68,7 @@ from lakehouse.assets.lakehouse.dbt import (
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
+    UNBUILDABLE_VIEW_KEYS,
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
@@ -557,17 +558,23 @@ dbt_docs_artifacts_schedule = ScheduleDefinition(
 )
 
 # Builds the tag:starrocks dbt models against StarRocks, then refreshes their
-# downstream manual-refresh MVs. STOPPED by default -- enable in production via
-# the Dagster UI after verifying the first manual run succeeds.
+# downstream manual-refresh MVs. STOPPED by default -- enable it in the Dagster
+# UI after verifying the first manual run succeeds. Leaves out the views this
+# environment's lake cannot build (STARROCKS_ABSENT_SOURCES).
+#
+# QA ticks at 07:00: learn_integrations_qa_daily starts at 05:30 and builds the
+# dimensional tables these views read, and its full build took 43 minutes
+# (run a59c0acd, 2026-11-23). At 06:00 the views would read tables mid-rebuild.
 b2b_analytics_starrocks_schedule = ScheduleDefinition(
     name="b2b_analytics_starrocks_nightly",
     job=define_asset_job(
         name="b2b_analytics_starrocks_job",
         selection=AssetSelection.assets(starrocks_dbt_assets).downstream(
             include_self=True
-        ),
+        )
+        - AssetSelection.assets(*UNBUILDABLE_VIEW_KEYS),
     ),
-    cron_schedule="0 6 * * *",
+    cron_schedule="0 7 * * *" if DAGSTER_ENV == "qa" else "0 6 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.STOPPED,
 )

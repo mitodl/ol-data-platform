@@ -20,6 +20,7 @@ from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     ICEBERG_MAINTENANCE_ENGINE_MAP,
+    STARROCKS_ABSENT_SOURCES_MAP,
     STARROCKS_DBT_TARGET_MAP,
     STARROCKS_HOST_MAP,
     STARROCKS_LOCAL_TARGET,
@@ -378,3 +379,29 @@ def test_dev_parses_its_own_manifest():
 def test_an_unbaked_deployed_target_raises():
     with pytest.raises(KeyError, match="no_such_target"):
         dbt_manifest_target_path("no_such_target", "qa")
+
+
+B2B_SOURCES_PATH = (
+    Path(__file__).parents[3]
+    / "src/ol_dbt/models/b2b_analytics/_b2b_analytics__sources.yml"
+)
+
+
+def test_every_lake_declares_its_absent_sources():
+    """A lake missing here would fail the code location's import."""
+    assert set(STARROCKS_ABSENT_SOURCES_MAP) == set(DATA_LAKE_ENV_MAP.values())
+
+
+@pytest.mark.parametrize(("lake", "absent"), STARROCKS_ABSENT_SOURCES_MAP.items())
+def test_absent_sources_name_sources_the_views_read(lake, absent):
+    """views_reading raises on an unknown name, which would fail the deploy.
+
+    Checked here against the sources YAML because CI never imports the code
+    location (it needs a parsed manifest).
+    """
+    declared = {
+        f"{source['name']}.{table['name']}"
+        for source in yaml.safe_load(B2B_SOURCES_PATH.read_text())["sources"]
+        for table in source["tables"]
+    }
+    assert absent <= declared, lake

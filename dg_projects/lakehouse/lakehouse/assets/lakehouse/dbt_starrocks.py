@@ -17,7 +17,10 @@ from lakehouse.assets.lakehouse.dbt import (
     DbtAutomationTranslator,
     upload_build_artifacts_best_effort,
 )
-from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
+from lakehouse.lib.dbt_environment import (
+    STARROCKS_ABSENT_SOURCES,
+    STARROCKS_DBT_TARGET,
+)
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
     OM_ARTIFACTS,
@@ -31,6 +34,8 @@ from lakehouse.lib.starrocks_dbt import (
     retry_delay,
     starrocks_credentials,
     unreadable_base_tables,
+    views_reading,
+    without_nodes,
 )
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import LoginNotPropagatedError, StarRocksResource
@@ -75,6 +80,13 @@ starrocks_dbt_project.prepare_if_dev()
 # b2b_analytics is enabled only on StarRocks targets in default_catalog.
 starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
 
+# The views this environment's lake cannot build (STARROCKS_ABSENT_SOURCES).
+# The b2b job leaves them out and the refresh asset skips them.
+UNBUILDABLE_VIEWS = views_reading(
+    json.loads(starrocks_dbt_project.manifest_path.read_text()),
+    STARROCKS_ABSENT_SOURCES,
+)
+
 # Retry knobs, the retriable-error classifier, and the column-drift comparison
 # live in lakehouse.lib so they can be unit-tested without a parsed dbt manifest
 # on disk (importing this module evaluates the @dbt_assets decorator below,
@@ -92,8 +104,14 @@ def _stale_materialized_views(
     refreshes an existing view in place, an edited SELECT never lands, and
     ol-analytics-api's `build_select` turns a column it expects into an
     unknown-column error at request time.
+
+    The views this environment cannot build are left out, so an old copy of
+    one does not read as drift.
     """
-    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    manifest = without_nodes(
+        json.loads(starrocks_dbt_project.manifest_path.read_text()),
+        UNBUILDABLE_VIEWS,
+    )
     documented = documented_columns(manifest)
     if not documented:
         # Nothing to compare against, and `live_column_query` would build an
@@ -245,3 +263,13 @@ def starrocks_dbt_assets(
                 context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
             )
         return
+
+
+UNBUILDABLE_VIEW_KEYS = [
+    key
+    for key in starrocks_dbt_assets.keys
+    if starrocks_dbt_assets.get_asset_spec(key).metadata[
+        DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
+    ]
+    in UNBUILDABLE_VIEWS
+]
