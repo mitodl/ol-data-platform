@@ -371,7 +371,15 @@ STARROCKS_ABSENT_SOURCES_MAP: Mapping[str, frozenset[str]] = {
     "qa": frozenset({"dimensional.bridge_user_contract"}),
     "production": frozenset(),
 }
-STARROCKS_ABSENT_SOURCES = STARROCKS_ABSENT_SOURCES_MAP[DATA_LAKE_ENV]
+try:
+    STARROCKS_ABSENT_SOURCES = STARROCKS_ABSENT_SOURCES_MAP[DATA_LAKE_ENV]
+except KeyError:
+    msg = (
+        f"No StarRocks absent sources declared for lake {DATA_LAKE_ENV!r} "
+        f"(declared: {sorted(STARROCKS_ABSENT_SOURCES_MAP)}). Add an entry to "
+        f"STARROCKS_ABSENT_SOURCES_MAP, empty if the lake has every source."
+    )
+    raise KeyError(msg) from None
 
 # Which engine compacts and analyzes the dbt-built Iceberg tables in
 # iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover

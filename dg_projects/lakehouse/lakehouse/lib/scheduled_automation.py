@@ -55,10 +55,10 @@ What omission also takes with it
 --------------------------------
 Most of these build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
-location too -- e.g. ``iceberg_dbt_maintenance_job`` and
-``b2b_analytics_starrocks_job`` are not manually launchable outside production,
-and ``learn_integrations_qa_job`` exists only in QA. Their ASSETS stay registered
-everywhere and can still be materialized by hand from the asset graph, so nothing
+location too -- e.g. ``iceberg_dbt_maintenance_job`` is not manually launchable
+outside production, and ``learn_integrations_qa_job`` exists only in QA. Their
+ASSETS stay registered everywhere and can still be materialized by hand from the
+asset graph, so nothing
 becomes unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
 

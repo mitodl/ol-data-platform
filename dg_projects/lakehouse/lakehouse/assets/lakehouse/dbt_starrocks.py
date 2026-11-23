@@ -35,6 +35,7 @@ from lakehouse.lib.starrocks_dbt import (
     starrocks_credentials,
     unreadable_base_tables,
     views_reading,
+    without_nodes,
 )
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import LoginNotPropagatedError, StarRocksResource
@@ -103,8 +104,14 @@ def _stale_materialized_views(
     refreshes an existing view in place, an edited SELECT never lands, and
     ol-analytics-api's `build_select` turns a column it expects into an
     unknown-column error at request time.
+
+    The views this environment cannot build are left out, so an old copy of
+    one does not read as drift.
     """
-    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    manifest = without_nodes(
+        json.loads(starrocks_dbt_project.manifest_path.read_text()),
+        UNBUILDABLE_VIEWS,
+    )
     documented = documented_columns(manifest)
     if not documented:
         # Nothing to compare against, and `live_column_query` would build an
