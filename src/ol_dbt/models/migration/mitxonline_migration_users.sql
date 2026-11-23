@@ -26,7 +26,7 @@ with xpro_enrolled_users as (
         , mitxpro_users.user_address_postal_code
         -- xPRO keeps up to five street lines joined by newlines; MITx Online has two
         , {{ street_1 }} as user_address_street_1
-        , nullif(replace(substr({{ street }}, length({{ street_1 }}) + 2), {{ codepoint_char(10) }}, ', '), '')
+        , nullif(replace(substr({{ street }}, {{ char_length(street_1) }} + 2), {{ codepoint_char(10) }}, ', '), '')
             as user_address_street_2
     from {{ ref('dim_user') }} as dim_user
     inner join xpro_enrolled_users
