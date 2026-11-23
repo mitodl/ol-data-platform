@@ -482,11 +482,17 @@ def read_course(  # noqa: PLR0913
         if info is not None:
             files[key] = info
 
-    results = pool.map(
-        lambda key: _extract_text(fs, client, bucket, key, files[key]["size"]),
-        files,
+    def read(key: str) -> Extraction:
+        return _extract_text(fs, client, bucket, key, files[key]["size"])
+
+    # Notebooks are read without Tika, so how they went says nothing about
+    # whether Tika is down and stays out of the outage check.
+    notebooks = [key for key in files if file_extension(key) == NOTEBOOK_EXTENSION]
+    documents = [key for key in files if key not in notebooks]
+    texts = dict(
+        zip(documents, collect(client, slug, pool.map(read, documents)), strict=True)
     )
-    texts = dict(zip(files, collect(client, slug, results), strict=True))
+    texts.update(zip(notebooks, pool.map(read, notebooks), strict=True))
 
     for row in rows:
         file_key = row["file_key"]
