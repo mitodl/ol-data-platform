@@ -11,19 +11,21 @@
     the end and the opposite one does not: "12-1pm" is noon to 1 PM, "11-1pm" 11 AM
     to 1 PM, "11am-1" 11 AM to 1 PM. With neither, a start hour after the end hour
     (both 1-12) is AM to PM, so "9-5" is 9 AM to 5 PM and "12-1" noon to 1 PM;
-    otherwise the hours are
-    24-hour time ("14:00 - 15:30"). Hour 0 is midnight whatever the suffix.
+    otherwise the hours are 24-hour time ("14:00 - 15:30"). Hour 0 is midnight
+    whatever the suffix.
   - "a.m." and "p.m." are AM and PM.
   - A US zone abbreviation (upper case, a whole word) picks its region's zone,
     daylight time included, so "10am PT" in July is 17:00 UTC and "EST" in July is
-    read as Eastern time. JST and KST are their zones. Otherwise a whole-hour UTC
-    or GMT offset from -12 to +14 ("EEST (UTC+3)") is that fixed offset, and a bare
-    UTC or GMT is UTC. Without any the time is US Eastern, as it is for an
-    abbreviation not listed here. Any other offset ("IST (UTC+5:30)") can't be
-    applied, so the range is unparseable rather than an hour-step off.
+    read as Eastern time. JST and KST are their zones. Each end takes the
+    abbreviation in its own time, else the other end's, so "9am PT - 1pm ET" ends
+    at 1 PM Eastern. Otherwise a whole-hour UTC or GMT offset from -12 to +14
+    ("EEST (UTC+3)") is that fixed offset, and a bare UTC or GMT is UTC. Without
+    any the time is US Eastern, as it is for an abbreviation not listed here. Any
+    other offset ("IST (UTC+5:30)", "UTC+5.5") can't be applied, so the range is
+    unparseable rather than an hour-step off.
   - An empty range has time_parse_status no_time, and one that cannot be read
     (no time, more than two, an hour past 23 such as "40 minutes", an offset as
-    above) unparseable. Both have null start_on, end_on and time_zone; the dates
+    above) unparseable. Both have null start_on, end_on and zones; the dates
     are still there.
   - An end before the start is kept as written, with time_parse_status
     end_before_start.
@@ -50,13 +52,29 @@ with parts as (
         , case when run_count = 2 then hour_2 else hour_1 end as end_hour
         , cast(case when run_count = 2 then minute_2 else minute_1 end as integer) as end_minute
         , case when run_count = 2 then ampm_2 else ampm_1 end as end_ampm
+        -- Each end's own abbreviation, else the other end's, else one outside
+        -- both times ("ET: 9-10am").
+        , coalesce(zone_abbreviation_1, zone_abbreviation_2, zone_abbreviation) as start_abbreviation
+        , coalesce(zone_abbreviation_2, zone_abbreviation_1, zone_abbreviation) as end_abbreviation
+        , utc_name
+        , utc_offset_hours
+        , utc_offset_minutes
+        , utc_offset_unreadable
+    from parts
+)
+
+, zones as (
+    select
+        *
+        {% for side in ['start', 'end'] %}
         , case
-            when zone_abbreviation in ('ET', 'EST', 'EDT') then 'America/New_York'
-            when zone_abbreviation in ('CT', 'CST', 'CDT') then 'America/Chicago'
-            when zone_abbreviation in ('MT', 'MST', 'MDT') then 'America/Denver'
-            when zone_abbreviation in ('PT', 'PST', 'PDT') then 'America/Los_Angeles'
-            when zone_abbreviation = 'JST' then 'Asia/Tokyo'
-            when zone_abbreviation = 'KST' then 'Asia/Seoul'
+            when {{ side }}_abbreviation in ('ET', 'EST', 'EDT') then 'America/New_York'
+            when {{ side }}_abbreviation in ('CT', 'CST', 'CDT') then 'America/Chicago'
+            when {{ side }}_abbreviation in ('MT', 'MST', 'MDT') then 'America/Denver'
+            when {{ side }}_abbreviation in ('PT', 'PST', 'PDT') then 'America/Los_Angeles'
+            when {{ side }}_abbreviation = 'JST' then 'Asia/Tokyo'
+            when {{ side }}_abbreviation = 'KST' then 'Asia/Seoul'
+            when utc_offset_unreadable then null
             when utc_offset_hours = 0 and utc_offset_minutes = 0 then 'UTC'
             -- "UTC+3" is Etc/GMT-3: POSIX inverts the sign. Etc/GMT has only
             -- whole hours from -14 to +12.
@@ -68,8 +86,9 @@ with parts as (
             when utc_offset_hours is not null then null
             when utc_name is not null then 'UTC'
             else 'America/New_York'
-        end as zone_read
-    from parts
+        end as {{ side }}_zone_read
+        {% endfor %}
+    from sides
 )
 
 {%- set start_minutes = "{} * 60 + start_minute" -%}
@@ -107,7 +126,7 @@ with parts as (
                 then {{ opposite.format(s='start_ampm') }}
             else start_ampm
         end as end_suffix
-    from sides
+    from zones
 )
 
 , clock as (
@@ -125,7 +144,7 @@ with parts as (
             when run_count = 0 and trim(coalesce(time_range_raw, '')) = '' then 'no_time'
             when run_count not in (1, 2) then 'unparseable'
             when start_hour_24 > 23 or end_hour_24 > 23 or start_minute > 59 or end_minute > 59 then 'unparseable'
-            when zone_read is null then 'unparseable'
+            when start_zone_read is null or end_zone_read is null then 'unparseable'
             else 'parsed'
         end as read_status
     from clock
@@ -137,7 +156,9 @@ with parts as (
         , start_date
         , end_date
         , read_status
-        , case when read_status = 'parsed' then zone_read end as time_zone
+        {% for side in ['start', 'end'] %}
+        , case when read_status = 'parsed' then {{ side }}_zone_read end as {{ side }}_time_zone
+        {% endfor %}
         {% for side in ['start', 'end'] %}
         , case
             when read_status = 'parsed'
@@ -157,9 +178,10 @@ with parts as (
         , start_date
         , end_date
         , read_status
-        , time_zone
-        , {{ local_timestamp_to_timestamptz('start_local', 'time_zone') }} as start_on
-        , {{ local_timestamp_to_timestamptz('end_local', 'time_zone') }} as end_on
+        , start_time_zone
+        , end_time_zone
+        , {{ local_timestamp_to_timestamptz('start_local', 'start_time_zone') }} as start_on
+        , {{ local_timestamp_to_timestamptz('end_local', 'end_time_zone') }} as end_on
     from local_times
 )
 
@@ -173,5 +195,6 @@ select
     , {{ timestamptz_at_utc('end_on') }} as end_on
     , case when read_status = 'parsed' and end_on < start_on then 'end_before_start' else read_status end
         as time_parse_status
-    , time_zone
+    , start_time_zone
+    , end_time_zone
 from instants

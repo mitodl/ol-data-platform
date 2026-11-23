@@ -12,8 +12,10 @@
   - learn_*: from the range as written, plus the zone abbreviation after an AM/PM,
     which is how Learn reads it.
   - unprefixed: from the range with any UTC or GMT offset taken out (it is
-    utc_offset_hours and utc_offset_minutes instead) and "a.m."/"p.m." read as AM/PM, so "(EDT, UTC-4)"
-    is not a third time and "8 p.m." is evening.
+    utc_offset_hours and utc_offset_minutes instead, or utc_offset_unreadable)
+    and "a.m."/"p.m." read as AM/PM, so "(EDT, UTC-4)" is not a third time and
+    "8 p.m." is evening, plus each run's own zone abbreviation, so "9am PT -
+    1pm ET" keeps both.
 #}
 
 with events as (
@@ -33,7 +35,7 @@ with events as (
             regexp_replace_all(
                 regexp_replace_all(
                     "coalesce(event_time_range_raw, '')"
-                    , "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d{1,2}(?::?\\d{2})?'"
+                    , "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d[\\d:]*(?:\\.\\d+)?'"
                     , "' '"
                 )
                 , "'(?i)a\\.\\s?m\\b\\.?'"
@@ -42,13 +44,11 @@ with events as (
             , "'(?i)p\\.\\s?m\\b\\.?'"
             , "'pm'"
         ) }} as platform_range
-        , {{ regexp_extract_or_null("event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*([+-])\\s*\\d{1,2}'", 1) }}
-            as utc_offset_sign
-        , {{ regexp_extract_or_null("event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*(\\d{1,2})'", 1) }}
-            as utc_offset_digits
+        -- The whole offset token, so "UTC+5.5" or "UTC+100" is not read as its
+        -- first digits.
         , {{ regexp_extract_or_null(
-            "event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*[+-]\\s*\\d{1,2}:?(\\d{2})'", 1
-        ) }} as utc_offset_minute_digits
+            "event_time_range_raw", "'(?i)\\b(?:utc|gmt)\\s*([+-]\\s*\\d[\\d:]*(?:\\.\\d+)?)'", 1
+        ) }} as utc_offset_token
         -- Case-sensitive, so "et al." is not Eastern time.
         , {{ regexp_extract_or_null(
             "event_time_range_raw", "'\\b(ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|JST|KST)\\b'", 1
@@ -62,7 +62,27 @@ with events as (
         *
         , {{ regexp_extract_all("platform_range", "'\\d{1,2}(:\\d{2})?\\D*'") }} as platform_runs
         , {{ regexp_extract_all("learn_range", "'\\d{1,2}(:\\d{2})?\\D*'") }} as learn_runs
+        -- An offset is H, HH, H:MM, HH:MM or HHMM; any other token is unreadable.
+        , {{ regexp_extract_or_null(
+            "utc_offset_token", "'^([+-]\\s*(?:\\d{1,2}|\\d{1,2}:\\d{2}|\\d{4}))$'", 1
+        ) }} as utc_offset
     from normalized
+)
+
+, offsets as (
+    select
+        *
+        , {{ regexp_extract_or_null("utc_offset", "'^([+-])'", 1) }} as utc_offset_sign
+        , coalesce(
+            {{ regexp_extract_or_null("utc_offset", "'^[+-]\\s*(\\d{1,2})(?::\\d{2})?$'", 1) }}
+            , {{ regexp_extract_or_null("utc_offset", "'^[+-]\\s*(\\d{2})\\d{2}$'", 1) }}
+        ) as utc_offset_hour_digits
+        , coalesce(
+            {{ regexp_extract_or_null("utc_offset", "':(\\d{2})$'", 1) }}
+            , {{ regexp_extract_or_null("utc_offset", "'^[+-]\\s*\\d{2}(\\d{2})$'", 1) }}
+            , case when utc_offset is not null then '00' end
+        ) as utc_offset_minute_digits
+    from runs
 )
 
 select
@@ -71,11 +91,17 @@ select
     , start_date
     , end_date
     , zone_abbreviation
+    {% for position in [1, 2] %}
+    , {{ regexp_extract_or_null(
+        element_at_array('platform_runs', position)
+        , "'\\b(ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|JST|KST)\\b'"
+        , 1
+    ) }} as zone_abbreviation_{{ position }}
+    {% endfor %}
     , utc_name
-    , cast(utc_offset_digits as integer) * case when utc_offset_sign = '-' then -1 else 1 end as utc_offset_hours
-    , case
-        when utc_offset_digits is not null then coalesce(cast(utc_offset_minute_digits as integer), 0)
-    end as utc_offset_minutes
+    , cast(utc_offset_hour_digits as integer) * case when utc_offset_sign = '-' then -1 else 1 end as utc_offset_hours
+    , cast(utc_offset_minute_digits as integer) as utc_offset_minutes
+    , utc_offset_token is not null and utc_offset is null as utc_offset_unreadable
     {% for prefix, runs in [('', 'platform_runs'), ('learn_', 'learn_runs')] %}
     , {{ array_length(runs) }} as {{ prefix }}run_count
     {% for position in [1, 2] %}
@@ -96,4 +122,4 @@ select
         ) }}
     ) as learn_tz_{{ position }}
     {% endfor %}
-from runs
+from offsets
