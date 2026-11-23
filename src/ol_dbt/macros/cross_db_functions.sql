@@ -103,23 +103,25 @@
         session timezone, causing "Illegal instant due to time zone offset transition" for
         timestamps in DST gap hours (e.g. 2:xx AM on spring-forward day in America/New_York).
 
-      Behavior of this wrapper:
-      * Strings that already carry a timezone marker at the end
-        (ending in 'Z', 'z', '+HH:MM', or '-HH:MM') are passed through unchanged.
-      * Plain dates in 'YYYY-MM-DD' format are treated as midnight UTC by
-        appending 'T00:00:00Z'.
-      * All other strings (naive datetimes with no explicit zone) have 'Z'
-        appended so Trino parses them as UTC, avoiding DST-gap issues.
+        iso8601_with_utc_default makes a zone-less string UTC, so this cannot happen.
     #}
-    from_iso8601_timestamp(
-        case
-            when regexp_like({{ timestamp_str }}, '.*([Zz]|[+-][0-9]{2}:[0-9]{2})$')
-              then {{ timestamp_str }}
-            when regexp_like({{ timestamp_str }}, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') then
-                {{ timestamp_str }} || 'T00:00:00Z'
-            else {{ timestamp_str }} || 'Z'
-        end
-    )
+    from_iso8601_timestamp({{ iso8601_with_utc_default(timestamp_str) }})
+{%- endmacro %}
+
+{#
+    iso8601_with_utc_default: an ISO 8601 date-time ('T' or space between date and time) with
+    no zone gets 'Z', and a bare date gets 'T00:00:00Z'. Anything else, e.g. a string with a
+    zone, is unchanged.
+    Nested regexp_replace keeps the argument (often itself a regexp_replace over a
+    billion-row column) to a single evaluation.
+#}
+{% macro iso8601_with_utc_default(timestamp_str) -%}
+    {{ regexp_replace_with_backreferences(
+        regexp_replace_with_backreferences(
+            timestamp_str, "'([T ][0-9]{2}(:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?)$'", "'$1Z'"
+        ),
+        "'^([0-9]{4}-[0-9]{2}-[0-9]{2})$'", "'$1T00:00:00Z'"
+    ) }}
 {%- endmacro %}
 
 {% macro duckdb__from_iso8601_timestamp(timestamp_str) -%}
@@ -149,14 +151,19 @@
     {{ adapter.dispatch('from_iso8601_timestamp_nanos', 'open_learning')(timestamp_str) }}
 {%- endmacro %}
 
+{#
+    Open edX logs times in UTC, and some tracking-log sources write them with no zone.
+    Trino and DuckDB parse a zone-less string in the session time zone, so a build from an
+    America/New_York client labelled UTC wall-clock times -04:00/-05:00 (about 1.9B
+    production staging rows). Treat a zone-less string as UTC, as StarRocks does.
+#}
 {% macro default__from_iso8601_timestamp_nanos(timestamp_str) -%}
-    {# Trino: native nanosecond-precision timestamp parser #}
-    from_iso8601_timestamp_nanos({{ timestamp_str }})
+    from_iso8601_timestamp_nanos({{ iso8601_with_utc_default(timestamp_str) }})
 {%- endmacro %}
 
 {% macro duckdb__from_iso8601_timestamp_nanos(timestamp_str) -%}
     {# DuckDB: max precision is microseconds; cast ISO 8601 string as timestamptz #}
-    try_cast({{ timestamp_str }} as timestamptz)
+    try_cast({{ iso8601_with_utc_default(timestamp_str) }} as timestamptz)
 {%- endmacro %}
 
 {% macro starrocks__from_iso8601_timestamp_nanos(timestamp_str) -%}
@@ -173,9 +180,9 @@
     zone the source ISO 8601 string gave ('-04:00' stays '-04:00'; 'Z' and '+00:00' are UTC).
     StarRocks' datetime casts to '2026-11-19 00:08:16.156297', so the same event hashed to a
     different key. iso8601_expr is the staged ISO 8601 string, for its zone; a string with
-    no zone (e.g. a studentmodule row's, built from a UTC timestamp) is UTC. Only rows Trino
-    staged carry a -04:00/-05:00 label: StarRocks staging always writes Z, so a raw row
-    staged by both engines would still hash differently.
+    no zone (e.g. a studentmodule row's, built from a UTC timestamp) is UTC. Both engines
+    now stage a zone-less raw time as Z, so the -04:00/-05:00 labels came only from Trino
+    builds run in an Eastern session before from_iso8601_timestamp_nanos defaulted to UTC.
 
     StarRocks keeps microseconds, so its text matches Trino's only while the 7th-9th
     fractional digits are 000. They were 000 on all 617,084 tfact_problem_events rows of
