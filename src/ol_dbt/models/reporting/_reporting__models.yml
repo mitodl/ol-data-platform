@@ -2069,6 +2069,10 @@ models:
 - name: course_feedback_report
   config:
     meta:
+      # Off until ol_instructor is limited to an explicit dataset list: published now,
+      # the next `ol-superset roles sync` would grant instructors every course's
+      # feedback before the RLS policy can list this dataset.
+      superset_dataset: false
       qa_branches:
       - learn_ai/app_postgres
       - micromasters/app_postgres
@@ -2087,8 +2091,9 @@ models:
       - xpro/tracking_logs
   description: Learner feedback about a course run, for its course team. One row per
     AskTIM chat, content feedback item or forum thread that resolves to a course run.
-    Zendesk tickets are excluded. No user key; its Superset dataset belongs under
-    the instructor course-scope RLS policy, which limits rows to the runs the viewer
+    Zendesk tickets are excluded. No user key, though source and conversation_id join
+    back to the author through tfact_feedback. Not published to Superset yet; once
+    it is, the instructor course-scope RLS policy limits rows to the runs the viewer
     teaches.
   columns:
   - name: courserun_readable_id

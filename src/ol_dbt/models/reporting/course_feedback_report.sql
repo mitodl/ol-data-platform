@@ -1,6 +1,8 @@
 -- What learners said about a course run, for its course team: AskTIM chats, content
--- feedback and forum threads. No user key, so an author can't be looked up through
--- dim_user. Its Superset dataset belongs under the instructor_course_scope RLS policy
+-- feedback and forum threads. It carries no user key, but this is not anonymity:
+-- source and conversation_id join back to tfact_feedback, which has the author.
+-- Published to Superset only once the instructor role is limited to an explicit
+-- dataset list and this sits under the instructor_course_scope RLS policy
 -- (src/ol_superset/policies/ol_rls_policies.json), keyed on courserun_readable_id.
 -- Unlike feedback_conversation_report it is not limited to the current cluster run.
 with conversation_fact as (
