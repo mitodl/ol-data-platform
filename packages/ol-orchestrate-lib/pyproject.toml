@@ -10,7 +10,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "boto3 ~=1.43.0",
+    "boto3 ~=1.44.4",
     "dagster ~= 1.11",
     "dagster-aws ~=0.29.0",
     "dagster-postgres ~=0.29.0",
