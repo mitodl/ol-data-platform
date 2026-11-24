@@ -16,13 +16,20 @@ Learn's only where Learn dropped caption digits.
 import re
 
 _TIMESTAMP = re.compile(r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)")
-_SEQUENCE = re.compile(r"\d+\n")
+# Learn's \d+\n, tried only where a digit run starts. re.sub scans left to right,
+# so a match starting inside a run would already have matched from the run's
+# start: the output is the same, and a guarded run is scanned once rather than
+# once per digit.
+_SEQUENCE = re.compile(r"(?<!\d)\d+\n")
 _BLANK_LINES = re.compile(r"\n\s*\n")
 _ENDS_IN_DIGIT = re.compile(r"\d$")
-# A guard character sits between a caption's last digit and its newline while
-# Learn's substitutions run, so \d+\n can't match there. It is a private-use
-# character, which none of the substitutions match, and one the content lacks.
-_PRIVATE_USE = range(0xE000, 0xF900)
+# The guard sits between a caption's last digit and its newline while Learn's
+# substitutions run, so \d+\n can't match there. None of the substitutions match
+# it. A copy already in the content is doubled first and undoubled after; a
+# guard follows a digit and precedes a newline or space, so it is never next to
+# a doubled copy, and a lone one is always a guard.
+_GUARD = "\ue000"
+_GUARDS_AND_COPIES = re.compile(f"{_GUARD}{_GUARD}|{_GUARD}")
 
 
 def _caption_lines(lines: list[str]) -> set[int]:
@@ -54,12 +61,14 @@ def text_from_srt(content: str) -> str:
         Learn strips Tika's output before parsing it
     :returns: the captions, cues joined by spaces as Learn joins them
     """
-    guard = next(chr(point) for point in _PRIVATE_USE if chr(point) not in content)
-    lines = content.split("\n")
+    lines = content.replace(_GUARD, _GUARD * 2).split("\n")
     for index in _caption_lines(lines):
         # The last line has no newline after it, so \d+\n can't reach it.
         if index + 1 < len(lines) and _ENDS_IN_DIGIT.search(lines[index]):
-            lines[index] += guard
+            lines[index] += _GUARD
     content = _TIMESTAMP.sub("", "\n".join(lines))
     content = _SEQUENCE.sub("", content)
-    return _BLANK_LINES.sub(" ", content).replace(guard, "")
+    return _GUARDS_AND_COPIES.sub(
+        lambda match: _GUARD if len(match[0]) == 2 else "",  # noqa: PLR2004
+        _BLANK_LINES.sub(" ", content),
+    )

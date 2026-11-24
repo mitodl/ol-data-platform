@@ -83,6 +83,34 @@ def test_keeps_numbers_that_end_a_caption_line(srt: str, expected: str) -> None:
     assert text_from_srt(srt) == expected
 
 
-def test_content_with_private_use_characters_keeps_them() -> None:
-    srt = "1\n00:00:00,000 --> 00:00:02,000\n is 5\nok"
-    assert text_from_srt(srt) == " is 5\nok"
+@pytest.mark.parametrize(
+    ("srt", "expected"),
+    [
+        (
+            "1\n00:00:00,000 --> 00:00:02,000\n\ue000 is 5\n\ue000\ue000ok",
+            "\ue000 is 5\n\ue000\ue000ok",
+        ),
+        # the guard's own character right after a guarded line's newline
+        (
+            "1\n00:00:00,000 --> 00:00:02,000\nis 5\n\ue000\n\n"
+            "2\n00:00:02,000 --> 00:00:04,000\n\ue0007\ue000",
+            "is 5\n\ue000 \ue0007\ue000",
+        ),
+    ],
+    ids=["copies-of-the-guard", "copy-after-a-guarded-line"],
+)
+def test_content_with_the_guard_character_keeps_it(srt: str, expected: str) -> None:
+    assert text_from_srt(srt) == expected
+
+
+def test_content_with_every_private_use_character_is_read() -> None:
+    every = "".join(chr(point) for point in range(0xE000, 0xF900))
+    srt = f"1\n00:00:00,000 --> 00:00:02,000\n{every} 42\nok"
+    assert text_from_srt(srt) == f"{every} 42\nok"
+
+
+def test_a_long_guarded_digit_run_is_scanned_once() -> None:
+    # \d+\n tried at every digit of a guarded run is quadratic: minutes, not ms.
+    digits = "7" * 200_000
+    srt = f"1\n00:00:00,000 --> 00:00:02,000\n{digits}\nok"
+    assert text_from_srt(srt) == f"{digits}\nok"
