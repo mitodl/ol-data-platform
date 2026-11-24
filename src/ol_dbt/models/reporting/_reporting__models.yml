@@ -2335,6 +2335,90 @@ models:
       arguments:
         column_list: ["platform", "courserun_readable_id", "activity_date", "enrollment_status"]
 
+- name: ocw_external_resource_link_report
+  description: >
+    One row per OCW external resource (a link to a page outside OCW), with the result
+    of ocw-studio's link checker and its license warning, and the Studio URL where
+    the
+    resource is edited. For the OCW content team to find broken links and license
+    warnings and fix them. Every external resource is included, not only the problem
+    ones, so a dashboard can show the share of links that are healthy and filter to
+    needs_review. Unchecked links are mostly sites that block the checker (HTTP 403
+    or 429), so they are kept apart from broken ones.
+  columns:
+  - name: course_uuid
+    description: str, UUID of the OCW course site containing the resource
+    tests:
+    - not_null
+  - name: course_name
+    description: str, unique name of the OCW course site, as it appears in OCW Studio
+      URLs
+    tests:
+    - not_null
+  - name: course_number
+    description: str, primary course number, from the course metadata
+  - name: course_title
+    description: str, course title, from the course metadata
+  - name: course_term
+    description: str, term the course was taught, from the course metadata
+  - name: course_year
+    description: str, year the course was taught, from the course metadata
+  - name: course_live_url
+    description: str, URL of the course on the live OCW site
+  - name: course_is_unpublished
+    description: boolean, true if the course has been unpublished from the live site.
+      Null when dim_ocw_course has no row for the course.
+  - name: course_has_never_published
+    description: boolean, true if the course has never been published. Null when dim_ocw_course
+      has no row for the course.
+  - name: resource_uuid
+    description: str, UUID of the external resource
+    tests:
+    - not_null
+  - name: resource_title
+    description: str, title of the external resource
+  - name: resource_live_url
+    description: str, URL of the resource page on the live OCW site
+  - name: studio_url
+    description: str, OCW Studio URL where the resource is edited
+    tests:
+    - not_null
+  - name: external_resource_url
+    description: str, the URL outside OCW that the resource links to
+  - name: external_resource_url_status_code
+    description: str, HTTP status code the link checker last got from the URL. Null
+      when it has not checked the URL or the check failed.
+  - name: external_resource_wayback_url
+    description: str, Wayback Machine archive of the URL, when ocw-studio has one.
+      A candidate replacement for a broken link.
+  - name: link_status
+    description: str, ocw-studio's link checker status. valid, broken, unchecked (the
+      site refused the checker, e.g. HTTP 403 or 429, so the link may be fine), check_failed,
+      or not_checked when the checker has never run on the resource.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["valid", "broken", "unchecked", "check_failed", "not_checked"]
+  - name: is_link_broken
+    description: boolean, true when link_status is broken
+    tests:
+    - not_null
+  - name: has_license_warning
+    description: boolean, true when ocw-studio flagged the external site's license
+      as needing a warning to learners
+    tests:
+    - not_null
+  - name: needs_review
+    description: boolean, true when the link is broken, the check failed, or the resource
+      has a license warning
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "resource_uuid"]
+
 unit_tests:
 - name: test_program_summary_report_counts_verified_from_the_fact
   description: >

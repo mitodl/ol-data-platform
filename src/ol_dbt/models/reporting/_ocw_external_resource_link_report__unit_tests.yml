@@ -1,0 +1,47 @@
+---
+unit_tests:
+- name: test_ocw_external_resource_link_report_flags
+  description: >
+    Only external resources are reported. A resource the checker never ran on has
+    no status and reports not_checked. Broken and check_failed links need review,
+    unchecked ones do not, and a license warning needs review whatever the link
+    status. A missing license warning counts as none.
+  model: ocw_external_resource_link_report
+  given:
+  - input: ref('dim_ocw_resource')
+    rows:
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-valid, content_type: external-resource,
+      studio_url: s1, external_resource_status: valid, external_resource_license_warning: false}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-broken, content_type: external-resource,
+      studio_url: s2, external_resource_status: broken, external_resource_license_warning: false}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-failed, content_type: external-resource,
+      studio_url: s3, external_resource_status: check_failed, external_resource_license_warning: false}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-unchecked, content_type: external-resource,
+      studio_url: s4, external_resource_status: unchecked, external_resource_license_warning: false}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-license, content_type: external-resource,
+      studio_url: s5, external_resource_status: valid, external_resource_license_warning: true}
+    - {course_uuid: c2, course_name: course-two, resource_uuid: r-never, content_type: external-resource,
+      studio_url: s6, external_resource_status: null, external_resource_license_warning: null}
+    - {course_uuid: c2, course_name: course-two, resource_uuid: r-never-license, content_type: external-resource,
+      studio_url: s7, external_resource_status: null, external_resource_license_warning: true}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-file, content_type: resource,
+      studio_url: s8, external_resource_status: null, external_resource_license_warning: null}
+  - input: ref('dim_ocw_course')
+    rows:
+    - {course_name: course-one, course_is_unpublished: false, course_has_never_published: false}
+  expect:
+    rows:
+    - {resource_uuid: r-valid, link_status: valid, is_link_broken: false, has_license_warning: false,
+      needs_review: false, course_is_unpublished: false}
+    - {resource_uuid: r-broken, link_status: broken, is_link_broken: true, has_license_warning: false,
+      needs_review: true, course_is_unpublished: false}
+    - {resource_uuid: r-failed, link_status: check_failed, is_link_broken: false,
+      has_license_warning: false, needs_review: true, course_is_unpublished: false}
+    - {resource_uuid: r-unchecked, link_status: unchecked, is_link_broken: false,
+      has_license_warning: false, needs_review: false, course_is_unpublished: false}
+    - {resource_uuid: r-license, link_status: valid, is_link_broken: false, has_license_warning: true,
+      needs_review: true, course_is_unpublished: false}
+    - {resource_uuid: r-never, link_status: not_checked, is_link_broken: false, has_license_warning: false,
+      needs_review: false, course_is_unpublished: null}
+    - {resource_uuid: r-never-license, link_status: not_checked, is_link_broken: false,
+      has_license_warning: true, needs_review: true, course_is_unpublished: null}
