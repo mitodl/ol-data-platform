@@ -10,12 +10,12 @@ Data flow:
             -> openedx/processed_data/course_transcript_text  (JSONL in S3)
                 -> integrations__learn__content_files         (dbt)
 
-The SRT and SJSON parsers below reproduce mit-learn's
-``learning_resources/etl/utils.py:text_from_srt_content`` and
-``text_from_sjson_content`` exactly, including their quirks. Their test table is
-ported verbatim into this project's tests so the parity is enforced rather than
-asserted -- a cutover diff should show a difference in the data, never in how
-the two sides parse it.
+The SJSON parser below reproduces mit-learn's
+``learning_resources/etl/utils.py:text_from_sjson_content``, and SRT goes through
+``ol_file_types.srt.text_from_srt``, which reproduces ``text_from_srt_content``
+except that it keeps the numbers Learn drops from captions. Learn's test table
+for both is ported verbatim into this project's tests so the parity is enforced
+rather than asserted.
 
 The WebVTT parser is the one deliberate exception. MIT Learn has no VTT
 transformer, so it stores whatever Tika returns for a `.vtt`: the `WEBVTT`
@@ -43,6 +43,7 @@ from dagster import (
     asset,
 )
 from ol_file_types import file_extension
+from ol_file_types.srt import text_from_srt
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
 
@@ -65,25 +66,11 @@ log = logging.getLogger(__name__)
 # _transform_content_by_type keys its transformer map, and how Open edX names
 # subtitles: subs_<id>.srt.sjson is SJSON, not SRT.
 
-_SRT_TIMESTAMP = re.compile(
-    r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)"
-)
-_SRT_SEQUENCE = re.compile(r"\d+\n")
-_SRT_BLANK_LINES = re.compile(r"\n\s*\n")
-
-
-def text_from_srt_content(content: str) -> str:
-    """Strip timestamps and sequence numbers from SRT subtitle content.
-
-    Reproduces mit-learn's ``text_from_srt_content`` exactly, including the
-    sequence-number rule being a bare ``\\d+\\n`` -- which also removes a
-    caption line that happens to be only digits. That is a real quirk, kept on
-    purpose: diverging here would make every such caption a spurious difference
-    during parallel validation. Fix it in both repos together or not at all.
-    """
-    content = _SRT_TIMESTAMP.sub("", content)
-    content = _SRT_SEQUENCE.sub("", content)
-    return _SRT_BLANK_LINES.sub(" ", content)
+# As DOCUMENT_TEXT_CODE_VERSION: Dagster ignores an asset's first code version,
+# so this value re-runs nothing (a backfill re-parses the existing snapshots).
+# Change it when a parser's output changes, and every course run's transcripts
+# are parsed again.
+TRANSCRIPT_TEXT_CODE_VERSION = "srt-keep-caption-numbers-1"
 
 
 def text_from_sjson_content(content: str) -> str | None:
@@ -192,8 +179,7 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     # Learn strips Tika's output before the SRT transformer runs
     # (_extract_content_with_tika), and the order changes the text. Without it
     # an SRT whose last caption ends in a newline or blank line keeps a trailing
-    # newline or space, and a final caption of only digits is dropped where
-    # Learn keeps it. Stripping the parsed text afterwards is not the same:
+    # newline or space. Stripping the parsed text afterwards is not the same:
     # Learn's text keeps the space an empty cue leaves at either end. Learn's
     # checksum is md5(content), so each such file reads as changed to a
     # checksum-based sync. Learn strips before SJSON parsing too, so an SJSON
@@ -206,7 +192,7 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     if suffix == SJSON_SUFFIX:
         return text_from_sjson_content(content)
     if suffix == SRT_SUFFIX:
-        return text_from_srt_content(content)
+        return text_from_srt(content)
     if suffix == VTT_SUFFIX:
         return text_from_vtt_content(content)
     return None
@@ -343,6 +329,7 @@ def assert_parsing_healthy(counters: dict[str, int], course_id: str) -> None:
     io_manager_key="s3file_io_manager",
     automation_condition=upstream_or_code_changes(),
     required_resource_keys={"openedx"},
+    code_version=TRANSCRIPT_TEXT_CODE_VERSION,
     description=(
         "Plain text parsed from the video transcripts in a course archive "
         "(SRT and Open edX SJSON). One JSONL row per transcript."
