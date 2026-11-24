@@ -4,8 +4,14 @@
 -- It has no order or coupon key and no time finer than a day, because other datasets
 -- put those next to learner emails (combined_orders_hash_id, order_reference_number and
 -- order_id in the enrollment reports), and a join on any of them would undo the point.
+-- The mart's paid, tax and payment amounts are the whole order's, repeated on each line.
+-- With no order key nobody downstream could undo that, so each line carries its even
+-- share and a sum over lines adds up to the orders' totals.
 with orders as (
-    select * from {{ ref('marts__combined__orders') }}
+    select
+        *
+        , count(*) over (partition by platform, order_id) as order_line_count
+    from {{ ref('marts__combined__orders') }}
 )
 
 , products as (
@@ -39,17 +45,24 @@ select
     , orders.courserun_readable_id
     , orders.unit_price
     , orders.discount
-    , orders.discount_amount
-    , orders.order_total_price_paid
-    , orders.order_tax_amount
+    -- xPro's mart value is the line's price minus the whole order's total, so it is
+    -- worked out again from the line's share. Other platforms' are already per line.
+    , case
+        when orders.platform = '{{ var("mitxpro") }}'
+            then orders.unit_price - orders.order_total_price_paid / orders.order_line_count
+        else orders.discount_amount
+    end as discount_amount
+    , orders.order_line_count
+    , orders.order_total_price_paid / orders.order_line_count as line_price_paid
+    , orders.order_tax_amount / orders.order_line_count as line_tax_amount
+    , orders.order_total_price_paid_plus_tax / orders.order_line_count as line_price_paid_plus_tax
+    , orders.receipt_payment_amount / orders.order_line_count as line_payment_amount
     , orders.order_tax_rate
     , orders.order_tax_rate_name
     , orders.order_tax_country_code
-    , orders.order_total_price_paid_plus_tax
     , orders.coupon_name
     , orders.coupon_type
     , orders.b2border_contract_number
-    , orders.receipt_payment_amount
     , orders.receipt_payment_currency
     , orders.receipt_payment_method
     , orders.receipt_payment_card_type

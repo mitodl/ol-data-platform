@@ -2012,6 +2012,9 @@ models:
   - dbt_utils.equal_rowcount:
       arguments:
         compare_model: ref('marts__combined__orders')
+      # Stands in for a unique key, so one extra row from a join has to fail.
+      config:
+        error_if: ">0"
   columns:
   - name: platform
     description: str, platform the order was placed on, e.g. MITx Online, xPro, edX.org,
@@ -2045,6 +2048,10 @@ models:
     description: str, title of the course run or program run, or for a program product
       that marts__combined__products lacks, the program title from dim_program. Null
       for Bootcamps and edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "product_readable_id is not null"
   - name: courserun_readable_id
     description: str, readable ID of the course run the order line is for.
   - name: unit_price
@@ -2058,21 +2065,28 @@ models:
       purchase.
   - name: discount_amount
     description: numeric, dollar amount off the order line, unit_price minus what
-      the line was charged. Null for Bootcamps, edX.org and migrated MicroMasters
-      orders under MITx Online.
-  - name: order_total_price_paid
-    description: numeric, total order amount.
-  - name: order_tax_amount
-    description: numeric, tax paid. xPro only.
+      the line was charged. For xPro, unit_price minus line_price_paid. Null for Bootcamps,
+      edX.org and migrated MicroMasters orders under MITx Online.
+  - name: order_line_count
+    description: int, number of lines in the order this line belongs to. The line_
+      amounts are the order's amounts divided by it.
+  - name: line_price_paid
+    description: numeric, the line's even share of what the order paid, before tax.
+      Summing it over lines gives the orders' totals.
+  - name: line_tax_amount
+    description: numeric, the line's even share of the order's tax. xPro only.
+  - name: line_price_paid_plus_tax
+    description: numeric, the line's even share of what the order paid including tax.
+      Equal to line_price_paid outside xPro.
+  - name: line_payment_amount
+    description: numeric, the line's even share of the amount charged, req_amount
+      from the CyberSource payment.
   - name: order_tax_rate
     description: numeric, tax rate applied. xPro only.
   - name: order_tax_rate_name
     description: str, name of the tax rate applied. xPro only.
   - name: order_tax_country_code
     description: str, country code the tax was applied for. xPro only.
-  - name: order_total_price_paid_plus_tax
-    description: numeric, order_total_price_paid plus order_tax_amount for xPro, and
-      order_total_price_paid elsewhere.
   - name: coupon_name
     description: str, name of the coupon payment the redeemed coupon belongs to. xPro
       only.
@@ -2080,8 +2094,6 @@ models:
     description: str, type of the coupon, which says when it can be redeemed.
   - name: b2border_contract_number
     description: str, B2B contract number for the order. xPro only.
-  - name: receipt_payment_amount
-    description: numeric, amount charged, req_amount from the CyberSource payment.
   - name: receipt_payment_currency
     description: str, currency of the payment, e.g. USD.
   - name: receipt_payment_method
