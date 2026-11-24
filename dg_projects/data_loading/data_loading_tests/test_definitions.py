@@ -227,9 +227,12 @@ def test_canvas_instigators_start_running_in_production_only(environment: str) -
         } == {expected}
 
 
-@pytest.mark.parametrize("environment", ["dev", "ci", "qa", "production"])
+@pytest.mark.parametrize("environment", ["dev", "ci", "production"])
 def test_canvas_content_ingest_runs_in_production_only(environment: str) -> None:
-    """Stopped, the warehouse keeps the hand-started first load while Learn moves on."""
+    """RUNNING in production so the warehouse keeps up with Learn; STOPPED elsewhere.
+
+    QA has no such schedule at all (see the landing-zone test below).
+    """
     expected = "RUNNING" if environment == "production" else "STOPPED"
     with _repository_for(environment) as repo:
         schedule = repo.get_schedule_def("canvas_content_ingest_daily_schedule")
@@ -621,15 +624,16 @@ def test_code_location_builds_under_the_qa_profile(
     [
         "posthog_events_ingest_hourly_schedule",
         "edxorg_program_reports_ingest_daily_schedule",
+        "canvas_content_ingest_daily_schedule",
     ],
 )
 @pytest.mark.parametrize("environment", ["dev", "qa", "production"])
 def test_production_landing_zone_schedules_are_not_defined_in_qa(
     environment: str, schedule_name: str
 ) -> None:
-    """posthog/s3 is `qa: omit` and edxorg/program_reports `qa: mirror`; both
-    read production's landing zone, and a hand-started QA PostHog schedule
-    failed hourly.
+    """posthog/s3 and canvas/s3 are `qa: omit` and edxorg/program_reports
+    `qa: mirror`; all read production's landing zone, and a hand-started QA
+    PostHog schedule failed hourly.
     """
     with _repository_for(environment) as repo:
         names = {schedule.name for schedule in repo.schedule_defs}
