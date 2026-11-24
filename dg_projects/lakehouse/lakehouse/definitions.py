@@ -762,11 +762,10 @@ non_airbyte_staging_schedules = (
 # Selects the models tagged qa_scheduled with their upstream models: the Learn
 # views whose every QA raw input exists, and the dimensional tables the b2b
 # StarRocks views read (_b2b_analytics__sources.yml), which have no other QA
-# build. bridge_user_contract is left out: it reads a check-strategy snapshot,
-# which dbt-starrocks 1.12.2 cannot build. `ol-dbt
-# validate`'s qa_branch_contract check fails a tagged model that reads more than
-# one ingestion unit unless it declares every one of them in qa_branches and the
-# committed QA observation shows them held, so a QA build is complete relative
+# build. `ol-dbt validate`'s qa_branch_contract check fails a tagged model that
+# reads more than one ingestion unit unless it declares every one of them in
+# qa_branches and the committed QA observation shows them held, so a QA build
+# is complete relative
 # to QA's apps rather than a silently partial union. The
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that
 # QA's data_loading schedules load daily, so QA holds close to production's
