@@ -334,9 +334,9 @@ incremental until `--full-refresh` is used.
 
 
 -   Automated dataset creation/refresh in Apache Superset
--   `create_superset_asset` generates Dagster asset for each dbt model
+-   `build_superset_dataset_assets` generates a Dagster asset for each published dbt model
 -   When dbt model updates, triggers API call to refresh Superset dataset
--   **To expose model**: Add parent folder to `dbt_models_for_superset_datasets` in `dg_projects/lakehouse/lakehouse/defs/lakehouse_datasets.py`
+-   Mart and reporting models and snapshots get a Superset dataset on both engines unless their meta sets `superset_dataset: false`. Dimensional-layer models and snapshots get one only when their meta sets `superset_dataset: true`, so add that only for a table a governed dashboard reads (`dbt_models_for_superset_datasets` and `superset_opt_in_layers` in `dg_projects/lakehouse/lakehouse/definitions.py`)
 
 ## Adding New Components
 
@@ -356,7 +356,7 @@ incremental until `--full-refresh` is used.
 3. **Build**: `ol-dbt run --select my_model` (incremental from repo root)
 4. **Verify**: Check `src/ol_dbt/target/compiled/` for compiled SQL
 5. **Auto-integration**: Dagster `@dbt_assets` auto-discovers (no Python changes needed)
-6. **Superset** (optional): Add parent dir to `dbt_models_for_superset_datasets`
+6. **Superset**: Mart and reporting models are published automatically; a dimensional model needs `superset_dataset: true` in its meta (see Superset Integration)
 
 ## Environment Variables
 
