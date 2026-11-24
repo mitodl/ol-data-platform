@@ -452,3 +452,23 @@ unit_tests:
       coursecontent_title: Notes, coursecontent_text: Lecture notes, coursecontent_text_extraction_status: extracted}
     - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/slides/data.json,
       coursecontent_title: Slides, coursecontent_text: null, coursecontent_text_extraction_status: failed}
+- name: test_stg__ocw__studio__postgres__external_resources_externalresourcestate_keeps_the_newest_row
+  description: >
+    A state row deleted in the Django admin is recreated under a new id for the
+    same content, and the xmin sync keeps the old row, so staging keeps the most
+    recently updated row per content id.
+  model: stg__ocw__studio__postgres__external_resources_externalresourcestate
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__ocw__studio__postgres__external_resources_externalresourcestate')
+    rows:
+    - {id: 1, content_id: 10, status: valid, external_url_response_code: 200, wayback_url: '',
+      last_checked: '2026-08-01 00:00:00', updated_on: '2026-08-01 00:00:00'}
+    - {id: 2, content_id: 10, status: check_failed, external_url_response_code: 200,
+      wayback_url: '', last_checked: '2026-09-01 00:00:00', updated_on: '2026-09-01
+        00:00:00'}
+    - {id: 3, content_id: 11, status: broken, external_url_response_code: 404, wayback_url: '',
+      last_checked: '2026-09-01 00:00:00', updated_on: '2026-09-01 00:00:00'}
+  expect:
+    rows:
+    - {externalresourcestate_id: 2, websitecontent_id: 10, externalresourcestate_status: check_failed}
+    - {externalresourcestate_id: 3, websitecontent_id: 11, externalresourcestate_status: broken}

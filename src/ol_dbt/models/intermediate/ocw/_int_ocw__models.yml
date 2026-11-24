@@ -285,7 +285,9 @@ models:
   - name: external_resource_url
     description: URL of the external resource
   - name: external_resource_url_status_code
-    description: int, status code of the external resource URL
+    description: str, HTTP status code of the external resource URL from the last
+      completed link check, read from ExternalResourceState and falling back to the
+      resource metadata. A failed check keeps the previous code.
   - name: image_credit
     description: str, credit of the image resource
   - name: image_alt_text

@@ -72,7 +72,9 @@ models:
   - name: external_resource_license_warning
     description: boolean, whether the external resource has a license warning
   - name: external_resource_url_status_code
-    description: int, status code of the external resource URL
+    description: str, HTTP status code of the external resource URL from the last
+      completed link check, read from ExternalResourceState and falling back to the
+      resource metadata. A failed check keeps the previous code.
   - name: external_resource_backup_url
     description: str, backup URL of the external resource
   - name: external_resource_backup_url_status_code

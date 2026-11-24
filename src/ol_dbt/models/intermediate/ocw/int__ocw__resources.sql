@@ -64,9 +64,14 @@ select
             {{ json_query_string('websitecontents.websitecontent_metadata', "'$.has_external_license_warning'") }}, ''
         ) as boolean
     ) as external_resource_license_warning
-    , nullif(nullif(
-        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.url_status_code'") }}, ''
-    ), 'null') as external_resource_url_status_code
+    -- ocw-studio writes the code to both places on a completed check; the state also
+    -- holds it for some resources whose metadata never got one.
+    , coalesce(
+        cast(externalresourcestates.externalresourcestate_url_response_code as varchar)
+        , nullif(nullif(
+            {{ json_query_string('websitecontents.websitecontent_metadata', "'$.url_status_code'") }}, ''
+        ), 'null')
+    ) as external_resource_url_status_code
     , nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.backup_url_status_code'") }}, ''
     ), 'null') as external_resource_backup_url_status_code
