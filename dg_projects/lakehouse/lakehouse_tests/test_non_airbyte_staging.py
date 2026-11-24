@@ -53,9 +53,26 @@ MANIFEST = {
         "model.open_learning.int__reads_raw": _model(
             "int__reads_raw", "intermediate", f"{SRC}.raw__dlt_table"
         ),
-        # Downstream of the dlt staging model, not of the raw table.
+        # Downstream of the dlt staging model, not of the raw table, so nothing
+        # else builds it either.
         "model.open_learning.stg__second_hop": _model(
             "stg__second_hop", "staging", "model.open_learning.stg__dlt"
+        ),
+        "model.open_learning.stg__third_hop": _model(
+            "stg__third_hop", "staging", "model.open_learning.stg__second_hop"
+        ),
+        # Downstream of the Airbyte staging model, which its sync_and_stage job
+        # covers.
+        "model.open_learning.stg__airbyte_second_hop": _model(
+            "stg__airbyte_second_hop", "staging", "model.open_learning.stg__airbyte"
+        ),
+        # Downstream of the dlt staging model but not staging: the automation
+        # sensor covers it.
+        "model.open_learning.int__reads_staging": _model(
+            "int__reads_staging", "intermediate", "model.open_learning.stg__dlt"
+        ),
+        "model.open_learning.stg__reads_int": _model(
+            "stg__reads_int", "staging", "model.open_learning.int__reads_staging"
         ),
         "test.open_learning.not_null_stg__dlt_id": {
             "name": "not_null_stg__dlt_id",
@@ -77,8 +94,12 @@ def test_raw_tables_exclude_airbyte_units() -> None:
     assert non_airbyte_raw_tables(units) == {"raw__dlt_table", "raw__dagster_table"}
 
 
-def test_selects_only_staging_models_directly_on_those_sources() -> None:
-    assert staging_models_reading(MANIFEST, {"raw__dlt_table"}) == {"stg__dlt"}
+def test_selects_staging_models_on_those_sources_through_staging() -> None:
+    assert staging_models_reading(MANIFEST, {"raw__dlt_table"}) == {
+        "stg__dlt",
+        "stg__second_hop",
+        "stg__third_hop",
+    }
 
 
 def test_unknown_raw_table_selects_nothing() -> None:

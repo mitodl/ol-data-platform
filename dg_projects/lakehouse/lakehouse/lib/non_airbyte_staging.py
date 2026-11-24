@@ -14,6 +14,11 @@ selection is derived from it rather than listed. A unit that flips to
 ``loader: dlt`` is picked up here in the same change, as long as dbt declares a
 source for its raw table. A table with no source (keycloak today)
 selects nothing, and nothing reports that.
+
+A staging model that reads another of these staging models rather than the raw
+table has no path either, so it is selected too. The Open edX document and
+transcript models moved onto stg__openedx__s3__course_text_snapshots in #3429
+and were not rebuilt again until this covered them.
 """
 
 from collections.abc import Iterable, Mapping
@@ -43,25 +48,38 @@ def non_airbyte_raw_tables(units: Iterable[Unit]) -> set[str]:
 def staging_models_reading(
     manifest: Mapping[str, Any], raw_tables: set[str]
 ) -> set[str]:
-    """Return the staging models that read directly from any of ``raw_tables``.
+    """Return the staging models fed by any of ``raw_tables``.
 
-    Staging is identified by ``config.schema``, the same field the dbt
-    translator turns into the Dagster group name.
+    A model is fed by a table when it reads it directly or reads another staging
+    model that is. Staging is identified by ``config.schema``, the same field the
+    dbt translator turns into the Dagster group name.
 
     :param manifest: A parsed dbt ``manifest.json``.
     :param raw_tables: dbt source table names to match.
-    :returns: Names of the staging models with one of those sources as a parent.
+    :returns: Names of the staging models with one of those sources upstream
+        through staging models only.
     :rtype: set[str]
     """
-    source_ids = {
+    staging = {
+        unique_id: node
+        for unique_id, node in manifest["nodes"].items()
+        if node["resource_type"] == "model"
+        and node["config"].get("schema") == STAGING_SCHEMA
+    }
+    fed_by = {
         unique_id
         for unique_id, source in manifest["sources"].items()
         if source["name"] in raw_tables
     }
-    return {
-        node["name"]
-        for node in manifest["nodes"].values()
-        if node["resource_type"] == "model"
-        and node["config"].get("schema") == STAGING_SCHEMA
-        and source_ids.intersection(node["depends_on"]["nodes"])
-    }
+    selected: set[str] = set()
+    while True:
+        reached = {
+            unique_id
+            for unique_id, node in staging.items()
+            if unique_id not in selected
+            and fed_by.intersection(node["depends_on"]["nodes"])
+        }
+        if not reached:
+            return {staging[unique_id]["name"] for unique_id in selected}
+        selected |= reached
+        fed_by |= reached
