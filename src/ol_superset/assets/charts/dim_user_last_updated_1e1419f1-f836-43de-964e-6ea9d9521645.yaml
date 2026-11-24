@@ -1,7 +1,7 @@
 cache_timeout: -1
 certification_details: null
 certified_by: null
-dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d  # tables
+dataset_uuid: 4d57e4d7-e292-4c7f-8963-a85f62085c72  # data_freshness
 description: null
 params:
   adhoc_filters:
@@ -14,7 +14,7 @@ params:
     isNew: false
     operator: TEMPORAL_RANGE
     sqlExpression: null
-    subject: created_on
+    subject: last_built_at
   - clause: WHERE
     comparator:
     - dim_user
@@ -27,22 +27,10 @@ params:
     operatorId: IN
     sqlExpression: null
     subject: table_name
-  - clause: WHERE
-    comparator:
-    - Trino
-    datasourceWarning: false
-    expressionType: SIMPLE
-    filterOptionName: filter_database_name_trino
-    isExtra: false
-    isNew: false
-    operator: IN
-    operatorId: IN
-    sqlExpression: null
-    subject: database_name
   all_columns:
   - expressionType: SQL
     label: last_updated_on in UTC
-    sqlExpression: changed_on
+    sqlExpression: last_built_at
   allow_render_html: true
   annotation_layers: []
   color_pn: true
@@ -56,8 +44,7 @@ params:
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup:
-    changed_on: true
-    created_on: true
+    last_built_at: true
   viz_type: table
 slice_name: dim_user last updated
 uuid: 1e1419f1-f836-43de-964e-6ea9d9521645
