@@ -500,15 +500,19 @@ ocw_content_ingest_schedule = dg.ScheduleDefinition(
 # Canvas course files and text for MIT Learn's ContentFiles. The 00:00 export of
 # every course has landed by now, and the lakehouse's non_airbyte_staging_daily
 # follows at 06:00. A course that did not change costs its zip directory and
-# its pages and assignment settings, read to find what is published. Stopped
-# everywhere: the first load sends every published file through production Tika,
-# so it is started by hand.
+# its pages and assignment settings, read to find what is published. RUNNING by
+# default in production only, like the Canvas exports it reads. The first load,
+# which sent every published file through Tika, ran by hand on 2026-11-09.
 canvas_content_ingest_schedule = dg.ScheduleDefinition(
     name="canvas_content_ingest_daily_schedule",
     target=dg.AssetSelection.keys(["ol_warehouse_raw_data", canvas_content.RAW_TABLE]),
     cron_schedule="5 5 * * *",
     execution_timezone="Etc/UTC",
-    default_status=dg.DefaultScheduleStatus.STOPPED,
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
 )
 
 defs = dg.Definitions(
@@ -526,19 +530,22 @@ defs = dg.Definitions(
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         *qa_first_app_database_schedules,
-        # posthog/s3 is `qa: omit` and edxorg/program_reports is `qa: mirror`,
-        # and both read production's landing zone, which QA cannot list.
-        # Leaving them out of QA, rather than relying on their STOPPED
-        # default, stops a tick someone started by hand: the PostHog one
-        # failed every hour.
+        # posthog/s3 and canvas/s3 are `qa: omit` and edxorg/program_reports
+        # is `qa: mirror`, and all three read production's landing zone, which
+        # QA cannot list. Leaving them out of QA, rather than relying on their
+        # STOPPED default, stops a tick someone started by hand: the PostHog
+        # one failed every hour.
         *(
-            [posthog_events_ingest_schedule, edxorg_program_reports_ingest_schedule]
+            [
+                posthog_events_ingest_schedule,
+                edxorg_program_reports_ingest_schedule,
+                canvas_content_ingest_schedule,
+            ]
             if DAGSTER_ENV != "qa"
             else []
         ),
         course_xml_blocks_ingest_schedule,
         *tracking_logs_ingest_schedules.values(),
         ocw_content_ingest_schedule,
-        canvas_content_ingest_schedule,
     ],
 )
