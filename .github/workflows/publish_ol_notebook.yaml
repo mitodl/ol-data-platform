@@ -1,0 +1,88 @@
+---
+# Publishes packages/ol-notebook to PyPI when its version changes. Notebooks
+# name `ol-notebook` in their /// script header, and one that declares its own
+# package index skips the images' bundled wheel and resolves the name from
+# that index, which can include PyPI. Owning the name there means that still
+# lands on this package, in a kernel that holds viewers' tokens. The images
+# keep shipping the wheel from their own commit, so they don't wait on a
+# release.
+name: Publish ol-notebook to PyPI
+
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - packages/ol-notebook/pyproject.toml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # PyPI's trusted publisher for ol-notebook names this workflow file and
+    # environment, so renaming either breaks publishing.
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/ol-notebook
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        # The tag push at the end needs the token.
+        persist-credentials: true
+
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        version: "0.13.8"
+
+    - name: Read version from pyproject.toml
+      id: version
+      run: |
+        version="$(uv run --no-project python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+        echo "tag=ol-notebook-v$version" >> "$GITHUB_OUTPUT"
+
+    - name: Check for a new version
+      id: check
+      # A dependency edit touches pyproject.toml without a version bump.
+      env:
+        TAG: ${{ steps.version.outputs.tag }}
+      run: |
+        if git rev-parse "$TAG" >/dev/null 2>&1; then
+          echo "$TAG already exists, nothing to publish."
+          echo "new=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "new=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run tests
+      if: steps.check.outputs.new == 'true'
+      run: uv run --frozen --package ol-notebook pytest ol_notebook_tests
+
+    - name: Build
+      if: steps.check.outputs.new == 'true'
+      # From a workspace member, uv build writes to the workspace root's dist/
+      # unless told otherwise.
+      run: uv build --package ol-notebook -o dist
+
+    - name: Publish to PyPI
+      if: steps.check.outputs.new == 'true'
+      uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+      with:
+        packages-dir: packages/ol-notebook/dist
+
+    - name: Tag the release
+      # After the publish, so a tag means the version is on PyPI.
+      if: steps.check.outputs.new == 'true'
+      env:
+        TAG: ${{ steps.version.outputs.tag }}
+      run: |
+        git tag "$TAG"
+        git push origin "$TAG"

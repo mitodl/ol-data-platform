@@ -7,10 +7,12 @@ on:
     - main
     paths:
     - images/marimo-jupyterlab/**
+    - packages/ol-notebook/**
     - .github/workflows/build_marimo_jupyterlab.yaml
   pull_request:
     paths:
     - images/marimo-jupyterlab/**
+    - packages/ol-notebook/**
     - .github/workflows/build_marimo_jupyterlab.yaml
   workflow_dispatch:
 
@@ -52,9 +54,11 @@ jobs:
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: images/marimo-jupyterlab
+        build-contexts: |
+          ol-notebook=packages/ol-notebook
         platforms: linux/amd64
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha,scope=marimo-jupyterlab
+        cache-to: type=gha,mode=max,scope=marimo-jupyterlab

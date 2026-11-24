@@ -1,0 +1,5 @@
+# marimo-operator runs `marimo run --sandbox` with this marimo, which then
+# builds the notebook's own environment from its /// script header. Keep the
+# version equal to images/marimo-jupyterlab/requirements.txt so a notebook runs
+# the same way published as it does in JupyterHub.
+marimo==0.25.2
