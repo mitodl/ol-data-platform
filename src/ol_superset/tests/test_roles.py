@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
 
-from ol_superset.lib.role_management import compute_desired_dataset_ids
+import pytest
+
+from ol_superset.lib.role_management import (
+    compute_desired_dataset_ids,
+    load_governance_roles,
+    parse_allowed_datasets,
+    role_dataset_access_is_managed,
+    uncovered_dataset_schemas,
+    unmatched_allowed_datasets,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for compute_desired_dataset_ids
@@ -33,7 +44,9 @@ API_DATASETS = [
 
 
 def test_compute_desired_dataset_ids_single_schema():
-    ids = compute_desired_dataset_ids(["ol_warehouse_production_mart"], API_DATASETS)
+    ids = compute_desired_dataset_ids(
+        ["ol_warehouse_production_mart"], API_DATASETS, []
+    )
     assert ids == {1, 2}
 
 
@@ -41,6 +54,7 @@ def test_compute_desired_dataset_ids_multiple_schemas():
     ids = compute_desired_dataset_ids(
         ["ol_warehouse_production_mart", "ol_warehouse_production_raw"],
         API_DATASETS,
+        [],
     )
     assert ids == {1, 2, 4}
 
@@ -54,12 +68,127 @@ def test_compute_desired_dataset_ids_all_schemas():
         "ol_warehouse_production_reporting",
         "public",
     ]
-    ids = compute_desired_dataset_ids(all_schemas, API_DATASETS)
+    ids = compute_desired_dataset_ids(all_schemas, API_DATASETS, [])
     assert ids == {1, 2, 3, 4, 5}
 
 
 def test_compute_desired_dataset_ids_empty_schemas():
-    assert compute_desired_dataset_ids([], API_DATASETS) == set()
+    assert compute_desired_dataset_ids([], API_DATASETS, []) == set()
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_only():
+    ids = compute_desired_dataset_ids(
+        [],
+        API_DATASETS,
+        ["ol_warehouse_production_mart.marts__other_table"],
+    )
+    assert ids == {2}
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_match_every_database():
+    api_datasets = [
+        *API_DATASETS,
+        # The StarRocks twin of dataset 2: same schema and table, its own id.
+        {
+            "id": 6,
+            "table_name": "marts__other_table",
+            "schema": "ol_warehouse_production_mart",
+        },
+    ]
+    ids = compute_desired_dataset_ids(
+        ["public"],
+        api_datasets,
+        ["ol_warehouse_production_mart.marts__other_table"],
+    )
+    assert ids == {2, 5, 6}
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_need_schema_match():
+    ids = compute_desired_dataset_ids(
+        [], API_DATASETS, ["ol_warehouse_production_reporting.marts__other_table"]
+    )
+    assert ids == set()
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "marts__other_table",
+        ".marts__other_table",
+        "ol_warehouse_production_mart.",
+        "a.b.c",
+    ],
+)
+def test_parse_allowed_datasets_rejects_malformed(entry: str):
+    with pytest.raises(ValueError, match="is not '<schema>.<table_name>'"):
+        parse_allowed_datasets([entry])
+
+
+def test_unmatched_allowed_datasets():
+    assert unmatched_allowed_datasets(
+        [
+            "ol_warehouse_production_mart.marts__other_table",
+            "ol_warehouse_production_mart.missing_table",
+        ],
+        API_DATASETS,
+    ) == ["ol_warehouse_production_mart.missing_table"]
+
+
+@pytest.mark.parametrize(
+    "allowed_datasets",
+    [
+        {"ol_warehouse_production_mart.marts__other_table": False},
+        "ol_warehouse_production_mart.marts__other_table",
+        [["ol_warehouse_production_mart", "marts__other_table"]],
+    ],
+)
+def test_parse_allowed_datasets_rejects_non_string_lists(allowed_datasets: Any):
+    with pytest.raises(ValueError, match="must be a list of"):
+        parse_allowed_datasets(allowed_datasets)
+
+
+@pytest.mark.parametrize(
+    ("role", "managed"),
+    [
+        ({"allowed_schemas": ["ol_warehouse_production_mart"]}, True),
+        ({"allowed_schemas": [], "allowed_datasets": ["a.b"]}, True),
+        # An emptied allow-list still syncs, so its old grants are revoked.
+        ({"allowed_schemas": [], "allowed_datasets": []}, True),
+        ({"allowed_datasets": []}, True),
+        ({"allowed_schemas": []}, False),
+        ({}, False),
+    ],
+)
+def test_role_dataset_access_is_managed(role: dict[str, object], managed: bool):
+    assert role_dataset_access_is_managed(role) is managed
+
+
+def test_emptied_allowed_datasets_revokes_everything():
+    assert compute_desired_dataset_ids([], API_DATASETS, []) == set()
+
+
+def test_uncovered_dataset_schemas_counts_single_table_grants():
+    roles: list[dict[str, object]] = [
+        {"name": "a", "allowed_schemas": ["ol_warehouse_production_dimensional"]},
+        {
+            "name": "b",
+            "allowed_datasets": ["ol_warehouse_production_mart.marts__other_table"],
+        },
+    ]
+    assert uncovered_dataset_schemas(roles, API_DATASETS) == {
+        "ol_warehouse_production_mart": 1,
+        "ol_warehouse_production_raw": 1,
+        "public": 1,
+    }
+
+
+def test_load_governance_roles_refuses_a_malformed_policy(tmp_path: Path, capsys):
+    policy = tmp_path / "ol_governance_roles.json"
+    policy.write_text(
+        json.dumps([{"name": "r", "allowed_datasets": ["no_schema_separator"]}])
+    )
+    assert load_governance_roles(policy) == []
+    assert "is not '<schema>.<table_name>'" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +308,7 @@ class TestRoleSyncSkipLogic:
         # includes mart and dimensional schemas
         allowed_schemas = cast(list[str], gov_role["allowed_schemas"])
 
-        desired = compute_desired_dataset_ids(allowed_schemas, api_datasets)
+        desired = compute_desired_dataset_ids(allowed_schemas, api_datasets, [])
         assert 1 in desired, "Dataset in allowed schema must be in desired set"
         assert 2 in desired, "Dataset in allowed schema must be in desired set"
 

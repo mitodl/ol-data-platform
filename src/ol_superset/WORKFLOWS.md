@@ -383,15 +383,21 @@ ol-superset sync superset-production superset-qa
 
 ### Grant Dataset Access to Governance Roles
 
-The `ol_data_analyst`, `ol_instructor`, `ol_business_analyst`, and `ol_researcher` roles do not have
+The `ol_data_analyst`, `ol_instructor`, `ol_business_analyst`, `ol_researcher`, and `ol_commerce_operations` roles do not have
 `all_datasource_access`. They rely on per-dataset `datasource access on [table]` permissions, which
-are derived from each role's `allowed_schemas` in
+are derived from each role's `allowed_schemas` and `allowed_datasets` in
 `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`.
+
+`allowed_schemas` grants every dataset in a schema. `allowed_datasets` grants single tables, written
+`<schema>.<table_name>` (e.g. `ol_warehouse_production_mart.marts__combined__orders`), and matches
+that table's dataset on every database, Trino and StarRocks alike. Use it for a role that may read a
+few tables in a schema but not the rest of it: a schema-wide grant on the mart layer also hands over
+every learner-level mart table.
 
 Run this after any of the following events:
 - A new Trino or StarRocks dataset is added to the YAML assets
 - A dataset is moved to a different schema
-- A new governance role is added or `allowed_schemas` is updated
+- A new governance role is added or `allowed_schemas` / `allowed_datasets` is updated
 
 ```bash
 # Preview which permissions would be added/revoked (no changes applied)
@@ -426,7 +432,7 @@ ol-superset apply-rls superset-production
 ### Deploy Updated Governance Role Definitions
 
 When `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`
-changes (e.g., new permissions, `allowed_schemas` additions), the Pulumi stack must be redeployed
+changes (e.g., new permissions, `allowed_schemas` or `allowed_datasets` changes), the Pulumi stack must be redeployed
 so that `flask fab import-roles` picks up the new definitions:
 
 ```bash
