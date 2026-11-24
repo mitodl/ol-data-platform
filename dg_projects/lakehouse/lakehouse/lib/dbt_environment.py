@@ -360,15 +360,9 @@ DATA_LAKE_ENV = resolve_for_environment(
 # `<source>.<table>`. The b2b job and the MV refresh leave out the views that
 # read one, so the rest still build there; with the whole set, the base-table
 # check would fail every run.
-#
-# QA does not build bridge_user_contract: its snapshot fails on dbt-starrocks
-# 1.12.2, whose snapshot_check_all_get_existing_columns takes two arguments
-# where dbt-core 1.12 passes three. That leaves out mv_b2b_learner,
-# mv_b2b_learner_enrollment and mv_b2b_contract_member_enrollment until QA's
-# daily job builds it.
 STARROCKS_ABSENT_SOURCES_MAP: Mapping[str, frozenset[str]] = {
     "local": frozenset(),
-    "qa": frozenset({"dimensional.bridge_user_contract"}),
+    "qa": frozenset(),
     "production": frozenset(),
 }
 try:

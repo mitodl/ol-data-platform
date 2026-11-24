@@ -311,8 +311,12 @@ models:
       - user_fk
       - contract_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql
