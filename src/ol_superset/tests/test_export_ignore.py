@@ -141,9 +141,9 @@ def test_checked_in_patterns_match_renamed_mmfin_assets(tmp_path: Path) -> None:
         base / "charts" / "MMFin_1x_Course_Enrollments_c1.yaml",
         _chart("c1", "[MMFin] 1x Course Enrollments (Lifetime Cumulative)"),
     )
-    # Not on a dashboard, no brackets in the title.
+    # Not on a dashboard, no brackets in the title, and only the title says MMFin.
     _write_yaml(
-        base / "charts" / "MMFin_Enrollment_Raw_Data_c2.yaml",
+        base / "charts" / "Enrollment_Raw_Data_c2.yaml",
         _chart("c2", "MMFin Enrollment Raw Data"),
     )
     _write_yaml(
@@ -158,7 +158,7 @@ def test_checked_in_patterns_match_renamed_mmfin_assets(tmp_path: Path) -> None:
     }
     assert {p.name for p in report.removed_charts} == {
         "MMFin_1x_Course_Enrollments_c1.yaml",
-        "MMFin_Enrollment_Raw_Data_c2.yaml",
+        "Enrollment_Raw_Data_c2.yaml",
     }
 
 
