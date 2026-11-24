@@ -186,8 +186,6 @@ WORKDIR /app
 # dbt ls never opens a connection, so like the parse steps above it needs only
 # values for profiles.yml's env_var() calls, not a real Trino login.
 RUN cd /opt/dbt && \
-    DBT_TRINO_USERNAME=build \
-    DBT_TRINO_PASSWORD=build \
     /app/.venv/bin/dbt deps --project-dir /opt/dbt && \
     DBT_TRINO_USERNAME=build \
     DBT_TRINO_PASSWORD=build \
