@@ -1990,6 +1990,123 @@ models:
       arguments:
         column_list: ["order_id", "line_id", "platform"]
 
+- name: order_revenue_report
+  description: Order lines with the product, the order date, prices, discounts, tax
+    and payment method, and nothing that identifies the learner or payer. orders_with_product_report
+    has those columns, for the people who look up a specific order. Use this one for
+    revenue reporting. It has no order, coupon or row key and no time finer than a
+    day, since the enrollment reports put those keys next to learner emails. Filter
+    order_state to fulfilled (and refunded states as needed) before summing amounts,
+    because failed and abandoned orders carry test amounts (one failed 2018 Bootcamps
+    order is 4.4e15). edX.org and Bootcamps orders have no product, so filter them
+    by courserun_readable_id.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  tests:
+  - dbt_utils.equal_rowcount:
+      arguments:
+        compare_model: ref('marts__combined__orders')
+      # Stands in for a unique key, so one extra row from a join has to fail.
+      config:
+        error_if: ">0"
+  columns:
+  - name: platform
+    description: str, platform the order was placed on, e.g. MITx Online, xPro, edX.org,
+      Bootcamps.
+    tests:
+    - not_null
+  - name: order_state
+    description: str, order state, e.g. fulfilled, refunded, partially_refunded, failed,
+      pending.
+    tests:
+    - not_null
+  - name: order_type
+    description: str, type of order, e.g. B2B, B2C, staff, Boeing. xPro only; null
+      on other platforms.
+  - name: order_created_date
+    description: date, the date part of the order's creation timestamp. For a B2B
+      order, when the B2B order was created.
+    tests:
+    - not_null
+  - name: order_payment_processor
+    description: str, payment processor used for the order. MITx Online only.
+  - name: product_id
+    description: int, product ID in the platform's database. Null for Bootcamps and
+      edX.org.
+  - name: product_readable_id
+    description: str, the course run, program run or program readable ID the product
+      sells. Null for Bootcamps and edX.org.
+  - name: product_type
+    description: str, course run or program. Null for Bootcamps and edX.org.
+  - name: product_name
+    description: str, title of the course run or program run, or for a program product
+      that marts__combined__products lacks, the program title from dim_program. Null
+      for Bootcamps and edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "product_readable_id is not null"
+  - name: courserun_readable_id
+    description: str, readable ID of the course run the order line is for.
+  - name: unit_price
+    description: numeric, list price at purchase for the order line, before discount.
+      For edX.org and migrated MicroMasters orders under MITx Online it is the price
+      after any coupon, as MicroMasters records no list price.
+  - name: discount
+    description: str, discount in a readable format, e.g. "$100" or "30%". A MITx
+      Online fixed-price discount is a bare number worked out from the product's price
+      today, so it can disagree with discount_amount when the price changed after
+      purchase.
+  - name: discount_amount
+    description: numeric, dollar amount off the order line, unit_price minus what
+      the line was charged. For xPro, unit_price minus line_price_paid. Null for Bootcamps,
+      edX.org and migrated MicroMasters orders under MITx Online.
+  - name: order_line_count
+    description: int, number of lines in the order this line belongs to. The line_
+      amounts are the order's amounts divided by it.
+  - name: line_price_paid
+    description: numeric, the line's even share of what the order paid, before tax.
+      Summing it over lines gives the orders' totals.
+  - name: line_tax_amount
+    description: numeric, the line's even share of the order's tax. xPro only.
+  - name: line_price_paid_plus_tax
+    description: numeric, the line's even share of what the order paid including tax.
+      Equal to line_price_paid outside xPro.
+  - name: line_payment_amount
+    description: numeric, the line's even share of the amount charged, req_amount
+      from the CyberSource payment.
+  - name: order_tax_rate
+    description: numeric, tax rate applied. xPro only.
+  - name: order_tax_rate_name
+    description: str, name of the tax rate applied. xPro only.
+  - name: order_tax_country_code
+    description: str, country code the tax was applied for. xPro only.
+  - name: coupon_name
+    description: str, name of the coupon payment the redeemed coupon belongs to. xPro
+      only.
+  - name: coupon_type
+    description: str, type of the coupon, which says when it can be redeemed.
+  - name: b2border_contract_number
+    description: str, B2B contract number for the order. xPro only.
+  - name: receipt_payment_currency
+    description: str, currency of the payment, e.g. USD.
+  - name: receipt_payment_method
+    description: str, payment method, e.g. card or paypal.
+  - name: receipt_payment_card_type
+    description: str, card type name, e.g. Visa.
+  - name: receipt_payment_transaction_type
+    description: str, CyberSource transaction type, e.g. sale.
+  - name: receipt_bill_to_address_country
+    description: str, bill-to country of the payment.
+  - name: receipt_bill_to_address_state
+    description: str, bill-to state of the payment.
+
 - name: feedback_conversation_report
   config:
     meta:

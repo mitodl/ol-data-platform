@@ -1,0 +1,43 @@
+---
+unit_tests:
+- name: test_order_revenue_report_splits_order_amounts_across_lines
+  description: >
+    The mart repeats the whole order's paid, tax and payment amounts on each line,
+    so each line takes an even share and the shares add up to the order. xPro's
+    discount is worked out again from the share, since the mart's is the line
+    price minus the whole order's total.
+  model: order_revenue_report
+  given:
+  - input: ref('marts__combined__orders')
+    rows:
+    - {platform: xPro, order_id: 1, line_id: 1, order_state: fulfilled, order_created_on: '2026-01-02T03:04:05Z',
+      product_readable_id: 'course-v1:xPRO+A+R1', product_type: course run, unit_price: 1000.00,
+      discount_amount: -500.00, order_total_price_paid: 1500.00, order_tax_amount: 150.00,
+      order_total_price_paid_plus_tax: 1650.00, receipt_payment_amount: 1650.00}
+    - {platform: xPro, order_id: 1, line_id: 2, order_state: fulfilled, order_created_on: '2026-01-02T03:04:05Z',
+      product_readable_id: 'course-v1:xPRO+A+R1', product_type: course run, unit_price: 1000.00,
+      discount_amount: -500.00, order_total_price_paid: 1500.00, order_tax_amount: 150.00,
+      order_total_price_paid_plus_tax: 1650.00, receipt_payment_amount: 1650.00}
+    - {platform: MITx Online, order_id: 1, line_id: 1, order_state: fulfilled, order_created_on: '2026-01-03T00:00:00Z',
+      product_readable_id: 'course-v1:MITxT+B+1T2026', product_type: course run, unit_price: 100.00,
+      discount_amount: 20.00, order_total_price_paid: 80.00, order_tax_amount: null,
+      order_total_price_paid_plus_tax: 80.00, receipt_payment_amount: 80.00}
+  - input: ref('marts__combined__products')
+    rows:
+    - {platform: xPro, product_readable_id: 'course-v1:xPRO+A+R1', product_name: Course
+        A}
+  - input: ref('dim_program')
+    rows:
+    - {platform_code: mitxpro, program_readable_id: 'program-v1:xPRO+P', program_title: Program
+        P}
+  expect:
+    rows:
+    - {platform: xPro, order_created_date: '2026-01-02', product_name: Course A, order_line_count: 2,
+      line_price_paid: 750.00, line_tax_amount: 75.00, line_price_paid_plus_tax: 825.00,
+      line_payment_amount: 825.00, discount_amount: 250.00}
+    - {platform: xPro, order_created_date: '2026-01-02', product_name: Course A, order_line_count: 2,
+      line_price_paid: 750.00, line_tax_amount: 75.00, line_price_paid_plus_tax: 825.00,
+      line_payment_amount: 825.00, discount_amount: 250.00}
+    - {platform: MITx Online, order_created_date: '2026-01-03', product_name: null,
+      order_line_count: 1, line_price_paid: 80.00, line_tax_amount: null, line_price_paid_plus_tax: 80.00,
+      line_payment_amount: 80.00, discount_amount: 20.00}
