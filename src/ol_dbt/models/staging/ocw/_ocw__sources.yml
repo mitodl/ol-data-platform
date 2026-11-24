@@ -7,6 +7,34 @@ sources:
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
+  - name: raw__ocw__studio__postgres__external_resources_externalresourcestate
+    description: The link checker's state for each external resource. OCW Studio updates
+      it on every check, including one that fails before getting a response, which
+      it does not record in the resource's metadata.
+    columns:
+    - name: id
+      description: int, primary key
+    - name: content_id
+      description: int, foreign key to websites_websitecontent, the external resource
+        checked
+    - name: status
+      description: str, result of the last check. valid, broken, unchecked (the site
+        answered 401, 402, 403, 408, 429 or 503), or check_failed (the request raised
+        before getting a response)
+    - name: external_url_response_code
+      description: int, HTTP status code from the external URL. A failed check leaves
+        the previous value.
+    - name: last_checked
+      description: timestamp, when the link was last checked
+    - name: wayback_url
+      description: str, Wayback Machine archive of the external URL
+    - name: wayback_status
+      description: str, status of the last Wayback Machine submission
+    - name: created_on
+      description: timestamp, when the state row was created
+    - name: updated_on
+      description: timestamp, when the state row was last updated
+
   - name: raw__ocw__studio__postgres__gdrive_sync_drivefile
     columns:
     - name: file_id

@@ -128,7 +128,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: gdrive_sync_driveapiquerytracker
   raw_table: raw__ocw__studio__postgres__gdrive_sync_driveapiquerytracker
   sync_mode: incremental_deduped_history

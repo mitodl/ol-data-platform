@@ -2,6 +2,39 @@
 version: 2
 
 models:
+- name: stg__ocw__studio__postgres__external_resources_externalresourcestate
+  description: The link checker's state for each OCW external resource, one row per
+    resource. Unlike the resource's metadata, it records a check that failed before
+    getting a response.
+  columns:
+  - name: externalresourcestate_id
+    description: int, primary key
+    tests:
+    - not_null
+    - unique
+  - name: websitecontent_id
+    description: int, the external resource checked (websites_websitecontent.id)
+    tests:
+    - not_null
+    - unique
+  - name: externalresourcestate_status
+    description: str, result of the last check. valid, broken, unchecked (the site
+      answered 401, 402, 403, 408, 429 or 503), or check_failed (the request raised
+      before getting a response, e.g. DNS, connection or TLS errors or a timeout)
+    tests:
+    - accepted_values:
+        arguments:
+          values: ["valid", "broken", "unchecked", "check_failed"]
+  - name: externalresourcestate_url_response_code
+    description: int, HTTP status code from the external URL on the last check that
+      got a response. A failed check leaves the previous value.
+  - name: externalresourcestate_wayback_url
+    description: str, Wayback Machine archive of the external URL
+  - name: externalresourcestate_last_checked_on
+    description: timestamp, when the link was last checked
+  - name: externalresourcestate_updated_on
+    description: timestamp, when the state row was last updated
+
 - name: stg__ocw__studio__postgres__gdrive_sync_drivefile
   description: Google Drive files synced to OCW Studio.
   columns:

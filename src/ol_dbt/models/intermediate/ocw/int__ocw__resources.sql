@@ -25,6 +25,10 @@ with websites as (
     select * from {{ ref('stg__ocw__studio__postgres__websites_websitestarter') }}
 )
 
+, externalresourcestates as (
+    select * from {{ ref('stg__ocw__studio__postgres__external_resources_externalresourcestate') }}
+)
+
 , sitemetadata as (
     select
         website_uuid
@@ -162,6 +166,9 @@ select
     , nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.wayback_url'") }}, ''
     ), 'null') as external_resource_wayback_url
+    , externalresourcestates.externalresourcestate_status as external_resource_check_status
+    , externalresourcestates.externalresourcestate_last_checked_on as external_resource_last_checked_on
+    , websitecontents.websitecontent_deleted_on as resource_deleted_on
     , nullif(nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.audience'") }}, ''
     ), 'null'), '[]') as resource_audience
@@ -176,6 +183,8 @@ left join drivefiles
     and drivefiles.drivefile_rank = 1
 left join sitemetadata
     on websites.website_uuid = sitemetadata.website_uuid
+left join externalresourcestates
+    on websitecontents.websitecontent_id = externalresourcestates.websitecontent_id
 inner join websitestarters
     on websites.websitestarter_id = websitestarters.websitestarter_id
 where

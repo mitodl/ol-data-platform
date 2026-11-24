@@ -1,6 +1,14 @@
 with resources as (
-    select * from {{ ref('dim_ocw_resource') }}
-    where content_type = 'external-resource'
+    select
+        *
+        -- The checker's state records a check that failed before a response; metadata keeps the
+        -- last good status then, so the state wins and metadata only fills in when there is none.
+        , coalesce(external_resource_check_status, external_resource_status, 'not_checked') as link_status
+        , coalesce(trim(external_resource_url), '') = '' as is_url_missing
+    from {{ ref('dim_ocw_resource') }}
+    where
+        content_type = 'external-resource'
+        and resource_deleted_on is null
 )
 
 , courses as (
@@ -24,14 +32,15 @@ select
     , resources.external_resource_url
     , resources.external_resource_url_status_code
     , resources.external_resource_wayback_url
-    -- ocw-studio's link checker sets status; resources it has never checked have none.
-    , coalesce(resources.external_resource_status, 'not_checked') as link_status
-    , coalesce(resources.external_resource_status = 'broken', false) as is_link_broken
+    , resources.external_resource_last_checked_on
+    , resources.link_status
+    , resources.link_status = 'broken' as is_link_broken
+    , resources.is_url_missing
     , coalesce(resources.external_resource_license_warning, false) as has_license_warning
-    , coalesce(
-        resources.external_resource_status in ('broken', 'check_failed')
-        or resources.external_resource_license_warning
-        , false
+    , (
+        resources.link_status in ('broken', 'check_failed')
+        or resources.is_url_missing
+        or coalesce(resources.external_resource_license_warning, false)
     ) as needs_review
 from resources
 left join courses

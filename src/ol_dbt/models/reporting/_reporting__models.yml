@@ -2337,14 +2337,14 @@ models:
 
 - name: ocw_external_resource_link_report
   description: >
-    One row per OCW external resource (a link to a page outside OCW), with the result
-    of ocw-studio's link checker and its license warning, and the Studio URL where
-    the
-    resource is edited. For the OCW content team to find broken links and license
-    warnings and fix them. Every external resource is included, not only the problem
-    ones, so a dashboard can show the share of links that are healthy and filter to
-    needs_review. Unchecked links are mostly sites that block the checker (HTTP 403
-    or 429), so they are kept apart from broken ones.
+    One row per OCW external resource (a link to a page outside OCW) that is not
+    soft-deleted in OCW Studio, with the result of ocw-studio's link checker, its
+    license warning, and the Studio URL where the resource is edited. For the OCW
+    content team to find broken links and license warnings and fix them. Healthy
+    links are kept too, so a dashboard can show the share of links that are healthy
+    and filter to needs_review. Unchecked links are kept apart from broken ones:
+    ocw-studio marks a link unchecked when the site answers 401, 402, 403, 408, 429
+    or 503, i.e. it may have refused the checker rather than be gone.
   columns:
   - name: course_uuid
     description: str, UUID of the OCW course site containing the resource
@@ -2386,15 +2386,23 @@ models:
   - name: external_resource_url
     description: str, the URL outside OCW that the resource links to
   - name: external_resource_url_status_code
-    description: str, HTTP status code the link checker last got from the URL. Null
-      when it has not checked the URL or the check failed.
+    description: str, HTTP status code from the last check that got a response. A
+      check that fails before a response (link_status check_failed) leaves the previous
+      code, so it can show 200 on a dead link. Null when no check has got a response.
   - name: external_resource_wayback_url
     description: str, Wayback Machine archive of the URL, when ocw-studio has one.
       A candidate replacement for a broken link.
+  - name: external_resource_last_checked_on
+    description: timestamp, when the link checker last checked the URL
   - name: link_status
-    description: str, ocw-studio's link checker status. valid, broken, unchecked (the
-      site refused the checker, e.g. HTTP 403 or 429, so the link may be fine), check_failed,
-      or not_checked when the checker has never run on the resource.
+    description: >
+      str, the link checker's result. The checker's ExternalResourceState wins; the
+      status in the resource's metadata is used only when the resource has no state
+      row, because a check that fails before getting a response (DNS, connection or
+      TLS errors, a timeout) is recorded in the state and not in the metadata, which
+      keeps its last status. valid, broken, unchecked (the site answered 401, 402,
+      403, 408, 429 or 503, so the link may be fine), check_failed, or not_checked
+      when neither has a status.
     tests:
     - not_null
     - accepted_values:
@@ -2404,14 +2412,18 @@ models:
     description: boolean, true when link_status is broken
     tests:
     - not_null
+  - name: is_url_missing
+    description: boolean, true when the resource has no external URL (null or blank)
+    tests:
+    - not_null
   - name: has_license_warning
     description: boolean, true when ocw-studio flagged the external site's license
       as needing a warning to learners
     tests:
     - not_null
   - name: needs_review
-    description: boolean, true when the link is broken, the check failed, or the resource
-      has a license warning
+    description: boolean, true when the link is broken, the check failed, the URL
+      is missing, or the resource has a license warning
     tests:
     - not_null
   tests:

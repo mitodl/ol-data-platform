@@ -2,46 +2,74 @@
 unit_tests:
 - name: test_ocw_external_resource_link_report_flags
   description: >
-    Only external resources are reported. A resource the checker never ran on has
-    no status and reports not_checked. Broken and check_failed links need review,
-    unchecked ones do not, and a license warning needs review whatever the link
-    status. A missing license warning counts as none.
+    The checker's state wins over the metadata status, because a check that fails
+    before a response is recorded only in the state: a resource whose metadata still
+    says valid but whose state says check_failed needs review. The metadata status
+    fills in only when there is no state row, and not_checked when neither has one.
+    Broken links, failed checks, a missing or blank URL and a license warning need
+    review; unchecked links do not. Soft-deleted resources and resources that are
+    not
+    external are left out.
   model: ocw_external_resource_link_report
   given:
   - input: ref('dim_ocw_resource')
     rows:
     - {course_uuid: c1, course_name: course-one, resource_uuid: r-valid, content_type: external-resource,
-      studio_url: s1, external_resource_status: valid, external_resource_license_warning: false}
+      studio_url: s1, external_resource_url: 'https://a.example', external_resource_check_status: valid,
+      external_resource_status: valid, external_resource_license_warning: false, resource_deleted_on: null}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-state-failed, content_type: external-resource,
+      studio_url: s2, external_resource_url: 'https://gone.example', external_resource_check_status: check_failed,
+      external_resource_status: valid, external_resource_license_warning: false, resource_deleted_on: null}
     - {course_uuid: c1, course_name: course-one, resource_uuid: r-broken, content_type: external-resource,
-      studio_url: s2, external_resource_status: broken, external_resource_license_warning: false}
-    - {course_uuid: c1, course_name: course-one, resource_uuid: r-failed, content_type: external-resource,
-      studio_url: s3, external_resource_status: check_failed, external_resource_license_warning: false}
+      studio_url: s3, external_resource_url: 'https://b.example', external_resource_check_status: broken,
+      external_resource_status: broken, external_resource_license_warning: false,
+      resource_deleted_on: null}
     - {course_uuid: c1, course_name: course-one, resource_uuid: r-unchecked, content_type: external-resource,
-      studio_url: s4, external_resource_status: unchecked, external_resource_license_warning: false}
+      studio_url: s4, external_resource_url: 'https://c.example', external_resource_check_status: unchecked,
+      external_resource_status: unchecked, external_resource_license_warning: false,
+      resource_deleted_on: null}
     - {course_uuid: c1, course_name: course-one, resource_uuid: r-license, content_type: external-resource,
-      studio_url: s5, external_resource_status: valid, external_resource_license_warning: true}
+      studio_url: s5, external_resource_url: 'https://d.example', external_resource_check_status: valid,
+      external_resource_status: valid, external_resource_license_warning: true, resource_deleted_on: null}
+    - {course_uuid: c2, course_name: course-two, resource_uuid: r-no-state, content_type: external-resource,
+      studio_url: s6, external_resource_url: 'https://e.example', external_resource_check_status: null,
+      external_resource_status: broken, external_resource_license_warning: null, resource_deleted_on: null}
     - {course_uuid: c2, course_name: course-two, resource_uuid: r-never, content_type: external-resource,
-      studio_url: s6, external_resource_status: null, external_resource_license_warning: null}
-    - {course_uuid: c2, course_name: course-two, resource_uuid: r-never-license, content_type: external-resource,
-      studio_url: s7, external_resource_status: null, external_resource_license_warning: true}
+      studio_url: s7, external_resource_url: 'https://f.example', external_resource_check_status: null,
+      external_resource_status: null, external_resource_license_warning: null, resource_deleted_on: null}
+    - {course_uuid: c2, course_name: course-two, resource_uuid: r-no-url, content_type: external-resource,
+      studio_url: s8, external_resource_url: null, external_resource_check_status: valid,
+      external_resource_status: valid, external_resource_license_warning: false, resource_deleted_on: null}
+    - {course_uuid: c2, course_name: course-two, resource_uuid: r-blank-url, content_type: external-resource,
+      studio_url: s9, external_resource_url: '  ', external_resource_check_status: valid,
+      external_resource_status: valid, external_resource_license_warning: false, resource_deleted_on: null}
+    - {course_uuid: c1, course_name: course-one, resource_uuid: r-deleted, content_type: external-resource,
+      studio_url: s10, external_resource_url: 'https://g.example', external_resource_check_status: broken,
+      external_resource_status: broken, external_resource_license_warning: false,
+      resource_deleted_on: '2026-01-01T00:00:00Z'}
     - {course_uuid: c1, course_name: course-one, resource_uuid: r-file, content_type: resource,
-      studio_url: s8, external_resource_status: null, external_resource_license_warning: null}
+      studio_url: s11, external_resource_url: null, external_resource_check_status: null,
+      external_resource_status: null, external_resource_license_warning: null, resource_deleted_on: null}
   - input: ref('dim_ocw_course')
     rows:
     - {course_name: course-one, course_is_unpublished: false, course_has_never_published: false}
   expect:
     rows:
-    - {resource_uuid: r-valid, link_status: valid, is_link_broken: false, has_license_warning: false,
-      needs_review: false, course_is_unpublished: false}
-    - {resource_uuid: r-broken, link_status: broken, is_link_broken: true, has_license_warning: false,
-      needs_review: true, course_is_unpublished: false}
-    - {resource_uuid: r-failed, link_status: check_failed, is_link_broken: false,
+    - {resource_uuid: r-valid, link_status: valid, is_link_broken: false, is_url_missing: false,
+      has_license_warning: false, needs_review: false, course_is_unpublished: false}
+    - {resource_uuid: r-state-failed, link_status: check_failed, is_link_broken: false,
+      is_url_missing: false, has_license_warning: false, needs_review: true, course_is_unpublished: false}
+    - {resource_uuid: r-broken, link_status: broken, is_link_broken: true, is_url_missing: false,
       has_license_warning: false, needs_review: true, course_is_unpublished: false}
     - {resource_uuid: r-unchecked, link_status: unchecked, is_link_broken: false,
-      has_license_warning: false, needs_review: false, course_is_unpublished: false}
-    - {resource_uuid: r-license, link_status: valid, is_link_broken: false, has_license_warning: true,
-      needs_review: true, course_is_unpublished: false}
-    - {resource_uuid: r-never, link_status: not_checked, is_link_broken: false, has_license_warning: false,
-      needs_review: false, course_is_unpublished: null}
-    - {resource_uuid: r-never-license, link_status: not_checked, is_link_broken: false,
-      has_license_warning: true, needs_review: true, course_is_unpublished: null}
+      is_url_missing: false, has_license_warning: false, needs_review: false, course_is_unpublished: false}
+    - {resource_uuid: r-license, link_status: valid, is_link_broken: false, is_url_missing: false,
+      has_license_warning: true, needs_review: true, course_is_unpublished: false}
+    - {resource_uuid: r-no-state, link_status: broken, is_link_broken: true, is_url_missing: false,
+      has_license_warning: false, needs_review: true, course_is_unpublished: null}
+    - {resource_uuid: r-never, link_status: not_checked, is_link_broken: false, is_url_missing: false,
+      has_license_warning: false, needs_review: false, course_is_unpublished: null}
+    - {resource_uuid: r-no-url, link_status: valid, is_link_broken: false, is_url_missing: true,
+      has_license_warning: false, needs_review: true, course_is_unpublished: null}
+    - {resource_uuid: r-blank-url, link_status: valid, is_link_broken: false, is_url_missing: true,
+      has_license_warning: false, needs_review: true, course_is_unpublished: null}

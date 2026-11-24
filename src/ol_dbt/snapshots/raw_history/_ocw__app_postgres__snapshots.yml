@@ -4,6 +4,43 @@
 # ingestion/inventory/units/ocw__app_postgres.yml disagree.
 version: 2
 snapshots:
+- name: snapshot_raw__ocw__studio__postgres__external_resources_externalresourcestate
+  description: >-
+    History of raw__ocw__studio__postgres__external_resources_externalresourcestate
+    (ocw/app_postgres, table external_resources_externalresourcestate): one row per
+    version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__ocw__studio__postgres__external_resources_externalresourcestate__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ocw/app_postgres
+        absence: deleted
+        delete_capture: keyset
+        keyset_table: raw__ocw__studio__postgres__external_resources_externalresourcestate__keyset
+        keyset_lakes: []
+  columns:
+  - name: id
+    description: >-
+      primary key of the ocw/app_postgres external_resources_externalresourcestate
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
 - name: snapshot_raw__ocw__studio__postgres__gdrive_sync_drivefile
   description: >-
     History of raw__ocw__studio__postgres__gdrive_sync_drivefile (ocw/app_postgres,
