@@ -309,7 +309,7 @@ unit_tests:
   - input: ref('stg__mitpe__api__events')
     rows:
     - {event_id: mitpe-1, event_title: Talk}
-  - input: ref('int__news_events__mitpe_event_times')
+  - input: ref('int__news_events__mitpe_event_times_learn')
     rows:
     - {event_id: mitpe-1, start_on: "2124-09-15 16:30:00+00", end_on: "2124-09-15\
         \ 17:00:00+00"}
