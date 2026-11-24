@@ -1,12 +1,9 @@
 # Installed as /etc/uv/uv.toml in images/marimo-jupyterlab and
-# images/marimo-runtime, next to this package's wheel. ol-notebook isn't on
-# PyPI, and uv treats find-links as extra candidates next to PyPI's, so a
-# release someone else registered under the name could be chosen over this
-# wheel. An index doesn't mix: under uv's default first-index strategy, a
-# package found here is never looked up on PyPI. Everything else still comes
-# from PyPI. A notebook header that declares its own [[tool.uv.index]] or
-# index-strategy outranks this file and undoes that, which only owning the
-# name on PyPI would close.
+# images/marimo-runtime, next to this package's wheel. Under uv's default
+# first-index strategy, a package found here is never looked up on PyPI, so
+# notebooks get the wheel built from the same commit as the image rather than
+# the latest PyPI release (.github/workflows/publish_ol_notebook.yaml). Every
+# other package still comes from PyPI.
 [[index]]
 name = "ol-notebook"
 url = "/opt/ol-notebook/wheels"

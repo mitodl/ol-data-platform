@@ -5,6 +5,7 @@ name = "ol-notebook"
 version = "0.1.0"
 description = "Helpers for MIT Open Learning marimo notebooks, in JupyterHub and as published apps"
 authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+readme = "README.md"
 requires-python = ">=3.12"
 license = "BSD-3-Clause"
 classifiers = [
