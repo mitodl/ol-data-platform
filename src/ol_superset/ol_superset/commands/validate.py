@@ -20,6 +20,7 @@ from ol_superset.lib.role_management import (
     find_governance_roles_json,
     get_local_datasets,
     load_governance_roles,
+    uncovered_dataset_schemas,
 )
 from ol_superset.lib.utils import count_assets, get_assets_dir
 
@@ -154,32 +155,22 @@ def validate(
             if ds.get("database") in WAREHOUSE_DATABASE_DIALECTS
         ]
 
-        covered_schemas: set[str] = set()
-        for role in governance_roles:
-            covered_schemas.update(role.get("allowed_schemas", []))
-
-        dataset_schemas: set[str] = {
-            ds["schema"] for ds in warehouse_datasets if ds.get("schema")
-        }
-        uncovered = dataset_schemas - covered_schemas
+        uncovered = uncovered_dataset_schemas(governance_roles, warehouse_datasets)
 
         if uncovered:
             warnings += len(uncovered)
-            for schema in sorted(uncovered):
-                count = sum(
-                    1 for ds in warehouse_datasets if ds.get("schema") == schema
-                )
+            for schema, count in sorted(uncovered.items()):
                 print(
                     f"  ⚠️  Schema not covered by any governance role: "
                     f"{schema} ({count} dataset(s))"
                 )
             print(
-                "      Add the missing schema(s) to ol_governance_roles.json "
-                "and run 'ol-superset roles sync'."
+                "      Add the missing schema(s) or tables to "
+                "ol_governance_roles.json and run 'ol-superset roles sync'."
             )
         else:
             print(
-                f"  ✅ All {len(dataset_schemas)} dataset schema(s) covered "
+                f"  ✅ All {len(warehouse_datasets)} warehouse dataset(s) covered "
                 "by governance roles"
             )
 

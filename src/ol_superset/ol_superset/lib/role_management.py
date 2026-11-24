@@ -14,13 +14,15 @@ def load_governance_roles(governance_json_path: Path) -> list[dict[str, object]]
     Load role definitions from the ol_governance_roles.json file.
 
     Each entry is expected to have 'name', 'permissions', and optionally
-    'allowed_schemas' fields.
+    'allowed_schemas' and 'allowed_datasets' fields. A malformed
+    'allowed_datasets' is reported and nothing is returned, so no command acts
+    on part of a policy.
 
     Args:
         governance_json_path: Path to ol_governance_roles.json
 
     Returns:
-        List of role definition dicts
+        List of role definition dicts, empty when the file is missing or invalid
     """
     if not governance_json_path.exists():
         print(
@@ -30,7 +32,14 @@ def load_governance_roles(governance_json_path: Path) -> list[dict[str, object]]
         return []
 
     with governance_json_path.open() as f:
-        return json.load(f)
+        roles = json.load(f)
+    try:
+        for role in roles:
+            parse_allowed_datasets(role.get("allowed_datasets", []))
+    except ValueError as e:
+        print(f"Error: {governance_json_path}: {e}", file=sys.stderr)
+        return []
+    return roles
 
 
 def get_local_datasets(assets_dir: Path) -> list[dict[str, object]]:
@@ -362,8 +371,15 @@ def parse_allowed_datasets(allowed_datasets: list[str]) -> set[tuple[str, str]]:
         The (schema, table_name) pairs
 
     Raises:
-        ValueError: When an entry is not ``<schema>.<table_name>``
+        ValueError: When the field is not a list of strings, or an entry is not
+            ``<schema>.<table_name>``
     """
+    # A JSON object would iterate as its keys and grant them.
+    if not isinstance(allowed_datasets, list) or not all(
+        isinstance(entry, str) for entry in allowed_datasets
+    ):
+        msg = "allowed_datasets must be a list of '<schema>.<table_name>' strings"
+        raise ValueError(msg)
     pairs: set[tuple[str, str]] = set()
     for entry in allowed_datasets:
         schema, _, table_name = entry.partition(".")
@@ -421,6 +437,58 @@ def allowed_role_datasets(
         if ds.get("schema") in allowed_set
         or (ds.get("schema"), ds.get("table_name")) in allowed_tables
     ]
+
+
+def role_dataset_access_is_managed(role: dict[str, object]) -> bool:
+    """
+    Say whether ``roles sync`` reconciles a role's dataset permissions.
+
+    A role with allowed schemas is managed, and so is one with an
+    ``allowed_datasets`` key, even an empty one: emptying the list must revoke
+    what it granted rather than leave the role unmanaged with its old grants.
+
+    Args:
+        role: A role definition from ``load_governance_roles``
+
+    Returns:
+        True when the role's dataset permissions should be synced
+    """
+    return bool(role.get("allowed_schemas")) or "allowed_datasets" in role
+
+
+def uncovered_dataset_schemas(
+    governance_roles: list[dict[str, object]],
+    datasets: list[dict[str, object]],
+) -> dict[str, int]:
+    """
+    Count, per schema, the datasets no governance role may read.
+
+    A dataset is covered by a role's ``allowed_schemas`` or by an
+    ``allowed_datasets`` entry naming it.
+
+    Args:
+        governance_roles: Role definitions from ``load_governance_roles``
+        datasets: Datasets from the Superset API or the local assets
+
+    Returns:
+        Schema name -> number of uncovered datasets in it
+    """
+    covered: set[int] = set()
+    for role in governance_roles:
+        covered.update(
+            id(ds)
+            for ds in allowed_role_datasets(
+                cast(list[str], role.get("allowed_schemas", [])),
+                datasets,
+                cast(list[str], role.get("allowed_datasets", [])),
+            )
+        )
+    uncovered: dict[str, int] = {}
+    for ds in datasets:
+        schema = ds.get("schema")
+        if schema and id(ds) not in covered:
+            uncovered[str(schema)] = uncovered.get(str(schema), 0) + 1
+    return uncovered
 
 
 def compute_desired_dataset_ids(

@@ -432,7 +432,7 @@ ol-superset apply-rls superset-production
 ### Deploy Updated Governance Role Definitions
 
 When `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`
-changes (e.g., new permissions, `allowed_schemas` additions), the Pulumi stack must be redeployed
+changes (e.g., new permissions, `allowed_schemas` or `allowed_datasets` changes), the Pulumi stack must be redeployed
 so that `flask fab import-roles` picks up the new definitions:
 
 ```bash

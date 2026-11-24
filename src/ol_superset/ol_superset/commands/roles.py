@@ -18,8 +18,9 @@ from ol_superset.lib.role_management import (
     get_role_dataset_permissions,
     get_superset_datasets,
     load_governance_roles,
-    parse_allowed_datasets,
+    role_dataset_access_is_managed,
     set_role_datasource_permissions,
+    uncovered_dataset_schemas,
     unmatched_allowed_datasets,
 )
 from ol_superset.lib.superset_api import (
@@ -192,16 +193,16 @@ def roles_check(
     elif database:
         local_datasets = [ds for ds in local_datasets if ds.get("database") == database]
 
-    # Collect all schemas covered by at least one role
+    # Schemas granted whole by at least one role
     covered_schemas: set[str] = set()
     for role in governance_roles:
         covered_schemas.update(role.get("allowed_schemas", []))
 
-    # Find schemas present in local datasets but not covered by any role
+    # Schemas holding a local dataset that no role may read, whole or singly
     dataset_schemas: set[str] = {
         ds["schema"] for ds in local_datasets if ds.get("schema")
     }
-    uncovered = dataset_schemas - covered_schemas
+    uncovered = uncovered_dataset_schemas(governance_roles, local_datasets)
     extra = covered_schemas - dataset_schemas
 
     print("=" * 60)
@@ -225,13 +226,13 @@ def roles_check(
 
     if uncovered:
         print("❌ FAIL: Dataset schemas not covered by any governance role:")
-        for schema in sorted(uncovered):
-            count = sum(1 for ds in local_datasets if ds.get("schema") == schema)
+        for schema, count in sorted(uncovered.items()):
             print(f"  • {schema} ({count} dataset(s))")
         print()
         print(
             "Add the missing schema(s) to the appropriate role's "
-            "'allowed_schemas' in ol_governance_roles.json"
+            "'allowed_schemas', or the tables to its 'allowed_datasets', in "
+            "ol_governance_roles.json"
         )
         sys.exit(1)
 
@@ -314,9 +315,6 @@ def roles_sync(
     governance_roles = load_governance_roles(gov_json)
     if not governance_roles:
         sys.exit(1)
-    # Refuse a malformed entry before any role is changed, not partway through.
-    for gov_role in governance_roles:
-        parse_allowed_datasets(gov_role.get("allowed_datasets", []))
 
     is_production = "production" in instance.lower()
 
@@ -425,7 +423,7 @@ def roles_sync(
             for p in gov_role.get("permissions", [])
         )
 
-        if not allowed_schemas and not allowed_datasets:
+        if not role_dataset_access_is_managed(gov_role):
             print("    ⏭️  Skipping: no allowed_schemas or allowed_datasets defined")
             total_skipped += 1
             print()
