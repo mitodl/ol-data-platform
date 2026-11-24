@@ -1,0 +1,55 @@
+---
+unit_tests:
+- name: test_course_feedback_report_keeps_course_feedback_on_a_current_run
+  description: >
+    Only AskTIM, content feedback and forum conversations on a course run reach
+    the report, once each against the run's current version. Zendesk tickets and
+    course-less chats do not, and a content URL loses its query string.
+  model: course_feedback_report
+  given:
+  - input: ref('afact_feedback_conversation')
+    rows:
+    - {conversation_id: chat1, feedback_source_fk: tutor, courserun_fk: run1, opened_date_fk: 20261014,
+      category_fk: null, sentiment_fk: null, turn_count: 2, explicit_rating: like}
+    - {conversation_id: chat2, feedback_source_fk: tutor, courserun_fk: null, opened_date_fk: 20261014,
+      category_fk: null, sentiment_fk: null, turn_count: 1, explicit_rating: null}
+    - {conversation_id: fb1, feedback_source_fk: content, courserun_fk: run1, opened_date_fk: 20261014,
+      category_fk: null, sentiment_fk: null, turn_count: 1, explicit_rating: idea}
+    - {conversation_id: ticket1, feedback_source_fk: zendesk, courserun_fk: run1,
+      opened_date_fk: 20261014, category_fk: null, sentiment_fk: null, turn_count: 3,
+      explicit_rating: good}
+  - input: ref('dim_feedback_source')
+    rows:
+    - {feedback_source_pk: tutor, source_slug: learn_ai_tutor, source_name: AskTIM}
+    - {feedback_source_pk: content, source_slug: content_feedback, source_name: Content
+        Feedback}
+    - {feedback_source_pk: zendesk, source_slug: zendesk, source_name: Zendesk Support}
+  - input: ref('tfact_feedback')
+    rows:
+    - {conversation_id: chat1, feedback_source_fk: tutor, is_conversation_opening: true,
+      source_metadata: '{"chatsession_agent": "TutorBot"}', subject_url: null}
+    - {conversation_id: chat2, feedback_source_fk: tutor, is_conversation_opening: true,
+      source_metadata: null, subject_url: null}
+    - {conversation_id: fb1, feedback_source_fk: content, is_conversation_opening: true,
+      source_metadata: null, subject_url: "https://courses.example.edu/learn/unit1?utm_source=x#top"}
+    - {conversation_id: ticket1, feedback_source_fk: zendesk, is_conversation_opening: true,
+      source_metadata: null, subject_url: null}
+  - input: ref('dim_feedback_category')
+    rows: []
+  - input: ref('dim_sentiment')
+    rows: []
+  - input: ref('dim_date')
+    format: sql
+    rows: select 20261014 as date_key, date '2026-10-14' as date
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: run1, courserun_readable_id: "course-v1:UCEP+UCE.1+1T2026", courserun_title: UCE,
+      platform: mitxonline, is_current: true}
+    - {courserun_pk: run1, courserun_readable_id: "course-v1:UCEP+UCE.1+1T2026", courserun_title: Old
+        UCE, platform: mitxonline, is_current: false}
+  expect:
+    rows:
+    - {course_title: UCE, source: AskTIM, chat_agent: TutorBot, conversation_id: chat1,
+      content_url: null}
+    - {course_title: UCE, source: Content Feedback, chat_agent: null, conversation_id: fb1,
+      content_url: "https://courses.example.edu/learn/unit1"}

@@ -2183,6 +2183,85 @@ models:
       arguments:
         column_list: ["source", "conversation_id"]
 
+- name: course_feedback_report
+  config:
+    meta:
+      # Off until ol_instructor is limited to an explicit dataset list: published now,
+      # the next `ol-superset roles sync` would grant instructors every course's
+      # feedback before the RLS policy can list this dataset.
+      superset_dataset: false
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/course_structure
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/course_structure
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/app_postgres
+      - xpro/course_structure
+      - xpro/mysql
+      - xpro/tracking_logs
+  description: Learner feedback about a course run, for its course team. One row per
+    AskTIM chat, content feedback item or forum thread that resolves to a course run.
+    Zendesk tickets are excluded. No user key, though source and conversation_id join
+    back to the author through tfact_feedback. Not published to Superset yet; once
+    it is, the instructor course-scope RLS policy limits rows to the runs the viewer
+    teaches.
+  columns:
+  - name: courserun_readable_id
+    description: str, readable ID of the course run the conversation is about. The
+      instructor RLS policy filters on it.
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course run.
+  - name: platform
+    description: str, the platform the course run is on.
+  - name: source
+    description: str, the feedback source, e.g. AskTIM, Content Feedback, Course Discussion
+      Forum.
+    tests:
+    - not_null
+  - name: chat_agent
+    description: str, the AskTIM agent of the conversation. Null for other sources.
+  - name: conversation_id
+    description: str, the conversation identifier in its source system (chat session,
+      feedback record or forum thread). Unique together with source.
+    tests:
+    - not_null
+  - name: conversation_date
+    description: date, the date of the conversation's first turn.
+  - name: conversation_month
+    description: str, the month of the conversation's first turn, formatted yyyy-MM.
+  - name: turn_count
+    description: int, number of turns in the conversation.
+  - name: explicit_rating
+    description: str, the rating the learner gave, e.g. like/dislike for AskTIM, positive/negative/idea
+      for content feedback. Null when none was given.
+  - name: sentiment
+    description: str, positive, negative or neutral, from the explicit rating when
+      there is one and otherwise from the sentiment model. Null when neither applies.
+  - name: category_label
+    description: str, the feedback category assigned to the conversation. Null when
+      it has none.
+  - name: content_url
+    description: str, URL of the course page the feedback is about, without any query
+      string or fragment. Content feedback only.
+  - name: conversation_summary
+    description: str, LLM summary of the conversation. Null if not summarized.
+  - name: conversation_text
+    description: str, the redacted conversation text, turns separated by a line of
+      ---. Null until the redaction asset has processed the conversation.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source", "conversation_id"]
+
 unit_tests:
 - name: test_program_summary_report_counts_verified_from_the_fact
   description: >

@@ -16,7 +16,8 @@
         "afact_course_page_engagement",
         "afact_discussion_engagement",
         "afact_problem_engagement",
-        "afact_video_engagement"
+        "afact_video_engagement",
+        "data_detail_problems"
       ],
       "roles": ["ol_instructor"]
     },
@@ -49,6 +50,7 @@
         "afact_discussion_engagement",
         "afact_problem_engagement",
         "afact_video_engagement",
+        "data_detail_problems",
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
         "marts__combined_course_engagements"
