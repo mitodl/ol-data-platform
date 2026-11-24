@@ -61,8 +61,9 @@ MANIFEST = {
         "model.open_learning.stg__third_hop": _model(
             "stg__third_hop", "staging", "model.open_learning.stg__second_hop"
         ),
-        # Downstream of the Airbyte staging model, which its sync_and_stage job
-        # covers.
+        # Downstream of an Airbyte staging model only. Out of this selection's
+        # scope: its sync_and_stage job reaches depth 1, so nothing builds a
+        # model shaped like this (none exists).
         "model.open_learning.stg__airbyte_second_hop": _model(
             "stg__airbyte_second_hop", "staging", "model.open_learning.stg__airbyte"
         ),
@@ -100,6 +101,13 @@ def test_selects_staging_models_on_those_sources_through_staging() -> None:
         "stg__second_hop",
         "stg__third_hop",
     }
+
+
+def test_excluded_model_is_not_walked_through() -> None:
+    # A job without stg__second_hop would read a relation it never built.
+    assert staging_models_reading(
+        MANIFEST, {"raw__dlt_table"}, excluded={"stg__second_hop"}
+    ) == {"stg__dlt"}
 
 
 def test_unknown_raw_table_selects_nothing() -> None:

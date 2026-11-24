@@ -706,13 +706,17 @@ AWAITING_RAW_TABLE = {
 non_airbyte_tables = non_airbyte_raw_tables(load_units(INVENTORY_DIR))
 non_airbyte_staging_models = sorted(
     staging_models_reading(
-        json.loads(dbt_project.manifest_path.read_text()), non_airbyte_tables
+        json.loads(dbt_project.manifest_path.read_text()),
+        non_airbyte_tables,
+        excluded={
+            POSTHOG_STAGING_MODEL,
+            *AWAITING_RAW_TABLE,
+            # Where ocw_learn_automation_sensor builds it, a daily build here
+            # would rebuild staging and the Learn views a second time for the
+            # same load.
+            *(OCW_LEARN_MODELS if DBT_AUTOMATION_ENABLED else ()),
+        },
     )
-    - {POSTHOG_STAGING_MODEL}
-    - AWAITING_RAW_TABLE
-    # Where ocw_learn_automation_sensor builds it, a daily build here would
-    # rebuild staging and the Learn views a second time for the same load.
-    - (set(OCW_LEARN_MODELS) if DBT_AUTOMATION_ENABLED else set())
 )
 non_airbyte_staging_schedules = (
     [

@@ -46,7 +46,9 @@ def non_airbyte_raw_tables(units: Iterable[Unit]) -> set[str]:
 
 
 def staging_models_reading(
-    manifest: Mapping[str, Any], raw_tables: set[str]
+    manifest: Mapping[str, Any],
+    raw_tables: set[str],
+    excluded: Iterable[str] = (),
 ) -> set[str]:
     """Return the staging models fed by any of ``raw_tables``.
 
@@ -56,15 +58,20 @@ def staging_models_reading(
 
     :param manifest: A parsed dbt ``manifest.json``.
     :param raw_tables: dbt source table names to match.
+    :param excluded: Staging model names to leave out, and not to walk through:
+        a model fed only through one of them is left out too, since a job without
+        the parent would read a relation it did not build.
     :returns: Names of the staging models with one of those sources upstream
         through staging models only.
     :rtype: set[str]
     """
+    excluded = set(excluded)
     staging = {
         unique_id: node
         for unique_id, node in manifest["nodes"].items()
         if node["resource_type"] == "model"
         and node["config"].get("schema") == STAGING_SCHEMA
+        and node["name"] not in excluded
     }
     fed_by = {
         unique_id
