@@ -3,7 +3,14 @@ with resources as (
         *
         -- The checker's state records a check that failed before a response; metadata keeps the
         -- last good status then, so the state wins and metadata only fills in when there is none.
-        , coalesce(external_resource_check_status, external_resource_status, 'not_checked') as link_status
+        -- A new resource's state starts as unchecked with no check time until the weekly run.
+        , case
+            when
+                external_resource_check_status = 'unchecked'
+                and external_resource_last_checked_on is null
+                then 'not_checked'
+            else coalesce(external_resource_check_status, external_resource_status, 'not_checked')
+        end as link_status
         , coalesce(trim(external_resource_url), '') = '' as is_url_missing
     from {{ ref('dim_ocw_resource') }}
     where

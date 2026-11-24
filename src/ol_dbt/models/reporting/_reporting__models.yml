@@ -2402,7 +2402,8 @@ models:
       TLS errors, a timeout) is recorded in the state and not in the metadata, which
       keeps its last status. valid, broken, unchecked (the site answered 401, 402,
       403, 408, 429 or 503, so the link may be fine), check_failed, or not_checked
-      when neither has a status.
+      when neither has a status or the state has never been checked (a new resource
+      waits for the weekly check).
     tests:
     - not_null
     - accepted_values:

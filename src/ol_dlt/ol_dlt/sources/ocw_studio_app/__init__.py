@@ -14,7 +14,8 @@ Scope is the 5 tables the inventory unit ``ocw/app_postgres`` marks
 ``modeled: true``; the production connection syncs 34. Every table is loaded
 with ``write_disposition="replace"`` and no cursor. The largest,
 ``websites_websitecontent``, was 212,063 rows in production raw on 2026-11-10
-(Athena), with 0 duplicate primary keys across the 4 tables.
+(Athena), with 0 duplicate primary keys across the 4 tables modeled then
+(external_resources_externalresourcestate was added later and not checked).
 
 The Vault mount is the only one named per environment
 (``postgres-ocw-studio-applications-qa`` and ``-production``).
