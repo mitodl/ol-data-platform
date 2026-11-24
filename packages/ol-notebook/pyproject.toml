@@ -17,7 +17,8 @@ classifiers = [
 dependencies = [
     # 9.1 added openid_token_file for authentication_openid_connect_client.
     "mysql-connector-python>=9.1",
-    "sqlalchemy>=2.0",
+    # 2.0.40 added the mysqlconnector preparer ol_notebook.dialect builds on.
+    "sqlalchemy>=2.0.40",
     # Compilation and reflection for ol_notebook.dialect.
     "starrocks>=1.2",
 ]

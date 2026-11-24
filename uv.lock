@@ -3229,7 +3229,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mysql-connector-python", specifier = ">=9.1" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.40" },
     { name = "starrocks", specifier = ">=1.2" },
 ]
 
