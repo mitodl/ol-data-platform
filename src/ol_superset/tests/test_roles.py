@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, cast
 
-from ol_superset.lib.role_management import compute_desired_dataset_ids
+import pytest
+
+from ol_superset.lib.role_management import (
+    compute_desired_dataset_ids,
+    parse_allowed_datasets,
+    unmatched_allowed_datasets,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for compute_desired_dataset_ids
@@ -60,6 +66,64 @@ def test_compute_desired_dataset_ids_all_schemas():
 
 def test_compute_desired_dataset_ids_empty_schemas():
     assert compute_desired_dataset_ids([], API_DATASETS) == set()
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_only():
+    ids = compute_desired_dataset_ids(
+        [],
+        API_DATASETS,
+        ["ol_warehouse_production_mart.marts__other_table"],
+    )
+    assert ids == {2}
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_match_every_database():
+    api_datasets = [
+        *API_DATASETS,
+        # The StarRocks twin of dataset 2: same schema and table, its own id.
+        {
+            "id": 6,
+            "table_name": "marts__other_table",
+            "schema": "ol_warehouse_production_mart",
+        },
+    ]
+    ids = compute_desired_dataset_ids(
+        ["public"],
+        api_datasets,
+        ["ol_warehouse_production_mart.marts__other_table"],
+    )
+    assert ids == {2, 5, 6}
+
+
+def test_compute_desired_dataset_ids_allowed_datasets_need_schema_match():
+    ids = compute_desired_dataset_ids(
+        [], API_DATASETS, ["ol_warehouse_production_reporting.marts__other_table"]
+    )
+    assert ids == set()
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "marts__other_table",
+        ".marts__other_table",
+        "ol_warehouse_production_mart.",
+        "a.b.c",
+    ],
+)
+def test_parse_allowed_datasets_rejects_malformed(entry: str):
+    with pytest.raises(ValueError, match="is not '<schema>.<table_name>'"):
+        parse_allowed_datasets([entry])
+
+
+def test_unmatched_allowed_datasets():
+    assert unmatched_allowed_datasets(
+        [
+            "ol_warehouse_production_mart.marts__other_table",
+            "ol_warehouse_production_mart.missing_table",
+        ],
+        API_DATASETS,
+    ) == ["ol_warehouse_production_mart.missing_table"]
 
 
 # ---------------------------------------------------------------------------

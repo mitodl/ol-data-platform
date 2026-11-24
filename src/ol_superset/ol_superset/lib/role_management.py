@@ -346,9 +346,60 @@ def compute_schema_to_datasets(
     return schema_map
 
 
+def parse_allowed_datasets(allowed_datasets: list[str]) -> set[tuple[str, str]]:
+    """
+    Split a role's ``allowed_datasets`` entries into (schema, table_name) pairs.
+
+    An entry names one table, e.g.
+    ``ol_warehouse_production_mart.marts__combined__orders``, and matches that
+    table's dataset on every database (Trino and StarRocks each register their
+    own).
+
+    Args:
+        allowed_datasets: The role's ``allowed_datasets`` entries
+
+    Returns:
+        The (schema, table_name) pairs
+
+    Raises:
+        ValueError: When an entry is not ``<schema>.<table_name>``
+    """
+    pairs: set[tuple[str, str]] = set()
+    for entry in allowed_datasets:
+        schema, _, table_name = entry.partition(".")
+        if not schema or not table_name or "." in table_name:
+            msg = f"allowed_datasets entry {entry!r} is not '<schema>.<table_name>'"
+            raise ValueError(msg)
+        pairs.add((schema, table_name))
+    return pairs
+
+
+def unmatched_allowed_datasets(
+    allowed_datasets: list[str],
+    datasets: list[dict[str, object]],
+) -> list[str]:
+    """
+    Return the ``allowed_datasets`` entries that match none of ``datasets``.
+
+    Args:
+        allowed_datasets: The role's ``allowed_datasets`` entries
+        datasets: Datasets from the Superset API or the local assets
+
+    Returns:
+        The unmatched entries, sorted
+    """
+    present = {(ds.get("schema"), ds.get("table_name")) for ds in datasets}
+    return sorted(
+        f"{schema}.{table_name}"
+        for schema, table_name in parse_allowed_datasets(allowed_datasets)
+        if (schema, table_name) not in present
+    )
+
+
 def compute_desired_dataset_ids(
     allowed_schemas: list[str],
     api_datasets: list[dict[str, object]],
+    allowed_datasets: list[str] | None = None,
 ) -> set[int]:
     """
     Compute the set of Superset dataset IDs that a role should have access to.
@@ -356,15 +407,22 @@ def compute_desired_dataset_ids(
     Args:
         allowed_schemas: List of schema names the role is allowed to access
         api_datasets: All datasets from the Superset API
+        allowed_datasets: ``<schema>.<table_name>`` entries the role may read
+            outside its allowed schemas
 
     Returns:
         Set of dataset IDs the role should have access to
     """
     allowed_set = set(allowed_schemas)
+    allowed_tables = parse_allowed_datasets(allowed_datasets or [])
     return {
         cast(int, ds["id"])
         for ds in api_datasets
-        if ds.get("schema") in allowed_set and ds.get("id") is not None
+        if ds.get("id") is not None
+        and (
+            ds.get("schema") in allowed_set
+            or (ds.get("schema"), ds.get("table_name")) in allowed_tables
+        )
     }
 
 

@@ -17,7 +17,9 @@ from ol_superset.lib.role_management import (
     get_role_dataset_permissions,
     get_superset_datasets,
     load_governance_roles,
+    parse_allowed_datasets,
     set_role_datasource_permissions,
+    unmatched_allowed_datasets,
 )
 from ol_superset.lib.superset_api import (
     create_authenticated_session,
@@ -96,19 +98,29 @@ def roles_list(
     for role in governance_roles:
         name = role.get("name", "(unknown)")
         allowed_schemas = role.get("allowed_schemas", [])
+        allowed_datasets = role.get("allowed_datasets", [])
+        allowed_tables = parse_allowed_datasets(allowed_datasets)
 
-        matching: list[dict[str, object]] = []
-        for schema in allowed_schemas:
-            matching.extend(schema_to_datasets.get(schema, []))
+        matching = [
+            ds
+            for ds in local_datasets
+            if ds.get("schema") in allowed_schemas
+            or (ds.get("schema"), ds.get("table_name")) in allowed_tables
+        ]
 
         uncovered_schemas = [s for s in allowed_schemas if s not in schema_to_datasets]
+        unmatched = unmatched_allowed_datasets(allowed_datasets, local_datasets)
 
         print(f"Role: {name}")
         print(f"  Allowed schemas: {allowed_schemas or '(none defined)'}")
+        if allowed_datasets:
+            print(f"  Allowed datasets: {allowed_datasets}")
         print(f"  Accessible datasets: {len(matching)}")
 
         if uncovered_schemas:
             print(f"  ⚠️  Schemas with no local datasets: {uncovered_schemas}")
+        if unmatched:
+            print(f"  ⚠️  allowed_datasets with no local dataset: {unmatched}")
 
         if matching:
             for ds in sorted(matching, key=lambda d: str(d.get("table_name") or "")):
@@ -305,6 +317,9 @@ def roles_sync(
     governance_roles = load_governance_roles(gov_json)
     if not governance_roles:
         sys.exit(1)
+    # Refuse a malformed entry before any role is changed, not partway through.
+    for gov_role in governance_roles:
+        parse_allowed_datasets(gov_role.get("allowed_datasets", []))
 
     is_production = "production" in instance.lower()
 
@@ -397,6 +412,7 @@ def roles_sync(
     for gov_role in governance_roles:
         role_name = gov_role.get("name", "")
         allowed_schemas = gov_role.get("allowed_schemas", [])
+        allowed_datasets = gov_role.get("allowed_datasets", [])
 
         print(f"  Role: {role_name}")
 
@@ -412,8 +428,8 @@ def roles_sync(
             for p in gov_role.get("permissions", [])
         )
 
-        if not allowed_schemas:
-            print("    ⏭️  Skipping: no allowed_schemas defined")
+        if not allowed_schemas and not allowed_datasets:
+            print("    ⏭️  Skipping: no allowed_schemas or allowed_datasets defined")
             total_skipped += 1
             print()
             continue
@@ -425,8 +441,12 @@ def roles_sync(
             print()
             continue
 
-        # Compute desired dataset IDs based on governance schemas
-        desired_ds_ids = compute_desired_dataset_ids(allowed_schemas, api_datasets)
+        desired_ds_ids = compute_desired_dataset_ids(
+            allowed_schemas, api_datasets, allowed_datasets
+        )
+        unmatched = unmatched_allowed_datasets(allowed_datasets, api_datasets)
+        if unmatched:
+            print(f"    ⚠️  allowed_datasets with no dataset in {instance}: {unmatched}")
 
         # Get current dataset permissions for this role
         current_perms = get_role_dataset_permissions(session, base_url, role_id)
@@ -453,6 +473,7 @@ def roles_sync(
             )
 
         print(f"    Allowed schemas: {allowed_schemas}")
+        print(f"    Allowed datasets: {allowed_datasets}")
         print(f"    Desired datasets: {len(desired_ds_ids)}")
         print(f"    Current datasets: {len(current_ds_ids)}")
         print(f"    To add:   {len(to_add_ds_ids)}")
