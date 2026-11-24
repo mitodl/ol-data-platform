@@ -383,7 +383,7 @@ ol-superset sync superset-production superset-qa
 
 ### Grant Dataset Access to Governance Roles
 
-The `ol_data_analyst`, `ol_instructor`, `ol_business_analyst`, and `ol_researcher` roles do not have
+The `ol_data_analyst`, `ol_instructor`, `ol_business_analyst`, `ol_researcher`, and `ol_commerce_operations` roles do not have
 `all_datasource_access`. They rely on per-dataset `datasource access on [table]` permissions, which
 are derived from each role's `allowed_schemas` and `allowed_datasets` in
 `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`.

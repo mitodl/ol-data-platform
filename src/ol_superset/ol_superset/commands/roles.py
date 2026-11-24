@@ -9,6 +9,7 @@ from cyclopts import Parameter
 
 from ol_superset.lib.asset_index import WAREHOUSE_DATABASE_DIALECTS
 from ol_superset.lib.role_management import (
+    allowed_role_datasets,
     compute_desired_dataset_ids,
     find_governance_roles_json,
     get_all_datasource_permissions,
@@ -99,14 +100,10 @@ def roles_list(
         name = role.get("name", "(unknown)")
         allowed_schemas = role.get("allowed_schemas", [])
         allowed_datasets = role.get("allowed_datasets", [])
-        allowed_tables = parse_allowed_datasets(allowed_datasets)
 
-        matching = [
-            ds
-            for ds in local_datasets
-            if ds.get("schema") in allowed_schemas
-            or (ds.get("schema"), ds.get("table_name")) in allowed_tables
-        ]
+        matching = allowed_role_datasets(
+            allowed_schemas, local_datasets, allowed_datasets
+        )
 
         uncovered_schemas = [s for s in allowed_schemas if s not in schema_to_datasets]
         unmatched = unmatched_allowed_datasets(allowed_datasets, local_datasets)

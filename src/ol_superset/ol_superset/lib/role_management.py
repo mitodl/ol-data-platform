@@ -396,10 +396,37 @@ def unmatched_allowed_datasets(
     )
 
 
+def allowed_role_datasets(
+    allowed_schemas: list[str],
+    datasets: list[dict[str, object]],
+    allowed_datasets: list[str],
+) -> list[dict[str, object]]:
+    """
+    Return the datasets a role may read: its whole schemas and its single tables.
+
+    Args:
+        allowed_schemas: List of schema names the role is allowed to access
+        datasets: Datasets from the Superset API or the local assets
+        allowed_datasets: ``<schema>.<table_name>`` entries the role may read
+            outside its allowed schemas
+
+    Returns:
+        The matching datasets, in their original order
+    """
+    allowed_set = set(allowed_schemas)
+    allowed_tables = parse_allowed_datasets(allowed_datasets)
+    return [
+        ds
+        for ds in datasets
+        if ds.get("schema") in allowed_set
+        or (ds.get("schema"), ds.get("table_name")) in allowed_tables
+    ]
+
+
 def compute_desired_dataset_ids(
     allowed_schemas: list[str],
     api_datasets: list[dict[str, object]],
-    allowed_datasets: list[str] | None = None,
+    allowed_datasets: list[str],
 ) -> set[int]:
     """
     Compute the set of Superset dataset IDs that a role should have access to.
@@ -413,16 +440,10 @@ def compute_desired_dataset_ids(
     Returns:
         Set of dataset IDs the role should have access to
     """
-    allowed_set = set(allowed_schemas)
-    allowed_tables = parse_allowed_datasets(allowed_datasets or [])
     return {
         cast(int, ds["id"])
-        for ds in api_datasets
+        for ds in allowed_role_datasets(allowed_schemas, api_datasets, allowed_datasets)
         if ds.get("id") is not None
-        and (
-            ds.get("schema") in allowed_set
-            or (ds.get("schema"), ds.get("table_name")) in allowed_tables
-        )
     }
 
 

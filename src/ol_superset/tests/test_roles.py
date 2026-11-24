@@ -39,7 +39,9 @@ API_DATASETS = [
 
 
 def test_compute_desired_dataset_ids_single_schema():
-    ids = compute_desired_dataset_ids(["ol_warehouse_production_mart"], API_DATASETS)
+    ids = compute_desired_dataset_ids(
+        ["ol_warehouse_production_mart"], API_DATASETS, []
+    )
     assert ids == {1, 2}
 
 
@@ -47,6 +49,7 @@ def test_compute_desired_dataset_ids_multiple_schemas():
     ids = compute_desired_dataset_ids(
         ["ol_warehouse_production_mart", "ol_warehouse_production_raw"],
         API_DATASETS,
+        [],
     )
     assert ids == {1, 2, 4}
 
@@ -60,12 +63,12 @@ def test_compute_desired_dataset_ids_all_schemas():
         "ol_warehouse_production_reporting",
         "public",
     ]
-    ids = compute_desired_dataset_ids(all_schemas, API_DATASETS)
+    ids = compute_desired_dataset_ids(all_schemas, API_DATASETS, [])
     assert ids == {1, 2, 3, 4, 5}
 
 
 def test_compute_desired_dataset_ids_empty_schemas():
-    assert compute_desired_dataset_ids([], API_DATASETS) == set()
+    assert compute_desired_dataset_ids([], API_DATASETS, []) == set()
 
 
 def test_compute_desired_dataset_ids_allowed_datasets_only():
@@ -243,7 +246,7 @@ class TestRoleSyncSkipLogic:
         # includes mart and dimensional schemas
         allowed_schemas = cast(list[str], gov_role["allowed_schemas"])
 
-        desired = compute_desired_dataset_ids(allowed_schemas, api_datasets)
+        desired = compute_desired_dataset_ids(allowed_schemas, api_datasets, [])
         assert 1 in desired, "Dataset in allowed schema must be in desired set"
         assert 2 in desired, "Dataset in allowed schema must be in desired set"
 
