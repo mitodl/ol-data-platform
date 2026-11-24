@@ -131,6 +131,37 @@ def test_surviving_reference_keeps_directly_matched_chart(tmp_path: Path) -> Non
     assert "MM_Fin_Shared_c_match.yaml" not in removed
 
 
+def test_checked_in_patterns_match_renamed_mmfin_assets(tmp_path: Path) -> None:
+    base = tmp_path / "assets"
+    _write_yaml(
+        base / "dashboards" / "MMFin_Main_Dashboard_1x_d1.yaml",
+        _dashboard("d1", "[MMFin] Main Dashboard (15.415.1x)", ["c1"]),
+    )
+    _write_yaml(
+        base / "charts" / "MMFin_1x_Course_Enrollments_c1.yaml",
+        _chart("c1", "[MMFin] 1x Course Enrollments (Lifetime Cumulative)"),
+    )
+    # Not on a dashboard, no brackets in the title.
+    _write_yaml(
+        base / "charts" / "MMFin_Enrollment_Raw_Data_c2.yaml",
+        _chart("c2", "MMFin Enrollment Raw Data"),
+    )
+    _write_yaml(
+        base / "charts" / "Course_Run_Enrollment_Trends_c3.yaml",
+        _chart("c3", "Course Run Enrollment Trends"),
+    )
+
+    report = plan_prune(base, load_ignore_patterns())
+
+    assert {p.name for p in report.removed_dashboards} == {
+        "MMFin_Main_Dashboard_1x_d1.yaml"
+    }
+    assert {p.name for p in report.removed_charts} == {
+        "MMFin_1x_Course_Enrollments_c1.yaml",
+        "MMFin_Enrollment_Raw_Data_c2.yaml",
+    }
+
+
 def test_match_by_uuid(tmp_path: Path) -> None:
     base = tmp_path / "assets"
     _write_yaml(
