@@ -32,6 +32,9 @@ select
     , external_resource_backup_url_status_code
     , external_resource_status
     , external_resource_wayback_url
+    , external_resource_check_status
+    , external_resource_last_checked_on
+    , resource_deleted_on
     , image_alt_text
     , image_caption
     , image_credit

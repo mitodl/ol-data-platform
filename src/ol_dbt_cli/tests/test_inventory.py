@@ -779,7 +779,7 @@ class TestKeysetTables:
             "xpro/app_postgres",
             "xpro/mysql",
         ]
-        assert sum(len(rows) for rows in selected.values()) == 125  # noqa: PLR2004
+        assert sum(len(rows) for rows in selected.values()) == 126  # noqa: PLR2004
 
     def test_learner_activity_tables_get_no_keyset(self) -> None:
         units = load_units(REAL_INVENTORY)

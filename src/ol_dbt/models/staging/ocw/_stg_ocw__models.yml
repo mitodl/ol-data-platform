@@ -2,6 +2,39 @@
 version: 2
 
 models:
+- name: stg__ocw__studio__postgres__external_resources_externalresourcestate
+  description: The link checker's state for each OCW external resource, one row per
+    resource. Unlike the resource's metadata, it records a check that failed before
+    getting a response.
+  columns:
+  - name: externalresourcestate_id
+    description: int, primary key
+    tests:
+    - not_null
+    - unique
+  - name: websitecontent_id
+    description: int, the external resource checked (websites_websitecontent.id)
+    tests:
+    - not_null
+    - unique
+  - name: externalresourcestate_status
+    description: str, result of the last check. valid, broken, unchecked (the site
+      answered 401, 402, 403, 408, 429 or 503), or check_failed (the request raised
+      before getting a response, e.g. DNS, connection or TLS errors or a timeout)
+    tests:
+    - accepted_values:
+        arguments:
+          values: ["valid", "broken", "unchecked", "check_failed"]
+  - name: externalresourcestate_url_response_code
+    description: int, HTTP status code from the external URL on the last check that
+      got a response. A failed check leaves the previous value.
+  - name: externalresourcestate_wayback_url
+    description: str, Wayback Machine archive of the external URL
+  - name: externalresourcestate_last_checked_on
+    description: timestamp, when the link was last checked
+  - name: externalresourcestate_updated_on
+    description: timestamp, when the state row was last updated
+
 - name: stg__ocw__studio__postgres__gdrive_sync_drivefile
   description: Google Drive files synced to OCW Studio.
   columns:
@@ -419,3 +452,23 @@ unit_tests:
       coursecontent_title: Notes, coursecontent_text: Lecture notes, coursecontent_text_extraction_status: extracted}
     - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/slides/data.json,
       coursecontent_title: Slides, coursecontent_text: null, coursecontent_text_extraction_status: failed}
+- name: test_stg__ocw__studio__postgres__external_resources_externalresourcestate_keeps_the_newest_row
+  description: >
+    A state row deleted in the Django admin is recreated under a new id for the
+    same content, and the xmin sync keeps the old row, so staging keeps the most
+    recently updated row per content id.
+  model: stg__ocw__studio__postgres__external_resources_externalresourcestate
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__ocw__studio__postgres__external_resources_externalresourcestate')
+    rows:
+    - {id: 1, content_id: 10, status: valid, external_url_response_code: 200, wayback_url: '',
+      last_checked: '2026-08-01 00:00:00', updated_on: '2026-08-01 00:00:00'}
+    - {id: 2, content_id: 10, status: check_failed, external_url_response_code: 200,
+      wayback_url: '', last_checked: '2026-09-01 00:00:00', updated_on: '2026-09-01
+        00:00:00'}
+    - {id: 3, content_id: 11, status: broken, external_url_response_code: 404, wayback_url: '',
+      last_checked: '2026-09-01 00:00:00', updated_on: '2026-09-01 00:00:00'}
+  expect:
+    rows:
+    - {externalresourcestate_id: 2, websitecontent_id: 10, externalresourcestate_status: check_failed}
+    - {externalresourcestate_id: 3, websitecontent_id: 11, externalresourcestate_status: broken}

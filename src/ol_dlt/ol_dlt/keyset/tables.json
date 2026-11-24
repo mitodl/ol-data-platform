@@ -307,6 +307,10 @@
     ],
     "ocw/app_postgres": [
       {
+        "table": "external_resources_externalresourcestate",
+        "key": "id"
+      },
+      {
         "table": "gdrive_sync_drivefile",
         "key": "file_id"
       }

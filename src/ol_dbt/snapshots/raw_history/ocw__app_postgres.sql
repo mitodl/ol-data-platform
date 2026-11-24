@@ -5,6 +5,14 @@
     ingestion/inventory/units/ocw__app_postgres.yml disagree.
 -#}
 
+{% snapshot snapshot_raw__ocw__studio__postgres__external_resources_externalresourcestate %}
+{{ raw_history_snapshot(
+    'raw__ocw__studio__postgres__external_resources_externalresourcestate',
+    unique_key='id',
+    live=false
+) }}
+{% endsnapshot %}
+
 {% snapshot snapshot_raw__ocw__studio__postgres__gdrive_sync_drivefile %}
 {{ raw_history_snapshot(
     'raw__ocw__studio__postgres__gdrive_sync_drivefile',

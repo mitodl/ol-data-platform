@@ -10,11 +10,12 @@ unit's dlt cutover.
 Data flow:
     OCW Studio RDS Postgres  ->  raw__ocw__studio__postgres__<table>
 
-Scope is the 4 tables the inventory unit ``ocw/app_postgres`` marks
+Scope is the 5 tables the inventory unit ``ocw/app_postgres`` marks
 ``modeled: true``; the production connection syncs 34. Every table is loaded
 with ``write_disposition="replace"`` and no cursor. The largest,
 ``websites_websitecontent``, was 212,063 rows in production raw on 2026-11-10
-(Athena), with 0 duplicate primary keys across the 4 tables.
+(Athena), with 0 duplicate primary keys across the 4 tables modeled then
+(external_resources_externalresourcestate was added later and not checked).
 
 The Vault mount is the only one named per environment
 (``postgres-ocw-studio-applications-qa`` and ``-production``).
@@ -35,6 +36,9 @@ OCW_STUDIO_APP_SPEC = DatabaseSourceSpec(
     database="ocw_studio",
     vault_mount="postgres-ocw-studio-applications-{profile}",
     tables=(
+        DatabaseTable(
+            name="external_resources_externalresourcestate", primary_key="id"
+        ),
         DatabaseTable(name="gdrive_sync_drivefile", primary_key="file_id"),
         DatabaseTable(name="websites_website", primary_key="uuid"),
         DatabaseTable(name="websites_websitecontent", primary_key="id"),

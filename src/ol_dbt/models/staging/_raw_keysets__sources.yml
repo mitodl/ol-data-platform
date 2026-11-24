@@ -1025,6 +1025,20 @@ sources:
         source database clock read before the load's first keyset select, one value
         per load. A raw row the loader wrote after this existed when the keyset was
         read.
+  - name: raw__ocw__studio__postgres__external_resources_externalresourcestate__keyset
+    description: >-
+      Primary key of every current record of raw__ocw__studio__postgres__external_resources_externalresourcestate,
+      read from the ocw/app_postgres source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
   - name: raw__ocw__studio__postgres__gdrive_sync_drivefile__keyset
     description: >-
       Primary key of every current record of raw__ocw__studio__postgres__gdrive_sync_drivefile,

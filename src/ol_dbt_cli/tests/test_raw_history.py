@@ -149,14 +149,15 @@ class TestCommittedFiles:
         assert stale_history_files(REPO_ROOT, rendered) == [], "Run `ol-dbt inventory history --write`."
 
     def test_real_scope(self) -> None:
-        """336 tables: 339 on 2026-11-10, plus mitxonline courses_paidcourserun.
+        """337 tables: 339 on 2026-11-10, plus mitxonline courses_paidcourserun.
 
         Less mitx's five unmodeled assessment_ai* tables, plus zendesk macros once
-        it synced incremental_deduped_history.
+        it synced incremental_deduped_history, plus ocw external_resources_externalresourcestate
+        once it was modeled.
         """
         selected = history_tables(load_units(REAL_INVENTORY))
         raw_tables = {table.raw_table for rows in selected.values() for table in rows}
-        assert len(raw_tables) == 336  # noqa: PLR2004
+        assert len(raw_tables) == 337  # noqa: PLR2004
         assert not raw_tables & LEARNER_ACTIVITY_TABLES
 
     def test_live_snapshots_are_the_pilots_and_mitxonline(self) -> None:
