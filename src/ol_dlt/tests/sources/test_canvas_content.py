@@ -326,7 +326,8 @@ def test_member_facts_record_what_canvas_says_without_judging_it() -> None:
         cartridge.MODULE_META: (
             f"<modules {_CC}><module><title>Week 1</title><items><item>"
             "<workflow_state>unpublished</workflow_state><title>Old reading</title>"
-            "<identifierref>m</identifierref></item></items></module></modules>"
+            "<identifierref>m</identifierref><content_type>Attachment</content_type>"
+            "</item></items></module></modules>"
         ),
         "web_resources/notes/hidden.pdf": "x",
         "web_resources/secret/a.pdf": "x",
@@ -385,8 +386,16 @@ def test_member_facts_record_what_canvas_says_without_judging_it() -> None:
 @pytest.mark.parametrize(
     "item",
     [
-        "<title>Reading</title><identifierref>m</identifierref>",
-        "<workflow_state>active</workflow_state><identifierref>m</identifierref>",
+        "<title>Reading</title><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        "<workflow_state>active</workflow_state><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        # Learn reads every item's title, so an unpublished one fails too.
+        "<workflow_state>unpublished</workflow_state><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        # And every item's content_type, whether or not it holds files.
+        "<workflow_state>active</workflow_state><title>Reading</title>"
+        "<identifierref>nothing</identifierref>",
     ],
 )
 def test_a_malformed_module_item_fails_the_course_as_in_learn(item: str) -> None:

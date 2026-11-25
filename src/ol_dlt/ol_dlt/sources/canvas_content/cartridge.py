@@ -250,24 +250,18 @@ def module_items(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
     resources = resources_by_identifierref(archive.read(MANIFEST))
     items: list[dict[str, Any]] = []
     root = ElementTree.fromstring(archive.read(MODULE_META))
-    # A module without a title, an item without a workflow_state, or an active
-    # item without a title raises, as in Learn, so the course is skipped rather
-    # than published with a guessed title.
+    # A module without a title, or an item without a workflow_state, title or
+    # content_type, raises, as Learn's parse_module_meta fails the course on any
+    # of them, whatever the item's state and whether it holds files.
     for module in root.findall(".//cccv1p0:module", NAMESPACES):
         module_title = module.find("cccv1p0:title", NAMESPACES).text
         for item in module.findall("cccv1p0:items/cccv1p0:item", NAMESPACES):
             state = item.find("cccv1p0:workflow_state", NAMESPACES).text
+            title = item.find("cccv1p0:title", NAMESPACES).text
+            item.find("cccv1p0:content_type", NAMESPACES).text  # noqa: B018
             reference = item.find("cccv1p0:identifierref", NAMESPACES)
             identifierref = reference.text if reference is not None else None
-            file_lists = resources.get(identifierref or "", [])
-            if not any(file_lists):
-                continue
-            title = (
-                item.find("cccv1p0:title", NAMESPACES).text
-                if state == "active"
-                else item.findtext("cccv1p0:title", None, NAMESPACES)
-            )
-            for files in file_lists:
+            for files in resources.get(identifierref or "", []):
                 items.extend(
                     {
                         "path": file,
@@ -532,7 +526,10 @@ def _config_visible(
 def published_items(
     archive: zipfile.ZipFile, config: dict[str, dict[str, Any]], now: datetime
 ) -> dict[str, dict[str, Any]]:
-    """Return what students can reach in a course at ``now``, keyed by path.
+    """Return what MIT Learn treats as visible in a course at ``now``, by path.
+
+    A page's linked files are admitted whether or not the page itself is
+    visible, as in Learn.
 
     :param archive: The course's ``.imscc``.
     :param config: The export's ``url_config``.

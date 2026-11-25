@@ -7,10 +7,10 @@ models:
     The current state of every Canvas course in the landing zone: one row per
     course and one per member of its newest export, whoever can see it, with what
     the export records about the member (files_*, page_*, api_*, module_items) and
-    the text Tika extracted from a member of a text type that students can reach
-    (others have no text, since every analyst can read this table). The learn_* columns
-    are
-    MIT Learn's reading of the same archive at the time of the read, for the
+    the text Tika extracted from a member of a text type that MIT Learn loads
+    (others have no text, since every analyst can read this table). The learn_*
+    columns are MIT Learn's reading of the same archive at the time of the read, for
+    the
     integrations__learn__canvas_* views; other readers should use the facts.
   columns:
   - name: course_id
@@ -67,7 +67,7 @@ models:
   - name: coursecontent_text_extraction_status
     description: str, extracted, empty (Tika found no text), failed, unreadable (over
       the size limit or not readable from the archive), or not_read (not a text type,
-      or not one students can reach by coursecontent_learn_published); null on a course
+      or not one MIT Learn loads, per coursecontent_learn_published); null on a course
       row
   - name: coursecontent_text_read_status
     description: str, the extraction status of this read itself, before an earlier
