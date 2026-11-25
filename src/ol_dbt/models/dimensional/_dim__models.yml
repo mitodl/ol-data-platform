@@ -3522,7 +3522,7 @@ unit_tests:
           , cast(null as varchar) as source_load_id
   expect:
     rows:
-    - problem_attempt_key: "439d42f650688f028bc958a90085e6ba"  # pragma: allowlist secret
+    - problem_attempt_key: "439d42f650688f028bc958a90085e6ba"  # pragma: allowlist secret gitleaks:allow
       event_type: "problem_check"
       user_fk: "USER_PK"
       event_timestamp_iso8601: "2024-01-15T10:00:00.000000Z"
