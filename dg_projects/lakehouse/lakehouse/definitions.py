@@ -760,12 +760,14 @@ non_airbyte_staging_schedules = (
 # job builds those too.
 #
 # Selects the models tagged qa_scheduled with their upstream models: the Learn
-# views whose every QA raw input exists, and the dimensional tables the b2b
+# views whose every QA raw input exists, the dimensional tables the b2b
 # StarRocks views read (_b2b_analytics__sources.yml), which have no other QA
-# build. `ol-dbt validate`'s qa_branch_contract check fails a tagged model that
-# reads more than one ingestion unit unless it declares every one of them in
-# qa_branches and the committed QA observation shows them held, so a QA build
-# is complete relative
+# build, and ocw_external_resource_link_report. QA loads OCW Studio with dlt
+# while the inventory's loader is Airbyte, so non_airbyte_staging_daily skips
+# that unit and only the tag gets its staging built in QA. `ol-dbt validate`'s
+# qa_branch_contract check fails a tagged model that reads more than one
+# ingestion unit unless it declares every one of them in qa_branches and the
+# committed QA observation shows them held, so a QA build is complete relative
 # to QA's apps rather than a silently partial union. The
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that
 # QA's data_loading schedules load daily, so QA holds close to production's
