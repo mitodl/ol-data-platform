@@ -3,9 +3,9 @@
 Its Role allows create and delete on Secrets but never get or list, so the
 publisher never reads a token back through the API. That alone doesn't stop a
 compromised publisher: a MarimoNotebook whose auth Secret is some other Secret
-in the namespace makes marimo print that value in its log. The admission policy
-on MarimoNotebooks closes that path by pinning the auth Secret to the app's
-own token Secrets.
+in the namespace makes marimo print that value in its log. The deployment's
+admission policy on MarimoNotebooks has to close that path by pinning the auth
+Secret to the app's own token Secrets (see README.md).
 """
 
 import urllib.error
