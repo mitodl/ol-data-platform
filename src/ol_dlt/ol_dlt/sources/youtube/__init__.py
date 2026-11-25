@@ -81,6 +81,11 @@ CHANNELS_LIST_UNITS = 1
 CAPTION_QUOTA_UNITS_DEFAULT = 9_000
 # A video's tracks are listed again once their last listing is this old.
 CAPTIONS_RELIST_DAYS = 90
+# Sends the caption calls that cost quota (channels.list, captions.list and
+# captions.download) once each. dlt's default client retries a 429 or 5xx, and
+# each retry would spend units the run's budget never counted; a video whose
+# call failed is fetched again on a later run instead.
+_CAPTIONS_HTTP = requests.Client(request_max_attempts=1)
 # Data API error reasons that mean the day's quota is spent.
 QUOTA_REASONS = frozenset({"quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"})
 # Data API error reasons that mean the credentials cannot read any captions.
@@ -396,7 +401,7 @@ class CaptionsClient:
             account has no channel.
         """
         try:
-            resp = requests.get(
+            resp = _CAPTIONS_HTTP.get(
                 f"{YOUTUBE_API_BASE}/channels",
                 params={"part": "id", "mine": "true"},
                 headers=self._authorization(),
@@ -415,7 +420,7 @@ class CaptionsClient:
 
     def list_tracks(self, video_id: str) -> list[dict[str, Any]]:
         """Return captions.list's items for a video (one page holds them all)."""
-        resp = requests.get(
+        resp = _CAPTIONS_HTTP.get(
             f"{YOUTUBE_API_BASE}/captions",
             params={"part": "snippet", "videoId": video_id},
             headers=self._authorization(),
@@ -425,7 +430,7 @@ class CaptionsClient:
 
     def download(self, caption_id: str) -> str:
         """Return a caption track as SRT."""
-        resp = requests.get(
+        resp = _CAPTIONS_HTTP.get(
             f"{YOUTUBE_API_BASE}/captions/{caption_id}",
             params={"tfmt": "srt"},
             headers=self._authorization(),
@@ -1343,6 +1348,20 @@ def youtube_source(  # noqa: C901
                 video_languages[video["id"]] = {language} if language else set()
                 if (video.get("contentDetails") or {}).get("caption") == "true":
                     captioned.add(video["id"])
+        # A requests error's text names the URL, and videos.list's carries MIT
+        # Learn's API key, so these log no more than its status and reason.
+        except requests.HTTPError as exc:
+            logger.warning(  # noqa: TRY400
+                "Not fetching captions: HTTP %s (%s)",
+                _status_code(exc),
+                _api_error_reason(exc),
+            )
+            return
+        except requests.RequestException as exc:
+            logger.warning(  # noqa: TRY400
+                "Not fetching captions: %s", type(exc).__name__
+            )
+            return
         except Exception:
             logger.exception("Not fetching captions")
             return

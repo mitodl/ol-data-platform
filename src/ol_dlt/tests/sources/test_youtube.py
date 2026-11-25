@@ -3,6 +3,7 @@
 import base64
 import json
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ import pyarrow as pa
 import pytest
 from dlt.extract.exceptions import ResourceExtractionError
 from dlt.sources.helpers import requests
+from requests.adapters import BaseAdapter
 
 from ol_dlt import config
 from ol_dlt.sources import youtube
@@ -640,7 +642,7 @@ def test_captions_client_reads_the_channel_its_token_is_for(monkeypatch):
         items = [{"id": "UC-ocw"}] if len(calls) == 1 else []
         return FakeResponse(json_data={"items": items})
 
-    monkeypatch.setattr(youtube.requests, "get", _fake_get)
+    monkeypatch.setattr(youtube._CAPTIONS_HTTP, "get", _fake_get)  # noqa: SLF001
     client = youtube.CaptionsClient(
         youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}), "ocw"
     )
@@ -879,6 +881,31 @@ def test_malformed_caption_credentials_end_only_the_transcripts_resource(
     assert list(source.resources["raw__youtube__api__transcripts"]) == []
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        _http_error(HTTPStatus.FORBIDDEN, "keyInvalid"),
+        requests.ConnectionError("Max retries exceeded with url: /videos?key=AIza-k"),
+    ],
+)
+def test_a_failed_videos_lookup_does_not_log_the_api_key(monkeypatch, caplog, error):
+    error.args = (
+        f"{error.args[0]} for url: {youtube.YOUTUBE_API_BASE}/videos?key=AIza-k",
+    )
+    client = _FakeCaptions()
+    _transcripts_resource(monkeypatch, ["v"], client)
+
+    def _failing_videos(_ids, _part, _key):
+        raise error
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(youtube, "_videos", _failing_videos)
+    source = youtube.youtube_source(api_key="k")
+    assert list(source.resources["raw__youtube__api__transcripts"]) == []
+    assert "Not fetching captions" in caplog.text
+    assert "AIza-k" not in caplog.text
+
+
 def test_a_second_run_does_not_download_unchanged_tracks(monkeypatch, tmp_path):
     """The resource state carries what was downloaded from one run to the next."""
     client = _FakeCaptions()
@@ -1025,7 +1052,7 @@ def test_captions_client_refreshes_its_access_token_when_it_expires(monkeypatch)
         return FakeResponse(content=_srt("hello").encode())
 
     monkeypatch.setattr(youtube.requests, "post", _fake_post)
-    monkeypatch.setattr(youtube.requests, "get", _fake_get)
+    monkeypatch.setattr(youtube._CAPTIONS_HTTP, "get", _fake_get)  # noqa: SLF001
     client = youtube.CaptionsClient(
         youtube.CaptionCredentials("id", "secret", {"other": "x", "ocw": "refresh"}),
         "ocw",
@@ -1077,20 +1104,25 @@ def test_ocw_transcript_video_ids_are_empty_outside_deployed_profiles(monkeypatc
     assert youtube._ocw_transcript_video_ids() == frozenset()
 
 
-def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch):
+def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch, caplog):
     resolutions: list[str | None] = []
+    caption_lookups: list[youtube.CaptionCredentials] = []
 
     def _resolve(api_key: str | None) -> str:
         resolutions.append(api_key)
         return "k"
 
+    def _clients(credentials):
+        caption_lookups.append(credentials)
+        return {"c": _FakeCaptions()}
+
     monkeypatch.setattr(youtube, "_resolve_api_key", _resolve)
     monkeypatch.setattr(
         youtube,
         "_resolve_caption_credentials",
-        lambda: youtube.CaptionCredentials("id", "secret", "refresh"),
+        lambda: youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}),
     )
-    monkeypatch.setattr(youtube, "CaptionsClient", lambda _credentials: _FakeCaptions())
+    monkeypatch.setattr(youtube, "caption_clients", _clients)
     monkeypatch.setattr(youtube, "_ocw_transcript_video_ids", frozenset)
     monkeypatch.setattr(
         youtube,
@@ -1108,6 +1140,46 @@ def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch):
     for resource in source.resources.values():
         list(resource)
     assert resolutions == ["k"]
+    # The transcripts resource got as far as its own videos.list lookup.
+    assert len(caption_lookups) == 1
+    assert "Not fetching captions" not in caplog.text
+
+
+def test_quota_charged_caption_calls_are_sent_once(monkeypatch):
+    """A retried call would spend units the run's caption budget never counted."""
+    sent: list[str] = []
+
+    class _Unavailable(BaseAdapter):
+        def send(  # noqa: PLR0913
+            self,
+            request,
+            stream=False,  # noqa: ARG002, FBT002
+            timeout=None,  # noqa: ARG002
+            verify=True,  # noqa: ARG002, FBT002
+            cert=None,  # noqa: ARG002
+            proxies=None,  # noqa: ARG002
+        ):
+            sent.append(request.url)
+            response = requests.Response()
+            response.status_code = HTTPStatus.SERVICE_UNAVAILABLE
+            response.request = request
+            response.url = request.url
+            response._content = b"{}"  # noqa: SLF001
+            return response
+
+        def close(self):
+            pass
+
+    session = youtube._CAPTIONS_HTTP.session  # noqa: SLF001
+    monkeypatch.setattr(session, "adapters", {"https://": _Unavailable()})
+    client = youtube.CaptionsClient(
+        youtube.CaptionCredentials("id", "secret", {"ocw": "refresh"}), "ocw"
+    )
+    monkeypatch.setattr(client, "_authorization", lambda: {})
+
+    with pytest.raises(requests.HTTPError):
+        client.download("c1")
+    assert len(sent) == 1
 
 
 # Matches the real mitodl/open-video-data format: a YAML *list* of channel dicts.
