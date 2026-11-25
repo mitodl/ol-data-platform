@@ -250,20 +250,30 @@ def module_items(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
     resources = resources_by_identifierref(archive.read(MANIFEST))
     items: list[dict[str, Any]] = []
     root = ElementTree.fromstring(archive.read(MODULE_META))
+    # A module without a title, an item without a workflow_state, or an active
+    # item without a title raises, as in Learn, so the course is skipped rather
+    # than published with a guessed title.
     for module in root.findall(".//cccv1p0:module", NAMESPACES):
-        module_title = module.findtext("cccv1p0:title", None, NAMESPACES)
+        module_title = module.find("cccv1p0:title", NAMESPACES).text
         for item in module.findall("cccv1p0:items/cccv1p0:item", NAMESPACES):
+            state = item.find("cccv1p0:workflow_state", NAMESPACES).text
             reference = item.find("cccv1p0:identifierref", NAMESPACES)
             identifierref = reference.text if reference is not None else None
-            for files in resources.get(identifierref or "", []):
+            file_lists = resources.get(identifierref or "", [])
+            if not any(file_lists):
+                continue
+            title = (
+                item.find("cccv1p0:title", NAMESPACES).text
+                if state == "active"
+                else item.findtext("cccv1p0:title", None, NAMESPACES)
+            )
+            for files in file_lists:
                 items.extend(
                     {
                         "path": file,
-                        "title": item.findtext("cccv1p0:title", None, NAMESPACES),
+                        "title": title,
                         "module": module_title,
-                        "workflow_state": item.findtext(
-                            "cccv1p0:workflow_state", None, NAMESPACES
-                        ),
+                        "workflow_state": state,
                     }
                     for file in files
                 )
@@ -632,6 +642,10 @@ def member_facts(
                 "linked_from_pages", []
             ).append(item["path"])
     for path, member in facts.items():
+        # Canvas reorders the manifest's resources between exports, and the
+        # version digests these facts.
+        if "linked_from_pages" in member:
+            member["linked_from_pages"] = sorted(set(member["linked_from_pages"]))
         key = _config_key({"path": path, "title": member.get("page_title") or ""})
         entry = config.get(key) if key else None
         if entry:

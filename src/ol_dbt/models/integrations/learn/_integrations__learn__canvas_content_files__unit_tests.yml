@@ -14,48 +14,65 @@ unit_tests:
     # One key, two files: the docx has text, the PDF is invalid.
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/a.docx,
       coursecontent_file_extension: .docx, coursecontent_text: Docx, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k1, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k1, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/a.pdf,
       coursecontent_file_extension: .pdf, coursecontent_text: Tika read it, coursecontent_text_extraction_status: extracted,
-      coursecontent_pdf_is_valid: false, coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_text_read_status: extracted, coursecontent_pdf_is_valid: false,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
       coursecontent_learn_key: k1, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     # An invalid PDF alone: a failure with no text.
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/b.pdf,
       coursecontent_file_extension: .pdf, coursecontent_text: Tika read it, coursecontent_text_extraction_status: extracted,
-      coursecontent_pdf_is_valid: false, coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_text_read_status: extracted, coursecontent_pdf_is_valid: false,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
       coursecontent_learn_key: k2, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     # Not published, in a draft folder, not a text type, or no text: left out.
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/c.txt,
       coursecontent_file_extension: .txt, coursecontent_text: Hidden, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: false, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: null, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: false,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: null, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/rough_drafts/d.txt,
       coursecontent_file_extension: .txt, coursecontent_text: Draft, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: true,
-      coursecontent_learn_key: k4, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: true, coursecontent_learn_key: k4, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/e.mp4,
       coursecontent_file_extension: .mp4, coursecontent_text: null, coursecontent_text_extraction_status: not_read,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k5, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: not_read, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k5, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/h.txt,
       coursecontent_file_extension: .txt, coursecontent_text: null, coursecontent_text_extraction_status: empty,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k7, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: empty, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k7, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     # One key, two files with text: the last by path.
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/f.md,
       coursecontent_file_extension: .md, coursecontent_text: Md, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/f.txt,
       coursecontent_file_extension: .txt, coursecontent_text: Txt, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # The PDF failed this read and staging gave it an earlier read's text; the
+    # docx extracted this read, so it is the key's file, as Learn would choose.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/r/x.docx,
+      coursecontent_file_extension: .docx, coursecontent_text: Now, coursecontent_text_extraction_status: extracted,
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k9, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/r/x.pdf,
+      coursecontent_file_extension: .pdf, coursecontent_text: Earlier, coursecontent_text_extraction_status: extracted,
+      coursecontent_text_read_status: failed, coursecontent_pdf_is_valid: true, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k9, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # Alone, a file that failed this read keeps an earlier read's text.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/r/y.pdf,
+      coursecontent_file_extension: .pdf, coursecontent_text: Earlier, coursecontent_text_extraction_status: extracted,
+      coursecontent_text_read_status: failed, coursecontent_pdf_is_valid: true, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k10, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
     # At the root of the archive.
     - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: g.html,
       coursecontent_file_extension: .html, coursecontent_text: Root, coursecontent_text_extraction_status: extracted,
-      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
-      coursecontent_learn_key: k8, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+      coursecontent_text_read_status: extracted, coursecontent_learn_published: true,
+      coursecontent_draft_in_parent_path: false, coursecontent_learn_key: k8, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
   expect:
     rows:
     - {run_readable_id: 1-A+canvas, key: k1, source_path: web_resources/n/a.docx,
@@ -66,6 +83,10 @@ unit_tests:
       content: Txt}
     - {run_readable_id: 1-A+canvas, key: k8, source_path: /g.html, extraction_status: extracted,
       content: Root}
+    - {run_readable_id: 1-A+canvas, key: k9, source_path: web_resources/r/x.docx,
+      extraction_status: extracted, content: Now}
+    - {run_readable_id: 1-A+canvas, key: k10, source_path: web_resources/r/y.pdf,
+      extraction_status: extracted, content: Earlier}
 - name: test_integrations__learn__canvas_courses_fills_learns_fallbacks
   description: >
     The run id and URL are built as Learn builds them, and a course with no title

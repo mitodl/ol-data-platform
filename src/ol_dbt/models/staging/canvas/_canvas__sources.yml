@@ -12,7 +12,8 @@ sources:
       The newest Common Cartridge export of every Canvas course in the landing
       zone (canvas/course_content/<course_id>/): one row for the course and one for
       each member of the archive, whoever can see it, with what the export records
-      about the member and the text Tika extracted from a member of a text type.
+      about the member and the text Tika extracted from a member of a text type
+      that students can reach.
       The learn_* columns are MIT Learn's reading of the archive at the time of the
       read (Learn-parity data). Loaded by the ol_dlt canvas_content source, which
       appends a full set of rows for a course each time its version changes;

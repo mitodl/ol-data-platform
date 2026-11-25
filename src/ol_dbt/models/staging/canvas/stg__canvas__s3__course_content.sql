@@ -108,6 +108,7 @@ select
     case
         when extracted.content is not null then 'extracted' else source.extraction_status
     end as coursecontent_text_extraction_status,
+    source.extraction_status as coursecontent_text_read_status,
     source.pdf_is_valid as coursecontent_pdf_is_valid,
     source.in_tutor_folder as coursecontent_in_tutor_folder,
     source.draft_in_parent_path as coursecontent_draft_in_parent_path,

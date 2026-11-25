@@ -382,6 +382,29 @@ def test_member_facts_record_what_canvas_says_without_judging_it() -> None:
     assert assignment["page_unlock_at"] == datetime(2026, 7, 1, tzinfo=UTC)
 
 
+@pytest.mark.parametrize(
+    "item",
+    [
+        "<title>Reading</title><identifierref>m</identifierref>",
+        "<workflow_state>active</workflow_state><identifierref>m</identifierref>",
+    ],
+)
+def test_a_malformed_module_item_fails_the_course_as_in_learn(item: str) -> None:
+    members = {
+        cartridge.MANIFEST: (
+            f"<manifest {_IMS}><organizations><item><item identifierref='m'/></item>"
+            f"</organizations><resources>{_webcontent('m', 'web_resources/a.pdf')}"
+            "</resources></manifest>"
+        ),
+        cartridge.MODULE_META: (
+            f"<modules {_CC}><module><title>Week 1</title><items><item>{item}"
+            "</item></items></module></modules>"
+        ),
+    }
+    with pytest.raises(AttributeError):
+        cartridge.module_items(_open(_archive(members)))
+
+
 def test_the_checksum_ignores_export_noise_and_follows_the_published_set() -> None:
     def checksum(
         manifest_note: str,
@@ -442,27 +465,23 @@ def test_derived_title() -> None:
     assert canvas_content.derived_title("a/lecture-1_notes.pdf") == "Lecture 1 Notes"
 
 
-def test_every_text_member_is_read_except_the_settings_canvas_rewrites() -> None:
+def test_only_text_members_students_can_reach_are_read() -> None:
     names = [
         "web_resources/not-published.pdf",
         "web_resources/draft_notes/b.pdf",
         "web_resources/movie.mp4",
-        cartridge.MANIFEST,
-        "course_settings/files_meta.xml",
         "course_settings/syllabus.html",
     ]
     archive = _open(_archive(dict.fromkeys(names, "x")))
-    published: dict[str, dict[str, Any]] = {"course_settings/syllabus.html": {}}
+    published: dict[str, dict[str, Any]] = {
+        name: {} for name in names if name != "web_resources/not-published.pdf"
+    }
     read = [
         info.filename
         for info in archive.infolist()
         if canvas_content.is_text_member(info, published)
     ]
-    assert read == [
-        "web_resources/not-published.pdf",
-        "web_resources/draft_notes/b.pdf",
-        "course_settings/syllabus.html",
-    ]
+    assert read == ["web_resources/draft_notes/b.pdf", "course_settings/syllabus.html"]
 
 
 @pytest.mark.parametrize(
@@ -635,9 +654,10 @@ def test_load_writes_the_course_and_every_member(fake_tika: FakeTika) -> None:
     assert notes["extraction_status"] == "extracted"
     assert members["wiki_content/w.html"]["learn_title"] == "Week 1"
     assert members["wiki_content/w.html"]["page_title"] == "Week 1"
-    # A hidden file lands with its text and what hid it, and Learn would skip it.
+    # A hidden file lands with what hid it, without its text.
     hidden = members["web_resources/hidden.txt"]
-    assert hidden["extraction_status"] == "extracted"
+    assert hidden["extraction_status"] == "not_read"
+    assert hidden["content"] is None
     assert hidden["files_hidden"] is True
     assert hidden["learn_published"] is False
     assert hidden["learn_key"] is None

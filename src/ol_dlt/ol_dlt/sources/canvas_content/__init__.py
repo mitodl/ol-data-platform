@@ -12,12 +12,15 @@ Every member of each course's newest export lands, whoever can see it:
     the course's settings                   -> content_kind = course
     each file in the archive                -> content_kind = member
         + what the export records about it (``cartridge.member_facts``)
-        + the text Tika extracts, for a member of a text type
+        + the text Tika extracts, for a member of a text type students can
+          reach (``is_text_member``)
     -> raw__canvas__s3__course_content
 
 Who can see a member is left to the reader: the ``files_*``, ``page_*``,
 ``api_*`` and ``module_items`` columns carry what Canvas recorded, with dates in
-UTC, and nothing is dropped for being hidden, locked, a draft or an instructor's.
+UTC, and no row is dropped for being hidden, locked, a draft or an instructor's.
+Only the text of what students cannot reach is held back, because the raw and
+staging schemas are readable by every analyst.
 
 MIT Learn builds its Canvas course and ContentFiles from the same exports
 (``learning_resources/etl/canvas.py`` in mit-learn). What Learn would treat as
@@ -141,8 +144,8 @@ KIND_COURSE = "course"
 KIND_MEMBER = "member"
 KIND_UNPUBLISHED = "unpublished"
 
-# A member whose text is not extracted: not a text type, or the manifest or a
-# course_settings/ file the version leaves out (see cartridge.CHECKSUM_EXCLUDED).
+# A member whose text is not extracted: not a text type, or not one students can
+# reach (see is_text_member).
 STATUS_NOT_READ = "not_read"
 
 _TIMESTAMP = pa.timestamp("us", tz="UTC")
@@ -291,14 +294,14 @@ def pdf_is_valid(body: bytes) -> bool:
 def is_text_member(info: zipfile.ZipInfo, published: dict[str, dict[str, Any]]) -> bool:
     """Tell whether a member's text is extracted.
 
-    Every member of a text type is, published or not, except the manifest and
-    the course_settings/ files Canvas rewrites on every export, which the
-    version leaves out, so their text could go stale. A published one of those
-    (the syllabus) is read.
+    Only a member of a text type that students can reach is read, by Learn's
+    reading of who can (``published``). The text of the rest (instructor-only
+    pages, hidden files, tutor solutions) would be readable by everyone with
+    access to the raw and staging schemas, so their rows carry facts and no text.
     """
-    return PurePosixPath(info.filename).suffix.lower() in VALID_TEXT_FILE_TYPES and (
-        info.filename in published
-        or not info.filename.startswith(cartridge.CHECKSUM_EXCLUDED)
+    return (
+        PurePosixPath(info.filename).suffix.lower() in VALID_TEXT_FILE_TYPES
+        and info.filename in published
     )
 
 

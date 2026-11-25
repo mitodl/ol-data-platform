@@ -32,13 +32,14 @@ with
     members as (
         select
             stg.*,
+            -- What Learn's loader would make of this read. A key's file is chosen
+            -- on it, before an earlier read's text stands in for a failure, as
+            -- Learn chooses on what it reads now.
             case
-                when
-                    stg.coursecontent_text_extraction_status = 'unreadable'
-                    or (stg.coursecontent_file_extension = '.pdf' and stg.coursecontent_pdf_is_valid = false)
+                when stg.coursecontent_file_extension = '.pdf' and stg.coursecontent_pdf_is_valid = false
                 then 'unreadable'
-                else stg.coursecontent_text_extraction_status
-            end as learn_extraction_status
+                else stg.coursecontent_text_read_status
+            end as learn_read_status
         from {{ ref("stg__canvas__s3__course_content") }} as stg
         where
             stg.coursecontent_kind = 'member'
@@ -70,24 +71,30 @@ with
             row_number() over (
                 partition by members.course_id, members.coursecontent_learn_key
                 order by
-                    case members.learn_extraction_status
+                    case members.learn_read_status
                         when 'extracted' then 1 when 'failed' then 2 when 'unreadable' then 3 else 4
                     end,
                     members.coursecontent_member_path desc
             ) as key_rank
         from members
     ),
-    content_files as (
+    statuses as (
         select
             chosen.*,
-            -- Only a read needs to tell these apart. Downstream both are a file
-            -- with no text whose row keeps a prune from taking it.
+            -- Only a read needs to tell unreadable from failed. Downstream both are
+            -- a file with no text whose row keeps a prune from taking it. A failure
+            -- takes the text of an earlier read of the same bytes (staging).
             case
-                when chosen.learn_extraction_status = 'unreadable' then 'failed' else chosen.learn_extraction_status
-            end as extraction_status,
-            case when chosen.learn_extraction_status = 'extracted' then chosen.coursecontent_text end as content
+                when chosen.learn_read_status = 'unreadable'
+                then 'failed'
+                else chosen.coursecontent_text_extraction_status
+            end as extraction_status
         from chosen
-        where chosen.key_rank = 1 and chosen.learn_extraction_status in ('extracted', 'failed', 'unreadable')
+        where chosen.key_rank = 1 and chosen.learn_read_status in ('extracted', 'failed', 'unreadable')
+    ),
+    content_files as (
+        select statuses.*, case when statuses.extraction_status = 'extracted' then statuses.coursecontent_text end as content
+        from statuses
     )
 
 select
