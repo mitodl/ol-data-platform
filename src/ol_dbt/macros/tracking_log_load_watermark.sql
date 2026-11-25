@@ -50,7 +50,7 @@
         {%- if stored_load_id is none -%}
             {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
         {%- else -%}
-            {{ load_column }} >= '{{ "%.6f" | format(stored_load_id | float - lookback_seconds) }}'
+            {{ load_column }} >= '{{ dlt_load_id_floor(stored_load_id, lookback_seconds) }}'
         {%- endif -%}
     {%- endif -%}
 {% endmacro %}

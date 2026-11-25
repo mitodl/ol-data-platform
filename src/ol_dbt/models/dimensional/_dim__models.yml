@@ -995,8 +995,11 @@ models:
     studentmodule history data. One row per unique event: one problem_check per
     (platform, user, course, problem, attempt) — the earliest timestamp wins when
     both tracking log and studentmodule sources have the same attempt — and all
-    showanswer events regardless of count. Incremental; full-refresh required when
-    backfilling or after schema changes.
+    showanswer events regardless of count. Incremental on the tracking-log load id
+    (event time for edX.org and studentmodule), so a tracking-log file that lands
+    late
+    still reaches the table. Full-refresh required when backfilling or after schema
+    changes.
   config:
     meta:
       qa_branches:
@@ -1088,6 +1091,19 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
+  - name: problem_attempt_key
+    description: string, the model's unique_key. For problem_check, a surrogate key
+      of (platform, openedx_user_id, courserun_readable_id, problem_block_fk, attempt,
+      event_type), so an attempt keeps one row and an earlier event found later replaces
+      it. For showanswer, the row's event_id.
+    tests:
+    - not_null
+    - unique
+  - name: source_load_id
+    description: string, the dlt load id (_dlt_load_id) of the staging tracking-log
+      row this event came from. Null for studentmodule rows and edX.org rows. Each
+      run re-reads the staging rows loaded since the newest stored value per platform,
+      less a 3-hour lookback.
 - name: tfact_studentmodule_problems
   description: >
     Transactional fact table for studentmodule problem submissions. Each row represents

@@ -1,6 +1,6 @@
 {{ config(
     materialized='incremental',
-    unique_key='event_id',
+    unique_key='problem_attempt_key',
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns',
     partition_by=(['platform'] if target.type == 'starrocks' else none),
@@ -17,24 +17,78 @@
     )
 %}
 
--- Precompute incremental watermarks once (1 scan instead of 8 correlated subqueries).
--- Each source CTE receives the pre-fetched max timestamp for its platform.
-{% if is_incremental() %}
 {#-
-    The watermark join below filters after the scan, so on its own every historical
-    problem event in the four tracking-log tables is read with both JSON columns. On
-    StarRocks that ran a CN out of process memory (13.9 GB) while the query's tracked
-    memory stayed near 2 GB, so query_mem_limit could not stop it. A literal floor on
-    the ISO 8601 text is a scan predicate (StarRocks applies it to the Iceberg scan's
-    min/max pruning), so old files and row groups are skipped. It is a day before the
-    watermark's date because staging text written by Trino keeps the event's UTC
-    offset, so its date can be a day behind the UTC date. The exact comparison
-    against the watermark still decides each row.
+    One entry per tracking-log source. `load_id` marks the dlt-loaded sources, whose
+    staging rows carry the load that wrote them (useractivity_load_id). edX.org's raw
+    table is frozen (ingestion/inventory/retired.yml), so no row can arrive late there
+    and it keeps the event-time watermark.
+-#}
+{%- set tracking_log_sources = [
+    {
+        'platform': 'mitxonline',
+        'model': 'stg__mitxonline__openedx__tracking_logs__user_activity',
+        'user_id': 'openedx_user_id',
+        'courserun': 'tracking_logs.courserun_readable_id',
+        'load_id': true,
+    },
+    {
+        'platform': 'mitxpro',
+        'model': 'stg__mitxpro__openedx__tracking_logs__user_activity',
+        'user_id': 'openedx_user_id',
+        'courserun': 'tracking_logs.courserun_readable_id',
+        'load_id': true,
+    },
+    {
+        'platform': 'residential',
+        'model': 'stg__mitxresidential__openedx__tracking_logs__user_activity',
+        'user_id': 'user_id',
+        'courserun': 'tracking_logs.courserun_readable_id',
+        'load_id': true,
+    },
+    {
+        'platform': 'edxorg',
+        'model': 'stg__edxorg__s3__tracking_logs__user_activity',
+        'user_id': 'user_id',
+        'courserun': format_course_id('tracking_logs.courserun_readable_id'),
+        'load_id': false,
+    },
+] -%}
+
+{#-
+    Incremental bounds, read once per run.
+
+    A dlt source re-reads every staging row loaded at or after the newest stored load id
+    less a 3-hour lookback (dlt_load_id_floor). Its event time can be anything, so a
+    tracking-log file that lands days late still reaches this table on the next run.
+    An event-time watermark skipped those rows for good.
+
+    edX.org, and a dlt source with no stored load id yet, use the event-time watermark
+    (max event_timestamp) instead. The literal date floor on the ISO 8601 text, a day
+    before the watermark's date, is a scan predicate: StarRocks applies it to the Iceberg
+    scan's min/max pruning, so old files are skipped. Without it, every historical
+    problem event was read with both JSON columns, and a StarRocks CN ran out of process
+    memory (13.9 GB) while the query's tracked memory stayed near 2 GB, so
+    query_mem_limit could not stop it. The load id literal prunes the same way. A day
+    early because staging text written by Trino keeps the event's UTC offset, so its
+    date can be a day behind the UTC date.
+
+    The table must already have problem_attempt_key, the unique_key. Rows stored before
+    it was added have it null, so delete+insert would never replace them, and every
+    re-read row would be stored twice. Adding it takes a --full-refresh.
 -#}
 {%- set source_date_floor = {} -%}
+{%- set source_load_floor = {} -%}
 {#- A unit test's {{ this }} is a fixture CTE, not a table run_query can read. -#}
-{%- if execute and model.resource_type != 'unit_test' -%}
-    {%- for row in run_query('select platform, max(event_timestamp) from ' ~ this ~ ' group by platform') -%}
+{%- if execute and is_incremental() and model.resource_type != 'unit_test' -%}
+    {%- set stored_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- if 'problem_attempt_key' not in stored_columns -%}
+        {{ exceptions.raise_compiler_error(
+            this ~ " has no problem_attempt_key column. Build it with --full-refresh."
+        ) }}
+    {%- endif -%}
+    {%- for row in run_query(
+        'select platform, max(event_timestamp), max(source_load_id) from ' ~ this ~ ' group by platform'
+    ) -%}
         {%- if row[1] is not none -%}
             {%- do source_date_floor.update({
                 row[0]: (
@@ -43,253 +97,13 @@
                 ).isoformat()
             }) -%}
         {%- endif -%}
+        {%- if row[2] is not none -%}
+            {%- do source_load_floor.update({row[0]: dlt_load_id_floor(row[2])}) -%}
+        {%- endif -%}
     {%- endfor -%}
 {%- endif %}
 
-with watermarks as (
-    select platform, max(event_timestamp) as max_ts
-    from {{ this }}
-    group by platform
-)
-
--- data from tracking logs
-, mitxonline_problem_events as (
-    select
-        user_username
-        , openedx_user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
-    left join watermarks on watermarks.platform = 'mitxonline'
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-        {%- if 'mitxonline' in source_date_floor %}
-        and useractivity_timestamp >= '{{ source_date_floor['mitxonline'] }}'
-        {%- endif %}
-        and (
-            watermarks.max_ts is null
-            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
-        )
-)
-
-, xpro_problem_events as (
-    select
-        user_username
-        , openedx_user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
-    left join watermarks on watermarks.platform = 'mitxpro'
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-        {%- if 'mitxpro' in source_date_floor %}
-        and useractivity_timestamp >= '{{ source_date_floor['mitxpro'] }}'
-        {%- endif %}
-        and (
-            watermarks.max_ts is null
-            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
-        )
-)
-
-, mitxresidential_problem_events as (
-    select
-        user_username
-        , user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
-    left join watermarks on watermarks.platform = 'residential'
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-        {%- if 'residential' in source_date_floor %}
-        and useractivity_timestamp >= '{{ source_date_floor['residential'] }}'
-        {%- endif %}
-        and (
-            watermarks.max_ts is null
-            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
-        )
-)
-
-, edxorg_problem_events as (
-    select
-        user_username
-        , user_id
-        , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
-    left join watermarks on watermarks.platform = 'edxorg'
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-        {%- if 'edxorg' in source_date_floor %}
-        and useractivity_timestamp >= '{{ source_date_floor['edxorg'] }}'
-        {%- endif %}
-        and (
-            watermarks.max_ts is null
-            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
-        )
-)
-
-{% else %}
--- Full-refresh path: no watermark filters
-with mitxonline_problem_events as (
-    select
-        user_username
-        , openedx_user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-)
-
-, xpro_problem_events as (
-    select
-        user_username
-        , openedx_user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-)
-
-, mitxresidential_problem_events as (
-    select
-        user_username
-        , user_id
-        , courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-)
-
-, edxorg_problem_events as (
-    select
-        user_username
-        , user_id
-        , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
-        , useractivity_event_type as event_type
-        , useractivity_event_object as event_json
-        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
-        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
-        , {{ json_query_object('useractivity_event_object', 'answers') }} as answers
-        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
-        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
-        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
-        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
-        , useractivity_timestamp as event_timestamp_iso8601
-        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
-        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
-    from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
-    where
-        courserun_readable_id is not null
-        and useractivity_event_type in {{ problem_events }}
-        and useractivity_event_source = 'server'
-)
-
-{% endif %}
-
-, users as (
+with users as (
     select * from {{ ref('dim_user') }}
 )
 
@@ -298,17 +112,80 @@ with mitxonline_problem_events as (
 )
 
 {% if is_incremental() %}
+, watermarks as (
+    select platform, max(event_timestamp) as max_ts
+    from {{ this }}
+    group by platform
+)
+{% endif %}
+
+-- data from tracking logs
+{%- for source in tracking_log_sources %}
+
+, {{ source.platform }}_problem_events as (
+    select
+        '{{ source.platform }}' as platform
+        , users.user_pk as user_fk
+        , tracking_logs.{{ source.user_id }} as openedx_user_id
+        , tracking_logs.user_username
+        , {{ source.courserun }} as courserun_readable_id
+        , tracking_logs.useractivity_event_type as event_type
+        , tracking_logs.useractivity_event_object as event_json
+        , {{ json_query_string('tracking_logs.useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_object('tracking_logs.useractivity_event_object', 'answers') }} as answers
+        , {{ json_query_string('tracking_logs.useractivity_event_object', "'$.attempts'") }} as attempt
+        , {{ json_query_string('tracking_logs.useractivity_event_object', "'$.success'") }} as success
+        , {{ json_query_string('tracking_logs.useractivity_event_object', "'$.grade'") }} as grade
+        , {{ json_query_string('tracking_logs.useractivity_event_object', "'$.max_grade'") }} as max_grade
+        , {{ from_iso8601_timestamp_nanos('tracking_logs.useractivity_timestamp') }} as event_timestamp
+        , tracking_logs.useractivity_timestamp as event_timestamp_iso8601
+        , {{ iso8601_to_time_key('tracking_logs.useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('tracking_logs.useractivity_timestamp') }} as date_fk
+        {%- if source.load_id %}
+        , tracking_logs.useractivity_load_id as source_load_id
+        {%- else %}
+        , cast(null as varchar) as source_load_id
+        {%- endif %}
+    from {{ ref(source.model) }} as tracking_logs
+    {%- if is_incremental() and not (source.load_id and source.platform in source_load_floor) %}
+    left join watermarks on watermarks.platform = '{{ source.platform }}'
+    {%- endif %}
+    left join users
+        on
+            tracking_logs.{{ source.user_id }} = users.{{ source.platform }}_openedx_user_id
+            and tracking_logs.user_username = users.user_{{ source.platform }}_username
+    where
+        tracking_logs.courserun_readable_id is not null
+        and tracking_logs.useractivity_event_type in {{ problem_events }}
+        and tracking_logs.useractivity_event_source = 'server'
+        {%- if is_incremental() %}
+        {%- if source.load_id and source.platform in source_load_floor %}
+        and tracking_logs.useractivity_load_id >= '{{ source_load_floor[source.platform] }}'
+        {%- else %}
+        {%- if source.platform in source_date_floor %}
+        and tracking_logs.useractivity_timestamp >= '{{ source_date_floor[source.platform] }}'
+        {%- endif %}
+        and (
+            watermarks.max_ts is null
+            or {{ from_iso8601_timestamp_nanos('tracking_logs.useractivity_timestamp') }} > watermarks.max_ts
+        )
+        {%- endif %}
+        {%- endif %}
+)
+{%- endfor %}
+
+{% if is_incremental() %}
 -- Rows already in the target whose stored user_fk no longer matches what dim_user
--- resolves today. The watermarks above only re-select events newer than the last run,
+-- resolves today. The sources above only re-select events loaded since the last run,
 -- so without this a dim_user re-key strands historical activity under the obsolete
 -- key -- the same hazard tfact_grade and tfact_certificate guard against with their
--- stale_user_fk_lookup. delete+insert on event_id replaces the row in place, which
--- only works because these rows keep their stored event_id (see batch below).
+-- stale_user_fk_lookup. delete+insert on problem_attempt_key replaces the row in
+-- place, which only works because these rows keep their stored keys (see batch below).
 -- Two CTEs per platform because the dim_user join keys differ per platform; each
 -- prunes to one partition (the model is partitioned by platform) and joins by
 -- equality rather than an OR across every platform's key pair.
--- Restricted to rows at or below the watermark so an event the source CTEs also
--- re-select cannot arrive twice and double-insert.
+-- A stale row whose attempt this run also writes is dropped in batch below, in favour
+-- of the newly deduplicated row, which resolves its user_fk from dim_user itself.
 -- stale_tuples_* compares dim_user with the distinct stored (user id, username,
 -- user_fk) tuples, not with every stored event: about 700k tuples against 160M rows
 -- (measured 2026-11-20). Joining every event to dim_user ran StarRocks CNs out of
@@ -355,6 +232,7 @@ with mitxonline_problem_events as (
 , stale_key_{{ stale_platform }} as (
     select
         stored.event_id
+        , stored.problem_attempt_key
         , stored.platform
         , stale.user_pk as user_fk
         , stored.openedx_user_id
@@ -372,6 +250,7 @@ with mitxonline_problem_events as (
         , stored.event_timestamp_iso8601
         , stored.time_fk
         , stored.date_fk
+        , stored.source_load_id
     from {{ this }} as stored
     inner join watermarks on watermarks.platform = stored.platform
     inner join stale_tuples_{{ stale_platform }} as stale
@@ -453,194 +332,105 @@ with mitxonline_problem_events as (
         , event_timestamp_iso8601
         , time_fk
         , date_fk
+        , cast(null as varchar) as source_load_id
     from combined_studentmodule_ranked
     where rn = 1
 )
 
 , combined as (
-    select
-        'mitxonline' as platform
-        , users.user_pk as user_fk
-        , mitxonline_problem_events.openedx_user_id
-        , mitxonline_problem_events.user_username
-        , mitxonline_problem_events.courserun_readable_id
-        , mitxonline_problem_events.event_type
-        , mitxonline_problem_events.event_json
-        , mitxonline_problem_events.problem_block_id
-        , mitxonline_problem_events.answers
-        , mitxonline_problem_events.attempt
-        , mitxonline_problem_events.success
-        , mitxonline_problem_events.grade
-        , mitxonline_problem_events.max_grade
-        , mitxonline_problem_events.event_timestamp
-        , mitxonline_problem_events.event_timestamp_iso8601
-        , mitxonline_problem_events.time_fk
-        , mitxonline_problem_events.date_fk
-    from mitxonline_problem_events
-    left join users
-        on
-            mitxonline_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
-            and mitxonline_problem_events.user_username = users.user_mitxonline_username
-
+    {%- for source in tracking_log_sources %}
+    select * from {{ source.platform }}_problem_events
     union all
-
-    select
-        'mitxpro' as platform
-        , users.user_pk as user_fk
-        , xpro_problem_events.openedx_user_id
-        , xpro_problem_events.user_username
-        , xpro_problem_events.courserun_readable_id
-        , xpro_problem_events.event_type
-        , xpro_problem_events.event_json
-        , xpro_problem_events.problem_block_id
-        , xpro_problem_events.answers
-        , xpro_problem_events.attempt
-        , xpro_problem_events.success
-        , xpro_problem_events.grade
-        , xpro_problem_events.max_grade
-        , xpro_problem_events.event_timestamp
-        , xpro_problem_events.event_timestamp_iso8601
-        , xpro_problem_events.time_fk
-        , xpro_problem_events.date_fk
-    from xpro_problem_events
-    left join users
-        on
-            xpro_problem_events.openedx_user_id = users.mitxpro_openedx_user_id
-            and xpro_problem_events.user_username = users.user_mitxpro_username
-
-    union all
-
-    select
-        'residential' as platform
-        , users.user_pk as user_fk
-        , mitxresidential_problem_events.user_id
-        , mitxresidential_problem_events.user_username
-        , mitxresidential_problem_events.courserun_readable_id
-        , mitxresidential_problem_events.event_type
-        , mitxresidential_problem_events.event_json
-        , mitxresidential_problem_events.problem_block_id
-        , mitxresidential_problem_events.answers
-        , mitxresidential_problem_events.attempt
-        , mitxresidential_problem_events.success
-        , mitxresidential_problem_events.grade
-        , mitxresidential_problem_events.max_grade
-        , mitxresidential_problem_events.event_timestamp
-        , mitxresidential_problem_events.event_timestamp_iso8601
-        , mitxresidential_problem_events.time_fk
-        , mitxresidential_problem_events.date_fk
-    from mitxresidential_problem_events
-    left join users
-        on
-            mitxresidential_problem_events.user_id = users.residential_openedx_user_id
-            and mitxresidential_problem_events.user_username = users.user_residential_username
-
-    union all
-
-    select
-        'edxorg' as platform
-        , users.user_pk as user_fk
-        , edxorg_problem_events.user_id
-        , edxorg_problem_events.user_username
-        , edxorg_problem_events.courserun_readable_id
-        , edxorg_problem_events.event_type
-        , edxorg_problem_events.event_json
-        , edxorg_problem_events.problem_block_id
-        , edxorg_problem_events.answers
-        , edxorg_problem_events.attempt
-        , edxorg_problem_events.success
-        , edxorg_problem_events.grade
-        , edxorg_problem_events.max_grade
-        , edxorg_problem_events.event_timestamp
-        , edxorg_problem_events.event_timestamp_iso8601
-        , edxorg_problem_events.time_fk
-        , edxorg_problem_events.date_fk
-    from edxorg_problem_events
-    left join users
-        on
-            edxorg_problem_events.user_id = users.edxorg_openedx_user_id
-            and edxorg_problem_events.user_username = users.user_edxorg_username
-
-    union all
-
-    select
-        platform
-        , user_fk
-        , openedx_user_id
-        , user_username
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , problem_block_id
-        , answers
-        , attempt
-        , success
-        , grade
-        , max_grade
-        , event_timestamp
-        , event_timestamp_iso8601
-        , time_fk
-        , date_fk
-    from combined_studentmodule
+    {%- endfor %}
+    select * from combined_studentmodule
 )
 
--- Deduplicate on (platform, user, course, problem, attempt):
---   - problem_check: keep the earliest event (rn=1) — tracking log events typically
---     have earlier timestamps than studentmodule events for the same submission
---   - showanswer and other types: keep all rows regardless of rank
-, deduped_combined as (
-    select *
-    from (
-        select
-            *
-            , row_number() over (
-                partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                order by event_timestamp nulls last
-            ) as rn
-        from combined
-    ) as subquery
-    where rn = 1 or event_type != 'problem_check'
-)
-
-, batch as (
+-- event_id: unique per (platform, user, course, problem, attempt, event_type, timestamp).
+-- Includes event_timestamp so showanswer events (multiple per attempt) each get a
+-- distinct key.
+-- problem_attempt_key, the unique_key: one problem_check row per (platform, user,
+-- course, problem, attempt), and each showanswer event on its own (its event_id).
+-- Keying problem_check by the attempt lets delete+insert replace the stored row of an
+-- attempt when a run finds an earlier event for it, e.g. a tracking-log row that landed
+-- after the studentmodule row for the same attempt was stored.
+, combined_with_event_id as (
     select
-        -- Surrogate key: unique per (platform, user, course, problem, attempt, event_type, timestamp).
-        -- Includes event_timestamp so showanswer events (multiple per attempt) each get a distinct key,
-        -- and problem_check events are idempotent across runs (same event → same key → no duplicate insert).
         {{ dbt_utils.generate_surrogate_key([
-            'deduped_combined.platform',
-            'deduped_combined.openedx_user_id',
-            'deduped_combined.courserun_readable_id',
-            'deduped_combined.problem_block_id',
-            'deduped_combined.attempt',
-            'deduped_combined.event_type',
-            surrogate_key_timestamptz('deduped_combined.event_timestamp', 'deduped_combined.event_timestamp_iso8601')
+            'combined.platform',
+            'combined.openedx_user_id',
+            'combined.courserun_readable_id',
+            'combined.problem_block_id',
+            'combined.attempt',
+            'combined.event_type',
+            surrogate_key_timestamptz('combined.event_timestamp', 'combined.event_timestamp_iso8601')
         ]) }} as event_id
-        , deduped_combined.platform
-        , deduped_combined.user_fk
-        , deduped_combined.openedx_user_id
-        , deduped_combined.user_username
-        , deduped_combined.courserun_readable_id
-        , deduped_combined.event_type
-        , deduped_combined.event_json
-        , deduped_combined.problem_block_id
-        , deduped_combined.answers
-        , deduped_combined.attempt
-        , deduped_combined.success
-        , deduped_combined.grade
-        , deduped_combined.max_grade
-        , deduped_combined.event_timestamp
-        , deduped_combined.event_timestamp_iso8601
-        , deduped_combined.time_fk
-        , deduped_combined.date_fk
-    from deduped_combined
+        , combined.*
+    from combined
+)
 
-    {% if is_incremental() %}
-    union all
+, keyed as (
+    select
+        case
+            when event_type = 'problem_check'
+                then {{ dbt_utils.generate_surrogate_key([
+                    'platform',
+                    'openedx_user_id',
+                    'courserun_readable_id',
+                    'problem_block_id',
+                    'attempt',
+                    'event_type',
+                ]) }}
+            else event_id
+        end as problem_attempt_key
+        , *
+        , 0 as is_stored
+    from combined_with_event_id
+)
 
-    -- Stored event_id, not a rehash: event_timestamp reads back in UTC, while the source path
-    -- hashed it with its original offset, so a rehash would insert a second row for the event.
+{% if is_incremental() %}
+-- The stored problem_check row of each attempt this run touches, so the dedup below
+-- compares the new rows with it. Without it, a late tracking-log row and the stored
+-- studentmodule row for the same attempt would both stay. Its user_fk takes the
+-- stale-key correction when there is one, since this row replaces the stale one.
+, stored_problem_checks as (
+    select
+        stored.event_id
+        , stored.problem_attempt_key
+        , stored.platform
+        , coalesce(stale_key_rows.user_fk, stored.user_fk) as user_fk
+        , stored.openedx_user_id
+        , stored.user_username
+        , stored.courserun_readable_id
+        , stored.event_type
+        , stored.event_json
+        , stored.problem_block_fk as problem_block_id
+        , stored.answers
+        , stored.attempt
+        , stored.success
+        , stored.grade
+        , stored.max_grade
+        , stored.event_timestamp
+        , stored.event_timestamp_iso8601
+        , stored.time_fk
+        , stored.date_fk
+        , stored.source_load_id
+        , 1 as is_stored
+    from {{ this }} as stored
+    inner join (
+        select distinct problem_attempt_key
+        from keyed
+        where event_type = 'problem_check'
+    ) as touched
+        on stored.problem_attempt_key = touched.problem_attempt_key
+    left join stale_key_rows on stored.event_id = stale_key_rows.event_id
+    where stored.event_type = 'problem_check'
+)
+{% endif %}
+
+, candidates as (
     select
         event_id
+        , problem_attempt_key
         , platform
         , user_fk
         , openedx_user_id
@@ -658,7 +448,86 @@ with mitxonline_problem_events as (
         , event_timestamp_iso8601
         , time_fk
         , date_fk
+        , source_load_id
+        , is_stored
+    from keyed
+    {% if is_incremental() %}
+    union all
+    select * from stored_problem_checks
+    {% endif %}
+)
+
+-- One row per problem_attempt_key: for problem_check the earliest event of the attempt
+-- (tracking log events typically have earlier timestamps than studentmodule events for
+-- the same submission), the stored row on a tie so its event_id stays put. A
+-- showanswer's key is its own event_id, so this only drops exact repeats.
+, deduped as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by problem_attempt_key
+                order by event_timestamp ASC nulls last, is_stored desc
+            ) as rn
+        from candidates
+    ) as subquery
+    where rn = 1
+)
+
+, batch as (
+    select
+        event_id
+        , problem_attempt_key
+        , platform
+        , user_fk
+        , openedx_user_id
+        , user_username
+        , courserun_readable_id
+        , event_type
+        , event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+        , event_timestamp_iso8601
+        , time_fk
+        , date_fk
+        , source_load_id
+    from deduped
+
+    {% if is_incremental() %}
+    union all
+
+    -- Stored keys, not a rehash: event_timestamp reads back in UTC, while the source path
+    -- hashed it with its original offset, so a rehash would change the event_id.
+    select
+        stale_key_rows.event_id
+        , stale_key_rows.problem_attempt_key
+        , stale_key_rows.platform
+        , stale_key_rows.user_fk
+        , stale_key_rows.openedx_user_id
+        , stale_key_rows.user_username
+        , stale_key_rows.courserun_readable_id
+        , stale_key_rows.event_type
+        , stale_key_rows.event_json
+        , stale_key_rows.problem_block_id
+        , stale_key_rows.answers
+        , stale_key_rows.attempt
+        , stale_key_rows.success
+        , stale_key_rows.grade
+        , stale_key_rows.max_grade
+        , stale_key_rows.event_timestamp
+        , stale_key_rows.event_timestamp_iso8601
+        , stale_key_rows.time_fk
+        , stale_key_rows.date_fk
+        , stale_key_rows.source_load_id
     from stale_key_rows
+    left join deduped on stale_key_rows.problem_attempt_key = deduped.problem_attempt_key
+    where deduped.problem_attempt_key is null
     {% endif %}
 )
 
@@ -687,5 +556,7 @@ select
     , batch.time_fk
     , batch.date_fk
     , batch.event_json
+    , batch.problem_attempt_key
+    , batch.source_load_id
 from batch
 left join platform on batch.platform = platform.platform_readable_id
