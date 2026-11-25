@@ -19,7 +19,6 @@ from ol_superset.lib.role_management import (
     get_local_datasets,
     get_permission_views,
     get_role_dataset_permissions,
-    get_superset_databases,
     get_superset_datasets,
     load_governance_roles,
     role_dataset_access_is_managed,
@@ -31,6 +30,7 @@ from ol_superset.lib.role_management import (
 from ol_superset.lib.superset_api import (
     create_authenticated_session,
     get_instance_config,
+    get_superset_databases,
 )
 from ol_superset.lib.utils import confirm_action, get_assets_dir
 
