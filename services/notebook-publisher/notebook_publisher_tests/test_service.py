@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 from notebook_publisher import render
 from notebook_publisher.service import (
+    ConcurrentChangeError,
     NameTakenError,
     NotebookNotFoundError,
     NotOwnerError,
@@ -10,7 +11,12 @@ from notebook_publisher.service import (
     Publisher,
     RolloutFailedError,
 )
-from notebook_publisher.validation import NotebookPublish, NotebookUpdate
+from notebook_publisher.settings import Settings
+from notebook_publisher.validation import (
+    NotebookPublish,
+    NotebookRejectedError,
+    NotebookUpdate,
+)
 
 from notebook_publisher_tests.conftest import NOTEBOOK, FakeCluster
 
@@ -157,3 +163,68 @@ def test_unpublish_removes_everything(
     assert not cluster.notebooks
     assert not cluster.secrets
     assert not cluster.routes
+
+
+def test_a_superseded_update_does_not_restore_over_the_newer_one(
+    publisher: Publisher, cluster: FakeCluster
+) -> None:
+    publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+    newer: dict[str, Any] = {}
+
+    def superseded_by_another_update(pod: dict[str, Any]) -> dict[str, Any]:
+        # While this update waits, a second one moves the app to revision r9.
+        notebook = cluster.notebooks["q3"]
+        if not newer:
+            newer["content"] = "second update"
+            notebook["spec"]["content"] = "second update"
+            notebook["metadata"]["annotations"][render.REVISION_ANNOTATION] = "r9"
+        # The operator's pod now carries the newer revision's token.
+        for volume in pod["spec"]["volumes"]:
+            if volume["name"] == render.AUTH_VOLUME:
+                volume["secret"]["secretName"] = (
+                    "q3-token-r9"  # pragma: allowlist secret
+                )
+        return pod
+
+    cluster.pod_hook = superseded_by_another_update
+    with pytest.raises(ConcurrentChangeError):
+        publisher.update(ALICE, "q3", NotebookUpdate(content=NOTEBOOK + "\n"))
+
+    assert _revision(cluster, "q3") == "r9"
+    assert cluster.notebooks["q3"]["spec"]["content"] == "second update"
+
+
+def test_failed_publish_leaves_a_recreated_app_alone(
+    publisher: Publisher, cluster: FakeCluster
+) -> None:
+    def recreated_by_someone_else(pod: dict[str, Any]) -> dict[str, Any]:
+        # The name is unpublished and published again while this publish waits.
+        cluster.notebooks["q3"]["metadata"]["uid"] = "someone-elses"
+        return _crash(pod)
+
+    cluster.pod_hook = recreated_by_someone_else
+    with pytest.raises(RolloutFailedError):
+        publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+    assert cluster.notebooks["q3"]["metadata"]["uid"] == "someone-elses"
+
+
+def test_cleanup_failures_keep_the_original_error(
+    publisher: Publisher, cluster: FakeCluster, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken_delete(*_: str) -> None:
+        raise RuntimeError
+
+    cluster.pod_hook = _crash
+    monkeypatch.setattr(cluster, "delete_notebook", broken_delete)
+    with pytest.raises(RolloutFailedError):
+        publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+
+
+def test_publish_caps_notebooks_per_user(
+    publisher: Publisher, settings: Settings
+) -> None:
+    for index in range(settings.max_notebooks_per_user):
+        publisher.publish(ALICE, NotebookPublish(name=f"n{index}", content=NOTEBOOK))
+    with pytest.raises(NotebookRejectedError, match="most allowed"):
+        publisher.publish(ALICE, NotebookPublish(name="one-more", content=NOTEBOOK))
+    publisher.publish(BOB, NotebookPublish(name="bobs", content=NOTEBOOK))

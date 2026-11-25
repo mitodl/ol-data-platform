@@ -139,11 +139,13 @@ class FakeCluster:
         self.notebooks[name] = copy.deepcopy(body)
         return self._stamp(self.notebooks[name])
 
-    def delete_notebook(self, name: str) -> None:
-        notebook = self.notebooks.pop(name, None)
+    def delete_notebook(self, name: str, uid: str) -> None:
+        notebook = self.notebooks.get(name)
         if notebook is None:
             return
-        uid = notebook["metadata"]["uid"]
+        if notebook["metadata"]["uid"] != uid:
+            raise client.ApiException(status=409)
+        del self.notebooks[name]
         for store in (self.secrets, self.routes):
             for key in [
                 key

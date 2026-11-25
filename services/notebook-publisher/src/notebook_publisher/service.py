@@ -1,6 +1,7 @@
 """Publish, update, inspect and unpublish notebooks for a hub user."""
 
 import copy
+import logging
 import re
 import secrets
 import time
@@ -15,9 +16,12 @@ from notebook_publisher.cluster import Cluster
 from notebook_publisher.settings import Settings
 from notebook_publisher.validation import (
     NotebookPublish,
+    NotebookRejectedError,
     NotebookUpdate,
     check_notebook,
 )
+
+log = logging.getLogger(__name__)
 
 HTTP_CONFLICT = 409
 LOG_TAIL_LINES = 100
@@ -207,15 +211,30 @@ class Publisher:
         self.cluster.delete_secret(render.token_secret_name(name, revision))
         self.cluster.delete_secret(render.route_auth_secret_name(name, revision))
 
-    def _wait_for_rollout(self, name: str, revision: str) -> None:
+    def _is_current(self, name: str, uid: str, revision: str) -> bool:
+        """Return whether the app is still the object and revision this request made."""
+        notebook = self.cluster.get_notebook(name)
+        return (
+            notebook is not None
+            and notebook["metadata"]["uid"] == uid
+            and notebook["metadata"]["annotations"][render.REVISION_ANNOTATION]
+            == revision
+        )
+
+    def _wait_for_rollout(self, name: str, uid: str, revision: str) -> None:
         """Wait until the revision's pod is as rendered and marimo answers.
 
         :raises RolloutFailedError: If it fails or doesn't serve in time.
         :raises PodMismatchError: If the pod isn't what was rendered.
+        :raises ConcurrentChangeError: If another request replaced the revision.
         """
         token_secret = render.token_secret_name(name, revision)
         deadline = time.monotonic() + self.settings.rollout_timeout_seconds
         while True:
+            # A later update or an unpublish took over; its pod will never
+            # carry this revision's token.
+            if not self._is_current(name, uid, revision):
+                raise ConcurrentChangeError(name)
             pod = self.cluster.get_pod(name)
             if pod is not None and _auth_secret(pod) == token_secret:
                 if problems := pod_problems(pod, name, revision, self.settings):
@@ -255,6 +274,13 @@ class Publisher:
         leaves nothing behind.
         """
         check_notebook(request.content, self.settings)
+        published = len(self.list_owned(user))
+        if published >= self.settings.max_notebooks_per_user:
+            msg = (
+                f"You have {published} published notebooks, the most allowed; "
+                "unpublish one first."
+            )
+            raise NotebookRejectedError(msg)
         revision = secrets.token_hex(4)
         body = render.render_notebook(
             request.name,
@@ -271,15 +297,29 @@ class Publisher:
                 raise NameTakenError(request.name) from error
             raise
         owner = render.owner_reference(notebook)
+        uid = notebook["metadata"]["uid"]
         try:
             self._create_secrets(request.name, revision, owner)
-            self._wait_for_rollout(request.name, revision)
+            self._wait_for_rollout(request.name, uid, revision)
             self._apply_route(request.name, revision, owner)
         except Exception:
-            # ownerReferences take the Secrets and the route with it.
-            self.cluster.delete_notebook(request.name)
+            self._discard(request.name, uid, revision)
             raise
         return self.status(user, request.name)
+
+    def _discard(self, name: str, uid: str, revision: str) -> None:
+        """Delete a failed new app, unless another request has taken it over.
+
+        ownerReferences take its Secrets and route with it. A cleanup failure
+        is logged, so the caller still sees why the publish failed.
+        """
+        try:
+            if self._is_current(name, uid, revision):
+                self.cluster.delete_notebook(name, uid)
+        except Exception:
+            log.exception(
+                "Couldn't remove failed publish %s (revision %s)", name, revision
+            )
 
     def update(self, user: str, name: str, request: NotebookUpdate) -> NotebookStatus:
         """Publish a new version of the caller's notebook.
@@ -323,23 +363,42 @@ class Publisher:
             if error.status == HTTP_CONFLICT:
                 raise ConcurrentChangeError(name) from error
             raise
+        uid = current["metadata"]["uid"]
         try:
-            self._wait_for_rollout(name, revision)
+            self._wait_for_rollout(name, uid, revision)
             self._apply_route(name, revision, owner)
         except Exception:
-            self._restore(current)
-            self._delete_secrets(name, revision)
+            self._restore(current, revision)
             raise
         self._delete_secrets(name, previous_revision)
         return self.status(user, name)
 
-    def _restore(self, previous: dict[str, Any]) -> None:
-        latest = self.cluster.get_notebook(previous["metadata"]["name"])
-        if latest is None:
-            return
-        restored = copy.deepcopy(previous)
-        restored["metadata"]["resourceVersion"] = latest["metadata"]["resourceVersion"]
-        self.cluster.replace_notebook(restored)
+    def _restore(self, previous: dict[str, Any], failed_revision: str) -> None:
+        """Put the previous MarimoNotebook back after a failed update.
+
+        Only while the app is still on the failed revision: if a later update
+        or an unpublish has taken over, restoring would undo it. A cleanup
+        failure is logged, so the caller still sees why the update failed.
+        """
+        name = previous["metadata"]["name"]
+        try:
+            latest = self.cluster.get_notebook(name)
+            if (
+                latest is not None
+                and latest["metadata"]["uid"] == previous["metadata"]["uid"]
+                and latest["metadata"]["annotations"][render.REVISION_ANNOTATION]
+                == failed_revision
+            ):
+                restored = copy.deepcopy(previous)
+                restored["metadata"]["resourceVersion"] = latest["metadata"][
+                    "resourceVersion"
+                ]
+                self.cluster.replace_notebook(restored)
+            self._delete_secrets(name, failed_revision)
+        except Exception:
+            log.exception(
+                "Couldn't restore %s after revision %s failed", name, failed_revision
+            )
 
     def list_owned(self, user: str) -> list[NotebookSummary]:
         """Return the caller's published notebooks."""
@@ -369,5 +428,10 @@ class Publisher:
 
     def unpublish(self, user: str, name: str) -> None:
         """Delete the caller's notebook and everything rendered for it."""
-        self._owned(name, user)
-        self.cluster.delete_notebook(name)
+        notebook = self._owned(name, user)
+        try:
+            self.cluster.delete_notebook(name, notebook["metadata"]["uid"])
+        except client.ApiException as error:
+            if error.status == HTTP_CONFLICT:
+                raise ConcurrentChangeError(name) from error
+            raise

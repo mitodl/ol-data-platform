@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     cpu_request: str = "100m"
     memory_request: str = "512Mi"
     memory_limit: str = "1Gi"
+    # marimo's sandbox installs what the notebook's header asks for into the
+    # pod's emptyDirs, which count against this.
+    ephemeral_storage_request: str = "1Gi"
+    ephemeral_storage_limit: str = "8Gi"
+    max_notebooks_per_user: int = 10
     # The operator stores inline content in a ConfigMap, and the 1 MiB object
     # limit covers its key and metadata as well.
     max_content_bytes: int = 900 * ONE_KIBIBYTE

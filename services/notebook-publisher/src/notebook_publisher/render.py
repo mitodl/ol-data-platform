@@ -174,8 +174,12 @@ def render_notebook(  # noqa: PLR0913
                 "requests": {
                     "cpu": settings.cpu_request,
                     "memory": settings.memory_request,
+                    "ephemeral-storage": settings.ephemeral_storage_request,
                 },
-                "limits": {"memory": settings.memory_limit},
+                "limits": {
+                    "memory": settings.memory_limit,
+                    "ephemeral-storage": settings.ephemeral_storage_limit,
+                },
             },
             "podOverrides": {
                 "serviceAccountName": settings.service_account,

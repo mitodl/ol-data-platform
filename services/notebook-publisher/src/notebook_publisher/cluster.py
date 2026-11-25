@@ -1,7 +1,11 @@
 """The Kubernetes calls the publisher makes, in its one namespace.
 
 Its Role allows create and delete on Secrets but never get or list, so the
-publisher can write each app's token and then can't read any token back.
+publisher never reads a token back through the API. That alone doesn't stop a
+compromised publisher: a MarimoNotebook whose auth Secret is some other Secret
+in the namespace makes marimo print that value in its log. The admission policy
+on MarimoNotebooks closes that path by pinning the auth Secret to the app's
+own token Secrets.
 """
 
 import urllib.error
@@ -77,8 +81,12 @@ class Cluster:
             body,
         )
 
-    def delete_notebook(self, name: str) -> None:
-        """Delete a MarimoNotebook; ownerReferences collect everything else."""
+    def delete_notebook(self, name: str, uid: str) -> None:
+        """Delete a MarimoNotebook; ownerReferences collect everything else.
+
+        :param uid: The object to delete. If the name now belongs to another
+            object, the API refuses with 409 rather than deleting it.
+        """
         try:
             self.custom.delete_namespaced_custom_object(
                 MARIMO_GROUP,
@@ -86,7 +94,7 @@ class Cluster:
                 self.namespace,
                 MARIMO_PLURAL,
                 name,
-                propagation_policy="Background",
+                body={"propagationPolicy": "Background", "preconditions": {"uid": uid}},
             )
         except client.ApiException as error:
             if error.status != HTTP_NOT_FOUND:
