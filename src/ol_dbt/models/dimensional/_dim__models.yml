@@ -3527,6 +3527,104 @@ unit_tests:
       user_fk: "USER_PK"
       event_timestamp_iso8601: "2024-01-15T10:00:00.000000Z"
       source_load_id: "1700000500.000000"
+- name: test_tfact_problem_events_stored_earlier_row_keeps_its_attempt
+  description: >
+    A new row for an attempt whose stored row is earlier must not replace it: the
+    dedup sees the stored row, which wins and is written back with its stored
+    event_id, so delete+insert on the attempt key changes nothing. Without the
+    stored row in the dedup, the later row would replace it.
+  model: tfact_problem_events
+  overrides:
+    macros:
+      is_incremental: true
+    vars:
+      tfact_problem_events_unit_test_load_floor:
+        mitxonline: "1700000000.000000"
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows:
+    - user_username: "learner"
+      openedx_user_id: 123
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "problem_check"
+      useractivity_event_source: "server"
+      useractivity_event_object: '{"problem_id": "block-v1:MITx+1.01x+1T2024+type@problem+block@p1",
+        "attempts": 1}'
+      useractivity_timestamp: "2099-01-15T10:00:00.000000Z"
+      useractivity_load_id: "1700000500.000000"
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  # Typed and empty, as in the test above.
+  - input: ref('tfact_studentmodule_problems')
+    format: sql
+    rows: |
+      select
+          cast(null as varchar) as user_fk
+          , cast(null as varchar) as platform
+          , cast(null as integer) as openedx_user_id
+          , cast(null as varchar) as user_username
+          , cast(null as varchar) as courserun_readable_id
+          , cast(null as integer) as studentmodule_id
+          , cast(null as integer) as studentmodulehistoryextended_id
+          , cast(null as varchar) as problem_block_id
+          , cast(null as varchar) as attempt
+          , cast(null as varchar) as seed
+          , cast(null as varchar) as correct_map
+          , cast(null as varchar) as answers
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , cast(null as varchar) as success
+          , current_timestamp as event_timestamp
+          , cast(null as varchar) as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+      where false
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      mitxonline_openedx_user_id: 123
+      user_mitxonline_username: "learner"
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  # The stored tracking-log row for the same attempt, earlier than the new row
+  # (current_timestamp; see the test above for why not a literal). Same
+  # problem_attempt_key as in the test above.
+  - input: this
+    format: sql
+    rows: |
+      select
+          'stored-tracking-log-id' as event_id
+          , 'PLATFORM_MITXONLINE' as platform_fk
+          , 'USER_PK' as user_fk
+          , 'mitxonline' as platform
+          , 123 as openedx_user_id
+          , 'learner' as user_username
+          , 'course-v1:MITx+1.01x+1T2024' as courserun_readable_id
+          , 'problem_check' as event_type
+          , 'block-v1:MITx+1.01x+1T2024+type@problem+block@p1' as problem_block_fk
+          , cast(null as varchar) as answers
+          , '1' as attempt
+          , cast(null as varchar) as success
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , current_timestamp as event_timestamp
+          , cast(null as varchar) as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+          , cast(null as varchar) as event_json
+          , '439d42f650688f028bc958a90085e6ba' as problem_attempt_key  -- pragma: allowlist secret
+          , '1700000100.000000' as source_load_id
+  expect:
+    rows:
+    - problem_attempt_key: "439d42f650688f028bc958a90085e6ba"  # pragma: allowlist secret gitleaks:allow
+      event_id: "stored-tracking-log-id"
+      source_load_id: "1700000100.000000"
 - name: test_tfact_discussion_events_date_fk_keeps_the_source_day
   description: >
     date_fk is the day written in the source timestamp, with the offset dropped,

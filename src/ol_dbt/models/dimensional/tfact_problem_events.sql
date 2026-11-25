@@ -80,7 +80,9 @@
 {#- A unit test's {{ this }} is a fixture CTE, not a table run_query can read, so a
     unit test sets the load floor per platform with this var instead. -#}
 {%- set source_load_floor = {} -%}
-{%- do source_load_floor.update(var('tfact_problem_events_unit_test_load_floor', {})) -%}
+{%- if model.resource_type == 'unit_test' -%}
+    {%- do source_load_floor.update(var('tfact_problem_events_unit_test_load_floor', {})) -%}
+{%- endif -%}
 {%- if execute and is_incremental() and model.resource_type != 'unit_test' -%}
     {%- set stored_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
     {%- if 'problem_attempt_key' not in stored_columns -%}
