@@ -198,10 +198,11 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
     return relations
 
 
-# Two ways a REFRESH fails because the Trino project rebuilt an Iceberg base
-# table under it. Every `dimensional` table the MVs read is materialized='table',
-# so each Trino build replaces it with a new Iceberg table, and the automation
-# sensor runs that build several times a day on no fixed schedule.
+# REFRESH failures that clear on a later attempt. The first two come from the
+# Trino project rebuilding an Iceberg base table under the MV. Every
+# `dimensional` table the MVs read is materialized='table', so each Trino build
+# replaces it with a new Iceberg table, and the automation sensor runs that
+# build several times a day on no fixed schedule.
 #
 # "does not exist when collecting snapshot infos" -- the REFRESH landed inside
 # the swap itself. On 2026-09-25 run 1889c9b0 rebuilt bridge_organization_courserun
