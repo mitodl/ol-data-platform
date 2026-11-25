@@ -30,7 +30,10 @@
       "tables": [
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
-        "marts__combined_course_engagements"
+        "marts__combined_course_engagements",
+        "marts__combined_problem_submissions",
+        "marts__mitxonline_course_certificates",
+        "marts__micromasters_course_certificates"
       ],
       "roles": ["ol_instructor"]
     },
@@ -53,7 +56,10 @@
         "data_detail_problems",
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
-        "marts__combined_course_engagements"
+        "marts__combined_course_engagements",
+        "marts__combined_problem_submissions",
+        "marts__mitxonline_course_certificates",
+        "marts__micromasters_course_certificates"
       ],
       "roles": ["Admin", "ol_data_engineer", "ol_data_analyst"]
     }
