@@ -39,7 +39,7 @@
     },
     {
       "name": "admin_engineer_analyst_course_scope_bypass",
-      "description": "Regular filter that exempts Admin, ol_data_engineer, and ol_data_analyst from all course-scope and term-expiry RLS on per-learner datasets. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support. Data analysts (including education technologists supporting course teams across multiple courses) need unrestricted cross-course and cross-platform visibility for institutional analysis.",
+      "description": "Regular filter in the course_scope group that exempts Admin, ol_data_engineer, and ol_data_analyst from instructor_enrollment_scope_with_term_expiry on per-learner datasets. Filters created by hand in Superset and not listed in this file still apply to these roles. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support. Data analysts (including education technologists supporting course teams across multiple courses) need unrestricted cross-course and cross-platform visibility for institutional analysis.",
       "filter_type": "Regular",
       "group_key": "course_scope",
       "clause": "1 = 1",
