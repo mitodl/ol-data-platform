@@ -1,0 +1,34 @@
+[project]
+name = "notebook-publisher"
+version = "0.1.0"
+description = "JupyterHub service that publishes marimo notebooks as marimo-operator apps"
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+requires-python = ">=3.13,<3.14"
+license = "BSD-3-Clause"
+dependencies = [
+    "fastapi>=0.115",
+    # HubAuth: validates the caller's hub token and its access scope for this
+    # service.
+    "jupyterhub>=5.3,<6",
+    "kubernetes>=31",
+    # `marimo check` validates notebooks before they are published. Keep it
+    # equal to images/marimo-runtime/requirements.txt, the marimo that runs
+    # them.
+    "marimo==0.25.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "uvicorn>=0.34",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28", "pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notebook_publisher"]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs

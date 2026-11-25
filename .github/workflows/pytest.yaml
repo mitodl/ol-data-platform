@@ -10,6 +10,7 @@ on:
     - main
     paths:
     - "packages/**"
+    - "services/**"
     - "src/**/*.py"
     - "src/ol_dbt_cli/**"
     - "src/ol_dlt/**"
@@ -32,6 +33,7 @@ on:
   pull_request:
     paths:
     - "packages/**"
+    - "services/**"
     - "src/**/*.py"
     - "src/ol_dbt_cli/**"
     - "src/ol_dlt/**"
