@@ -2,30 +2,35 @@
 
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import cyclopts
 from cyclopts import Parameter
 
 from ol_superset.lib.asset_index import WAREHOUSE_DATABASE_DIALECTS
 from ol_superset.lib.role_management import (
+    GLOBAL_ACCESS_PERMISSIONS,
+    PermissionView,
+    access_permission_changes,
     allowed_role_datasets,
     compute_desired_dataset_ids,
     find_governance_roles_json,
-    get_all_datasource_permissions,
     get_all_roles,
     get_local_datasets,
+    get_permission_views,
     get_role_dataset_permissions,
     get_superset_datasets,
     load_governance_roles,
     role_dataset_access_is_managed,
     set_role_datasource_permissions,
     uncovered_dataset_schemas,
+    unmatched_allowed_databases,
     unmatched_allowed_datasets,
 )
 from ol_superset.lib.superset_api import (
     create_authenticated_session,
     get_instance_config,
+    get_superset_databases,
 )
 from ol_superset.lib.utils import confirm_action, get_assets_dir
 
@@ -113,6 +118,8 @@ def roles_list(
         print(f"  Allowed schemas: {allowed_schemas or '(none defined)'}")
         if allowed_datasets:
             print(f"  Allowed datasets: {allowed_datasets}")
+        if "allowed_databases" in role:
+            print(f"  Allowed databases (SQL Lab): {role['allowed_databases']}")
         print(f"  Accessible datasets: {len(matching)}")
 
         if uncovered_schemas:
@@ -291,8 +298,20 @@ def roles_sync(
 
     Roles with 'all_datasource_access' (e.g. ol_data_engineer) still have
     their allowed_schemas processed to add individual datasource_access
-    permissions as belt-and-suspenders coverage — permissions are only added,
-    never revoked, for those roles.
+    permissions as belt-and-suspenders coverage. Their per-dataset permissions
+    are only added, never revoked; their database and global grants are
+    reconciled like any other role's.
+
+    A role with 'allowed_databases' gets database_access (SQL Lab) on exactly
+    those databases, by name. A global access permission (all_database_access,
+    all_datasource_access, all_query_access) that a role holds but its
+    definition no longer lists is revoked, since `flask fab import-roles` only
+    adds permissions.
+
+    A role whose allowed_databases names no database on the instance, or whose
+    database_access permission isn't registered yet, is left unchanged. That,
+    or Superset rejecting a role update, makes the command exit 1 once the
+    other roles are synced.
 
     Examples:
         Dry-run to preview changes:
@@ -377,16 +396,36 @@ def roles_sync(
     print(f"  Found {len(api_roles)} role(s) in {instance}")
     print()
 
-    print("  Fetching all datasource permissions from API...")
-    all_ds_perms = get_all_datasource_permissions(session, base_url)
-    print(f"  Found {len(all_ds_perms)} datasource permission(s)")
+    print("  Fetching databases from API...")
+    api_databases = get_superset_databases(session, base_url)
+    print(f"  Found {len(api_databases)} database(s) in {instance}")
     print()
+
+    print("  Fetching data-access permissions from API...")
+    access_perms = get_permission_views(
+        session,
+        base_url,
+        frozenset({"datasource_access", "database_access"}) | GLOBAL_ACCESS_PERMISSIONS,
+    )
+    print(f"  Found {len(access_perms)} data-access permission(s)")
+    print()
+
+    # (permission, view menu) -> PermissionView id, for database and global
+    # access grants.
+    pv_to_perm_id: dict[PermissionView, int] = {
+        (str(perm["permission_name"]), str(perm["view_menu_name"])): cast(
+            int, perm["id"]
+        )
+        for perm in access_perms
+    }
 
     # Build a lookup: dataset_id -> permission_id
     # Superset datasource permissions have view_menu_name like:
     #   "[database].[table_name](id:42)"
     dataset_id_to_perm_id: dict[int, int] = {}
-    for perm in all_ds_perms:
+    for perm in access_perms:
+        if perm.get("permission_name") != "datasource_access":
+            continue
         vm = perm.get("view_menu_name") or ""
         # Extract the trailing "(id:NNN)" suffix
         if vm.endswith(")") and "(" in vm:
@@ -398,11 +437,13 @@ def roles_sync(
                 dataset_id_to_perm_id[ds_id] = perm["id"]
             except ValueError:
                 pass
+    perm_id_to_ds_id = {v: k for k, v in dataset_id_to_perm_id.items()}
 
     # Process each governance role
     total_added = 0
     total_revoked = 0
     total_skipped = 0
+    failed_roles: list[str] = []
 
     for gov_role in governance_roles:
         role_name = gov_role.get("name", "")
@@ -410,6 +451,13 @@ def roles_sync(
         allowed_datasets = gov_role.get("allowed_datasets", [])
 
         print(f"  Role: {role_name}")
+
+        role_id = role_name_to_id.get(role_name)
+        if role_id is None:
+            print(f"    ⚠️  Role not found in {instance}, skipping")
+            total_skipped += 1
+            print()
+            continue
 
         # Check if role has all_datasource_access.
         # Even if it does, still apply individual datasource_access permissions
@@ -423,58 +471,87 @@ def roles_sync(
             for p in gov_role.get("permissions", [])
         )
 
-        if not role_dataset_access_is_managed(gov_role):
-            print("    ⏭️  Skipping: no allowed_schemas or allowed_datasets defined")
-            total_skipped += 1
-            print()
-            continue
-
-        role_id = role_name_to_id.get(role_name)
-        if role_id is None:
-            print(f"    ⚠️  Role not found in {instance}, skipping")
-            total_skipped += 1
-            print()
-            continue
-
-        desired_ds_ids = compute_desired_dataset_ids(
-            allowed_schemas, api_datasets, allowed_datasets
-        )
-        unmatched = unmatched_allowed_datasets(allowed_datasets, api_datasets)
-        if unmatched:
-            print(f"    ⚠️  allowed_datasets with no dataset in {instance}: {unmatched}")
-
-        # Get current dataset permissions for this role
         current_perms = get_role_dataset_permissions(session, base_url, role_id)
         current_perm_ids: set[int] = {p["id"] for p in current_perms if p.get("id")}
 
-        # Map current perm IDs back to dataset IDs
-        perm_id_to_ds_id = {v: k for k, v in dataset_id_to_perm_id.items()}
-        current_ds_ids: set[int] = {
-            perm_id_to_ds_id[pid] for pid in current_perm_ids if pid in perm_id_to_ds_id
-        }
-
-        to_add_ds_ids = desired_ds_ids - current_ds_ids
-        to_revoke_ds_ids = current_ds_ids - desired_ds_ids
-
-        # Roles with all_datasource_access keep any extra permissions they already
-        # hold — only add what's missing, never revoke.
-        if skip_revoke or has_all_access:
-            to_revoke_ds_ids = set()
-
-        if has_all_access:
-            print(
-                "    ℹ️  Role has all_datasource_access"
-                " — adding missing per-dataset permissions (no revoke)"
+        to_add_ds_ids: set[int] = set()
+        to_revoke_ds_ids: set[int] = set()
+        if role_dataset_access_is_managed(gov_role):
+            desired_ds_ids = compute_desired_dataset_ids(
+                allowed_schemas, api_datasets, allowed_datasets
             )
+            unmatched = unmatched_allowed_datasets(allowed_datasets, api_datasets)
+            if unmatched:
+                print(
+                    f"    ⚠️  allowed_datasets with no dataset in {instance}: "
+                    f"{unmatched}"
+                )
 
-        print(f"    Allowed schemas: {allowed_schemas}")
-        print(f"    Allowed datasets: {allowed_datasets}")
-        print(f"    Desired datasets: {len(desired_ds_ids)}")
-        print(f"    Current datasets: {len(current_ds_ids)}")
-        print(f"    To add:   {len(to_add_ds_ids)}")
-        print(f"    To revoke: {len(to_revoke_ds_ids)}")
+            # Map current perm IDs back to dataset IDs
+            current_ds_ids: set[int] = {
+                perm_id_to_ds_id[pid]
+                for pid in current_perm_ids
+                if pid in perm_id_to_ds_id
+            }
+            to_add_ds_ids = desired_ds_ids - current_ds_ids
+            # Roles with all_datasource_access keep any extra permissions they
+            # already hold — only add what's missing, never revoke.
+            if not (skip_revoke or has_all_access):
+                to_revoke_ds_ids = current_ds_ids - desired_ds_ids
 
-        if not to_add_ds_ids and not to_revoke_ds_ids:
+            if has_all_access:
+                print(
+                    "    ℹ️  Role has all_datasource_access"
+                    " — adding missing per-dataset permissions (no revoke)"
+                )
+            print(f"    Allowed schemas: {allowed_schemas}")
+            print(f"    Allowed datasets: {allowed_datasets}")
+            print(f"    Desired datasets: {len(desired_ds_ids)}")
+            print(f"    Current datasets: {len(current_ds_ids)}")
+        else:
+            print("    ⏭️  Datasets unmanaged: no allowed_schemas or allowed_datasets")
+
+        held: set[PermissionView] = {
+            (str(p["permission_name"]), str(p["view_menu_name"])) for p in current_perms
+        }
+        add_access, revoke_access = access_permission_changes(
+            gov_role, api_databases, held
+        )
+        # Revoking the old grants while a replacement can't be granted would
+        # lock the role out of a database it is meant to keep, so a role with
+        # an unresolved name or permission is left as it is.
+        unresolved: list[str] = []
+        if "allowed_databases" in gov_role:
+            print(f"    Allowed databases: {gov_role['allowed_databases']}")
+            unmatched_dbs = unmatched_allowed_databases(
+                cast(list[str], gov_role["allowed_databases"]), api_databases
+            )
+            if unmatched_dbs:
+                unresolved.append(
+                    f"allowed_databases with no database in {instance}: {unmatched_dbs}"
+                )
+        missing_access = sorted(pv for pv in add_access if pv not in pv_to_perm_id)
+        if missing_access:
+            unresolved.append(
+                f"no permission registered in Superset for {missing_access}"
+            )
+        if unresolved:
+            for problem in unresolved:
+                print(f"    ❌ {problem}", file=sys.stderr)
+            print("    ❌ Not updating this role", file=sys.stderr)
+            failed_roles.append(role_name)
+            print()
+            continue
+        if skip_revoke:
+            revoke_access = set()
+
+        print(f"    To add:   {len(to_add_ds_ids)} dataset(s), {sorted(add_access)}")
+        print(
+            f"    To revoke: {len(to_revoke_ds_ids)} dataset(s), "
+            f"{sorted(revoke_access)}"
+        )
+
+        if not (to_add_ds_ids or to_revoke_ds_ids or add_access or revoke_access):
             print("    ✅ Already in sync")
             print()
             continue
@@ -511,6 +588,12 @@ def roles_sync(
             for ds_id in to_revoke_ds_ids
             if ds_id in dataset_id_to_perm_id
         }
+        # A held permission is in the role's own listing, so its id is known.
+        pvm_ids_to_revoke |= {
+            cast(int, p["id"])
+            for p in current_perms
+            if (p["permission_name"], p["view_menu_name"]) in revoke_access
+        }
 
         missing_perms = to_add_ds_ids - set(dataset_id_to_perm_id.keys())
         if missing_perms:
@@ -519,12 +602,15 @@ def roles_sync(
                 "datasource permission registered in Superset yet "
                 "(import them first)"
             )
+        pvm_ids_to_add |= {pv_to_perm_id[pv] for pv in add_access}
 
         if pvm_ids_to_add or pvm_ids_to_revoke:
             ok = set_role_datasource_permissions(
                 session, base_url, role_id, pvm_ids_to_add, pvm_ids_to_revoke
             )
-            if ok:
+            if not ok:
+                failed_roles.append(role_name)
+            else:
                 if pvm_ids_to_add:
                     print(f"    ✅ Added {len(pvm_ids_to_add)} permission(s)")
                     total_added += len(pvm_ids_to_add)
@@ -544,6 +630,9 @@ def roles_sync(
         )
     print("=" * 60)
     print()
+    if failed_roles:
+        print(f"❌ Not synced: {failed_roles}", file=sys.stderr)
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
