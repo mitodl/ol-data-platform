@@ -24,6 +24,7 @@ from notebook_publisher.validation import (
 log = logging.getLogger(__name__)
 
 HTTP_CONFLICT = 409
+RESTORE_ATTEMPTS = 3
 LOG_TAIL_LINES = 100
 # Container states that won't recover by waiting.
 FAILED_WAITING_REASONS = frozenset(
@@ -382,18 +383,27 @@ class Publisher:
         """
         name = previous["metadata"]["name"]
         try:
-            latest = self.cluster.get_notebook(name)
-            if (
-                latest is not None
-                and latest["metadata"]["uid"] == previous["metadata"]["uid"]
-                and latest["metadata"]["annotations"][render.REVISION_ANNOTATION]
-                == failed_revision
-            ):
+            # The operator's status writes also bump the resourceVersion, so
+            # one conflict is expected now and then.
+            for attempt in range(RESTORE_ATTEMPTS):
+                latest = self.cluster.get_notebook(name)
+                if (
+                    latest is None
+                    or latest["metadata"]["uid"] != previous["metadata"]["uid"]
+                    or latest["metadata"]["annotations"][render.REVISION_ANNOTATION]
+                    != failed_revision
+                ):
+                    break
                 restored = copy.deepcopy(previous)
                 restored["metadata"]["resourceVersion"] = latest["metadata"][
                     "resourceVersion"
                 ]
-                self.cluster.replace_notebook(restored)
+                try:
+                    self.cluster.replace_notebook(restored)
+                    break
+                except client.ApiException as error:
+                    if error.status != HTTP_CONFLICT or attempt == RESTORE_ATTEMPTS - 1:
+                        raise
             self._delete_secrets(name, failed_revision)
         except Exception:
             log.exception(

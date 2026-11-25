@@ -66,10 +66,11 @@ The `marimo_data` stack in ol-infrastructure deploys it. It needs:
   `apisixroutes`; `create` and `delete` on `secrets` (never `get` or `list`);
   `get` on `pods` and `pods/log`; and `list` on `events`.
 - A ValidatingAdmissionPolicy on `marimos` that rejects `sidecars`, `mounts`,
-  extra volumes, any ServiceAccount but `marimo-published`, and any
-  `auth.password` Secret not named `<name>-token-*`. Without the last rule a
-  compromised publisher could point an app at another Secret in `marimo`, and
-  marimo would print its value in the log the publisher can read.
+  extra volumes, any ServiceAccount but `marimo-published`, any `auth.password`
+  Secret not named `<name>-token-*`, and any `env` or `envFrom` that references
+  a Secret (in `spec.env` or in `podOverrides`). Without the last two rules a
+  compromised publisher could hand an app another Secret in `marimo`, and the
+  app could print its value to the log the publisher can read.
 
 Requests are synchronous: a publish or update returns once the app serves, up
 to `NOTEBOOK_PUBLISHER_ROLLOUT_TIMEOUT_SECONDS` (300s) later, so the hub proxy
@@ -77,6 +78,10 @@ in front of it needs a longer timeout. Nothing reconciles a request the
 publisher was restarted in the middle of. A publish cut off that way leaves an
 app with no route, and an update leaves the route on the previous token. The
 owner fixes either by publishing again (`PUT`) or unpublishing.
+
+The operator runs each app as a bare Pod and doesn't replace one that has
+failed, e.g. one evicted for going over its ephemeral-storage limit. That app
+stays down until its owner publishes it again.
 
 ## Development
 

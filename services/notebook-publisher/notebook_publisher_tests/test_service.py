@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from kubernetes import client
 from notebook_publisher import render
 from notebook_publisher.service import (
     ConcurrentChangeError,
@@ -228,3 +229,23 @@ def test_publish_caps_notebooks_per_user(
     with pytest.raises(NotebookRejectedError, match="most allowed"):
         publisher.publish(ALICE, NotebookPublish(name="one-more", content=NOTEBOOK))
     publisher.publish(BOB, NotebookPublish(name="bobs", content=NOTEBOOK))
+
+
+def test_restore_retries_a_conflict_from_a_status_write(
+    publisher: Publisher, cluster: FakeCluster, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+    first = _revision(cluster, "q3")
+    replace = cluster.replace_notebook
+    conflicts = iter([False, True])  # the update's replace, then the restore's
+
+    def conflict_once(body: dict[str, Any]) -> dict[str, Any]:
+        if next(conflicts, False):
+            raise client.ApiException(status=409)
+        return replace(body)
+
+    monkeypatch.setattr(cluster, "replace_notebook", conflict_once)
+    cluster.pod_hook = _crash
+    with pytest.raises(RolloutFailedError):
+        publisher.update(ALICE, "q3", NotebookUpdate(content=NOTEBOOK + "\n"))
+    assert _revision(cluster, "q3") == first
