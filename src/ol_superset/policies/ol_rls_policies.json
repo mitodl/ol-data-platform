@@ -29,20 +29,23 @@
     },
     {
       "name": "instructor_enrollment_scope_with_term_expiry",
-      "description": "Restricts enrollment-detail datasets to the instructor's own courses. Course ownership uses int__combined__user_course_roles.",
+      "description": "Restricts enrollment-detail, certificate and problem-submission mart datasets to the instructor's own courses. Course ownership uses int__combined__user_course_roles. The name is historical: the clause has no term expiry, and apply-rls matches filters by name, so renaming it would leave the old filter behind.",
       "filter_type": "Regular",
       "group_key": "course_scope",
       "clause": "courserun_readable_id IN (SELECT courserun_readable_id FROM ol_data_lake_production.ol_warehouse_production_intermediate.int__combined__user_course_roles WHERE courseaccess_role IN ('staff', 'instructor') AND user_email = '{{ current_user_email() }}')",
       "tables": [
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
-        "marts__combined_course_engagements"
+        "marts__combined_course_engagements",
+        "marts__combined_problem_submissions",
+        "marts__mitxonline_course_certificates",
+        "marts__micromasters_course_certificates"
       ],
       "roles": ["ol_instructor"]
     },
     {
       "name": "admin_engineer_analyst_course_scope_bypass",
-      "description": "Regular filter that exempts Admin, ol_data_engineer, and ol_data_analyst from all course-scope and term-expiry RLS on per-learner datasets. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support. Data analysts (including education technologists supporting course teams across multiple courses) need unrestricted cross-course and cross-platform visibility for institutional analysis.",
+      "description": "Regular filter in the course_scope group that exempts Admin, ol_data_engineer, and ol_data_analyst from instructor_enrollment_scope_with_term_expiry on per-learner datasets. Filters created by hand in Superset and not listed in this file still apply to these roles. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support. Data analysts (including education technologists supporting course teams across multiple courses) need unrestricted cross-course and cross-platform visibility for institutional analysis.",
       "filter_type": "Regular",
       "group_key": "course_scope",
       "clause": "1 = 1",
@@ -65,7 +68,10 @@
         "course_staff_report",
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
-        "marts__combined_course_engagements"
+        "marts__combined_course_engagements",
+        "marts__combined_problem_submissions",
+        "marts__mitxonline_course_certificates",
+        "marts__micromasters_course_certificates"
       ],
       "roles": ["Admin", "ol_data_engineer", "ol_data_analyst"]
     }
