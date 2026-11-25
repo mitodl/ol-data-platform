@@ -1775,6 +1775,8 @@ models:
 - name: orders_with_product_report
   description: Combined orders mart table with product name added
   config:
+    grants:
+      +select: ["ol_commerce_operations"]
     meta:
       # Tier1 because it carries a data contract (contracts/orders_with_product_report.yaml).
       openmetadata:
