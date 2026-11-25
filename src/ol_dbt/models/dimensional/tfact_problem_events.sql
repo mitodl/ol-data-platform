@@ -77,8 +77,10 @@
     re-read row would be stored twice. Adding it takes a --full-refresh.
 -#}
 {%- set source_date_floor = {} -%}
+{#- A unit test's {{ this }} is a fixture CTE, not a table run_query can read, so a
+    unit test sets the load floor per platform with this var instead. -#}
 {%- set source_load_floor = {} -%}
-{#- A unit test's {{ this }} is a fixture CTE, not a table run_query can read. -#}
+{%- do source_load_floor.update(var('tfact_problem_events_unit_test_load_floor', {})) -%}
 {%- if execute and is_incremental() and model.resource_type != 'unit_test' -%}
     {%- set stored_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
     {%- if 'problem_attempt_key' not in stored_columns -%}
@@ -180,12 +182,14 @@ with users as (
 -- so without this a dim_user re-key strands historical activity under the obsolete
 -- key -- the same hazard tfact_grade and tfact_certificate guard against with their
 -- stale_user_fk_lookup. delete+insert on problem_attempt_key replaces the row in
--- place, which only works because these rows keep their stored keys (see batch below).
+-- place, which only works because these rows keep their stored keys (see candidates
+-- below).
 -- Two CTEs per platform because the dim_user join keys differ per platform; each
 -- prunes to one partition (the model is partitioned by platform) and joins by
 -- equality rather than an OR across every platform's key pair.
--- A stale row whose attempt this run also writes is dropped in batch below, in favour
--- of the newly deduplicated row, which resolves its user_fk from dim_user itself.
+-- A stale row is one more candidate in the dedup below. When a new row for the same
+-- attempt is earlier, the new row wins with the user_fk its own source resolved: a
+-- tracking-log row from dim_user, a studentmodule row from tfact_studentmodule_problems.
 -- stale_tuples_* compares dim_user with the distinct stored (user id, username,
 -- user_fk) tuples, not with every stored event: about 700k tuples against 160M rows
 -- (measured 2026-11-20). Joining every event to dim_user ran StarRocks CNs out of
@@ -214,10 +218,7 @@ with users as (
             , stored.user_username
             , stored.user_fk
         from {{ this }} as stored
-        inner join watermarks on watermarks.platform = stored.platform
-        where
-            stored.platform = '{{ stale_platform }}'
-            and stored.event_timestamp <= watermarks.max_ts
+        where stored.platform = '{{ stale_platform }}'
     ) as stored_keys
     inner join users
         on
@@ -252,15 +253,12 @@ with users as (
         , stored.date_fk
         , stored.source_load_id
     from {{ this }} as stored
-    inner join watermarks on watermarks.platform = stored.platform
     inner join stale_tuples_{{ stale_platform }} as stale
         on
             stored.openedx_user_id = stale.openedx_user_id
             and stored.user_username = stale.user_username
             and not ({{ is_distinct_from('stored.user_fk', 'stale.stored_user_fk') }})
-    where
-        stored.platform = '{{ stale_platform }}'
-        and stored.event_timestamp <= watermarks.max_ts
+    where stored.platform = '{{ stale_platform }}'
 )
 {%- endfor %}
 
@@ -390,14 +388,13 @@ with users as (
 {% if is_incremental() %}
 -- The stored problem_check row of each attempt this run touches, so the dedup below
 -- compares the new rows with it. Without it, a late tracking-log row and the stored
--- studentmodule row for the same attempt would both stay. Its user_fk takes the
--- stale-key correction when there is one, since this row replaces the stale one.
+-- studentmodule row for the same attempt would both stay.
 , stored_problem_checks as (
     select
         stored.event_id
         , stored.problem_attempt_key
         , stored.platform
-        , coalesce(stale_key_rows.user_fk, stored.user_fk) as user_fk
+        , stored.user_fk
         , stored.openedx_user_id
         , stored.user_username
         , stored.courserun_readable_id
@@ -415,6 +412,7 @@ with users as (
         , stored.date_fk
         , stored.source_load_id
         , 1 as is_stored
+        , 0 as is_corrected
     from {{ this }} as stored
     inner join (
         select distinct problem_attempt_key
@@ -422,11 +420,14 @@ with users as (
         where event_type = 'problem_check'
     ) as touched
         on stored.problem_attempt_key = touched.problem_attempt_key
-    left join stale_key_rows on stored.event_id = stale_key_rows.event_id
     where stored.event_type = 'problem_check'
 )
 {% endif %}
 
+-- New rows, the stored rows of the attempts they touch, and the stored rows whose
+-- user_fk dim_user has re-keyed. Stored rows keep their stored keys, not a rehash:
+-- event_timestamp reads back in UTC, while the source path hashed it with its
+-- original offset, so a rehash would change the event_id.
 , candidates as (
     select
         event_id
@@ -450,17 +451,44 @@ with users as (
         , date_fk
         , source_load_id
         , is_stored
+        , 0 as is_corrected
     from keyed
     {% if is_incremental() %}
     union all
     select * from stored_problem_checks
+    union all
+    select
+        event_id
+        , problem_attempt_key
+        , platform
+        , user_fk
+        , openedx_user_id
+        , user_username
+        , courserun_readable_id
+        , event_type
+        , event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+        , event_timestamp_iso8601
+        , time_fk
+        , date_fk
+        , source_load_id
+        , 1 as is_stored
+        , 1 as is_corrected
+    from stale_key_rows
     {% endif %}
 )
 
 -- One row per problem_attempt_key: for problem_check the earliest event of the attempt
 -- (tracking log events typically have earlier timestamps than studentmodule events for
--- the same submission), the stored row on a tie so its event_id stays put. A
--- showanswer's key is its own event_id, so this only drops exact repeats.
+-- the same submission). On a tie the stored row wins, so its event_id stays put, and
+-- of two stored copies the one with the corrected user_fk. A showanswer's key is its
+-- own event_id, so for it this only drops repeats of the same event.
 , deduped as (
     select *
     from (
@@ -468,7 +496,7 @@ with users as (
             *
             , row_number() over (
                 partition by problem_attempt_key
-                order by event_timestamp ASC nulls last, is_stored desc
+                order by event_timestamp asc nulls last, is_stored desc, is_corrected desc
             ) as rn
         from candidates
     ) as subquery
@@ -498,37 +526,6 @@ with users as (
         , date_fk
         , source_load_id
     from deduped
-
-    {% if is_incremental() %}
-    union all
-
-    -- Stored keys, not a rehash: event_timestamp reads back in UTC, while the source path
-    -- hashed it with its original offset, so a rehash would change the event_id.
-    select
-        stale_key_rows.event_id
-        , stale_key_rows.problem_attempt_key
-        , stale_key_rows.platform
-        , stale_key_rows.user_fk
-        , stale_key_rows.openedx_user_id
-        , stale_key_rows.user_username
-        , stale_key_rows.courserun_readable_id
-        , stale_key_rows.event_type
-        , stale_key_rows.event_json
-        , stale_key_rows.problem_block_id
-        , stale_key_rows.answers
-        , stale_key_rows.attempt
-        , stale_key_rows.success
-        , stale_key_rows.grade
-        , stale_key_rows.max_grade
-        , stale_key_rows.event_timestamp
-        , stale_key_rows.event_timestamp_iso8601
-        , stale_key_rows.time_fk
-        , stale_key_rows.date_fk
-        , stale_key_rows.source_load_id
-    from stale_key_rows
-    left join deduped on stale_key_rows.problem_attempt_key = deduped.problem_attempt_key
-    where deduped.problem_attempt_key is null
-    {% endif %}
 )
 
 -- StarRocks: this query's memory grows with the pipeline dop. At the default dop (8
