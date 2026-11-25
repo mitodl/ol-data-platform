@@ -298,14 +298,20 @@ def roles_sync(
 
     Roles with 'all_datasource_access' (e.g. ol_data_engineer) still have
     their allowed_schemas processed to add individual datasource_access
-    permissions as belt-and-suspenders coverage — permissions are only added,
-    never revoked, for those roles.
+    permissions as belt-and-suspenders coverage. Their per-dataset permissions
+    are only added, never revoked; their database and global grants are
+    reconciled like any other role's.
 
     A role with 'allowed_databases' gets database_access (SQL Lab) on exactly
     those databases, by name. A global access permission (all_database_access,
     all_datasource_access, all_query_access) that a role holds but its
     definition no longer lists is revoked, since `flask fab import-roles` only
     adds permissions.
+
+    A role whose allowed_databases names no database on the instance, or whose
+    database_access permission isn't registered yet, is left unchanged. That,
+    or Superset rejecting a role update, makes the command exit 1 once the
+    other roles are synced.
 
     Examples:
         Dry-run to preview changes:
@@ -437,6 +443,7 @@ def roles_sync(
     total_added = 0
     total_revoked = 0
     total_skipped = 0
+    failed_roles: list[str] = []
 
     for gov_role in governance_roles:
         role_name = gov_role.get("name", "")
@@ -510,16 +517,31 @@ def roles_sync(
         add_access, revoke_access = access_permission_changes(
             gov_role, api_databases, held
         )
+        # Revoking the old grants while a replacement can't be granted would
+        # lock the role out of a database it is meant to keep, so a role with
+        # an unresolved name or permission is left as it is.
+        unresolved: list[str] = []
         if "allowed_databases" in gov_role:
             print(f"    Allowed databases: {gov_role['allowed_databases']}")
             unmatched_dbs = unmatched_allowed_databases(
                 cast(list[str], gov_role["allowed_databases"]), api_databases
             )
             if unmatched_dbs:
-                print(
-                    f"    ⚠️  allowed_databases with no database in {instance}: "
-                    f"{unmatched_dbs}"
+                unresolved.append(
+                    f"allowed_databases with no database in {instance}: {unmatched_dbs}"
                 )
+        missing_access = sorted(pv for pv in add_access if pv not in pv_to_perm_id)
+        if missing_access:
+            unresolved.append(
+                f"no permission registered in Superset for {missing_access}"
+            )
+        if unresolved:
+            for problem in unresolved:
+                print(f"    ❌ {problem}", file=sys.stderr)
+            print("    ❌ Not updating this role", file=sys.stderr)
+            failed_roles.append(role_name)
+            print()
+            continue
         if skip_revoke:
             revoke_access = set()
 
@@ -580,21 +602,15 @@ def roles_sync(
                 "datasource permission registered in Superset yet "
                 "(import them first)"
             )
-        missing_access = {pv for pv in add_access if pv not in pv_to_perm_id}
-        if missing_access:
-            print(
-                "    ⚠️  No permission registered in Superset for "
-                f"{sorted(missing_access)}"
-            )
-        pvm_ids_to_add |= {
-            pv_to_perm_id[pv] for pv in add_access if pv in pv_to_perm_id
-        }
+        pvm_ids_to_add |= {pv_to_perm_id[pv] for pv in add_access}
 
         if pvm_ids_to_add or pvm_ids_to_revoke:
             ok = set_role_datasource_permissions(
                 session, base_url, role_id, pvm_ids_to_add, pvm_ids_to_revoke
             )
-            if ok:
+            if not ok:
+                failed_roles.append(role_name)
+            else:
                 if pvm_ids_to_add:
                     print(f"    ✅ Added {len(pvm_ids_to_add)} permission(s)")
                     total_added += len(pvm_ids_to_add)
@@ -614,6 +630,9 @@ def roles_sync(
         )
     print("=" * 60)
     print()
+    if failed_roles:
+        print(f"❌ Not synced: {failed_roles}", file=sys.stderr)
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------

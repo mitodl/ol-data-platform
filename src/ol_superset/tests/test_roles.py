@@ -429,18 +429,16 @@ class TestRoleSyncSkipLogic:
 
         assert to_revoke == set(), "Revoke set must be empty for all_access roles"
 
-    def test_no_schemas_all_access_role_is_skipped(self):
+    def test_no_schemas_all_access_role_keeps_its_listed_grants(self):
         """
-        Role with all_datasource_access but no allowed_schemas should still
-        be skipped.
+        A role with no allowed_schemas leaves datasets unmanaged, but sync still
+        reconciles its global grants, and keeps the ones its definition lists.
         """
         role = NO_SCHEMAS_ALL_ACCESS_ROLE
-        allowed_schemas = role.get("allowed_schemas", [])
-        _has_all_access(role)
-
-        # Mirrors the new skip condition: skip only when no allowed_schemas
-        should_skip = not allowed_schemas
-        assert should_skip is True
+        assert not role_dataset_access_is_managed(role)
+        assert access_permission_changes(
+            role, API_DATABASES, {ALL_DATASOURCES, ALL_DATABASES}
+        ) == (set(), {ALL_DATABASES})
 
     def test_regular_role_can_revoke(self):
         """A regular role without all_datasource_access should allow revokes."""
@@ -454,3 +452,125 @@ class TestRoleSyncSkipLogic:
             to_revoke = set()
 
         assert to_revoke == {99}, "Regular role should revoke out-of-policy datasets"
+
+
+# ---------------------------------------------------------------------------
+# roles sync, end to end against a stubbed Superset API
+# ---------------------------------------------------------------------------
+
+DATABASE_PERMS: list[dict[str, object]] = [
+    {"id": 501, "permission_name": TRINO[0], "view_menu_name": TRINO[1]},
+    {"id": 502, "permission_name": METADATA_DB[0], "view_menu_name": METADATA_DB[1]},
+    {"id": 503, "permission_name": STARROCKS[0], "view_menu_name": STARROCKS[1]},
+    {
+        "id": 601,
+        "permission_name": ALL_DATABASES[0],
+        "view_menu_name": ALL_DATABASES[1],
+    },
+]
+ENGINEER_HELD: list[dict[str, object]] = [DATABASE_PERMS[1], DATABASE_PERMS[3]]
+
+
+def _run_sync(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    allowed_databases: list[str],
+    *,
+    permission_views: list[dict[str, object]] = DATABASE_PERMS,
+    update_succeeds: bool = True,
+    dry_run: bool = False,
+) -> list[tuple[int, set[int], set[int]]]:
+    """Run roles sync for one role; return each permission update it sent."""
+    from ol_superset.commands import roles  # noqa: PLC0415
+
+    policy = tmp_path / "ol_governance_roles.json"
+    policy.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "ol_data_engineer",
+                    "permissions": [],
+                    "allowed_databases": allowed_databases,
+                }
+            ]
+        )
+    )
+    updates: list[tuple[int, set[int], set[int]]] = []
+
+    def record(_session, _base_url, role_id, to_add, to_revoke):
+        updates.append((role_id, to_add, to_revoke))
+        return update_succeeds
+
+    stubs = {
+        "get_instance_config": lambda _instance: {"url": "https://superset.test"},
+        "create_authenticated_session": lambda _instance: object(),
+        "get_superset_datasets": lambda _session, _url: [],
+        "get_all_roles": lambda _session, _url: [
+            {"id": 10, "name": "ol_data_engineer"}
+        ],
+        "get_superset_databases": lambda _session, _url: API_DATABASES,
+        "get_permission_views": lambda _session, _url, _names: permission_views,
+        "get_role_dataset_permissions": lambda _session, _url, _id: ENGINEER_HELD,
+        "set_role_datasource_permissions": record,
+    }
+    for name, stub in stubs.items():
+        monkeypatch.setattr(roles, name, stub)
+
+    roles.roles_sync(
+        "superset-qa",
+        assets_dir_path=str(tmp_path),
+        governance_json_path=str(policy),
+        dry_run=dry_run,
+        skip_confirmation=True,
+    )
+    return updates
+
+
+def test_sync_grants_listed_databases_and_revokes_the_rest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    updates = _run_sync(monkeypatch, tmp_path, ["Trino", "StarRocks - Lakehouse"])
+    assert updates == [(10, {501, 503}, {502, 601})]
+
+
+def test_sync_refuses_a_database_name_it_cannot_find(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    with pytest.raises(SystemExit) as exit_info:
+        _run_sync(monkeypatch, tmp_path, ["Trino", "StarRocks"])
+    assert exit_info.value.code == 1
+
+
+def test_sync_refuses_an_unregistered_database_permission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    without_starrocks = [p for p in DATABASE_PERMS if p["id"] != 503]
+    with pytest.raises(SystemExit) as exit_info:
+        _run_sync(
+            monkeypatch,
+            tmp_path,
+            ["Trino", "StarRocks - Lakehouse"],
+            permission_views=without_starrocks,
+        )
+    assert exit_info.value.code == 1
+
+
+def test_dry_run_reports_an_unresolved_database_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    with pytest.raises(SystemExit) as exit_info:
+        _run_sync(monkeypatch, tmp_path, ["StarRocks"], dry_run=True)
+    assert exit_info.value.code == 1
+
+
+def test_sync_fails_when_superset_rejects_the_update(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    with pytest.raises(SystemExit) as exit_info:
+        _run_sync(
+            monkeypatch,
+            tmp_path,
+            ["Trino", "StarRocks - Lakehouse"],
+            update_succeeds=False,
+        )
+    assert exit_info.value.code == 1
