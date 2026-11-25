@@ -56,6 +56,7 @@ from ol_dbt_cli.lib.metric_sync import (
     structural_changes,
 )
 from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, OpenMetadataError
+from tests.openmetadata_fakes import install
 
 FIXTURES = Path(__file__).parent / "fixtures" / "metrics"
 SERVICE = "Starburst Galaxy"
@@ -359,9 +360,7 @@ def metrics_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch, metrics_dir: Path) -> FakeOpenMetadata:
     fake = FakeOpenMetadata()
-    monkeypatch.setattr(OpenMetadataClient, "from_env", classmethod(lambda cls: fake))
-    monkeypatch.setattr(metrics_command, "get_repo_root", lambda: metrics_dir.parent)
-    monkeypatch.setattr(metrics_command, "load_catalog_manifest", lambda dbt_dir, path: _manifest())
+    install(monkeypatch, metrics_command, fake, metrics_dir.parent, _manifest)
     return fake
 
 

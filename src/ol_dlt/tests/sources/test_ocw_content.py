@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import runpy
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1385,3 +1387,30 @@ def test_a_tika_outage_is_tika_unavailable() -> None:
     failed = (None, "failed", False)
     with pytest.raises(TikaUnavailableError, match="Tika failed"):
         collect(FakeTika(fail=True), "a-course", [failed] * FAILURES_BEFORE_PROBE)
+
+
+@pytest.mark.parametrize(
+    ("argv", "pipeline_name", "courses"),
+    [
+        ([], "ocw_content_pipeline", None),
+        (["course-a", "course-b"], "ocw_course_pipeline", ["course-a", "course-b"]),
+    ],
+    ids=["sweep", "named-courses"],
+)
+def test_python_dash_m_runs_one_load(
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    pipeline_name: str,
+    courses: list[str] | None,
+) -> None:
+    runs: list[tuple[str, Any]] = []
+    monkeypatch.setattr(ocw_content, "build_source", lambda named: ("source", named))
+    for name in ("ocw_content_pipeline", "ocw_course_pipeline"):
+        monkeypatch.setattr(
+            getattr(ocw_content, name),
+            "run",
+            lambda source, name=name: runs.append((name, source)),
+        )
+    monkeypatch.setattr(sys, "argv", ["ocw_content", *argv])
+    runpy.run_module("ol_dlt.sources.ocw_content", run_name="__main__")
+    assert runs == [(pipeline_name, ("source", courses))]

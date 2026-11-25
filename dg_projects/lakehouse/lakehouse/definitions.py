@@ -68,6 +68,7 @@ from lakehouse.assets.lakehouse.dbt import (
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
+    UNBUILDABLE_VIEW_KEYS,
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
@@ -375,6 +376,12 @@ dbt_models_for_superset_datasets = {
     "reporting",
     "dimensional",
 }  # relevant dbt models to sync with superset
+# The dimensional layer is what reporting models are built on, not an end-user
+# surface, and its facts carry user keys and free text with no RLS. Published by
+# default, tfact_feedback reached Superset and ad-hoc charts read it. Dropping a
+# table from this set only stops refreshing its dataset; deleting the dataset in
+# Superset is a separate, manual step.
+superset_opt_in_layers = {"dimensional"}
 
 # Freshness policies on the layers the business actually reads. Deliberately not
 # applied to every dbt asset: staging and intermediate models are refreshed on
@@ -423,6 +430,7 @@ superset_model_keys = superset_dataset_keys(
     dbt_model_keys,
     *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
     layers=dbt_models_for_superset_datasets,
+    opt_in_layers=superset_opt_in_layers,
 )
 superset_assets = build_superset_dataset_assets(
     superset_model_keys,
@@ -522,8 +530,8 @@ iceberg_raw_orphan_files_schedule = ScheduleDefinition(
 
 # The same pass over the dbt-layer databases, after the raw one (its production
 # delete runs took up to two hours) and that night's 02:00 dbt-layer snapshot
-# expiry. Reports only until an environment is named in
-# ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS.
+# expiry. Deletes only in ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS and
+# reports elsewhere.
 iceberg_dbt_layer_orphan_files_schedule = ScheduleDefinition(
     name="iceberg_dbt_layer_orphan_files_weekly",
     job=define_asset_job(
@@ -557,17 +565,23 @@ dbt_docs_artifacts_schedule = ScheduleDefinition(
 )
 
 # Builds the tag:starrocks dbt models against StarRocks, then refreshes their
-# downstream manual-refresh MVs. STOPPED by default -- enable in production via
-# the Dagster UI after verifying the first manual run succeeds.
+# downstream manual-refresh MVs. STOPPED by default -- enable it in the Dagster
+# UI after verifying the first manual run succeeds. Leaves out the views this
+# environment's lake cannot build (STARROCKS_ABSENT_SOURCES).
+#
+# QA ticks at 07:00: learn_integrations_qa_daily starts at 05:30 and builds the
+# dimensional tables these views read, and its full build took 43 minutes
+# (run a59c0acd, 2026-11-23). At 06:00 the views would read tables mid-rebuild.
 b2b_analytics_starrocks_schedule = ScheduleDefinition(
     name="b2b_analytics_starrocks_nightly",
     job=define_asset_job(
         name="b2b_analytics_starrocks_job",
         selection=AssetSelection.assets(starrocks_dbt_assets).downstream(
             include_self=True
-        ),
+        )
+        - AssetSelection.assets(*UNBUILDABLE_VIEW_KEYS),
     ),
-    cron_schedule="0 6 * * *",
+    cron_schedule="0 7 * * *" if DAGSTER_ENV == "qa" else "0 6 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.STOPPED,
 )
@@ -699,13 +713,17 @@ AWAITING_RAW_TABLE = {
 non_airbyte_tables = non_airbyte_raw_tables(load_units(INVENTORY_DIR))
 non_airbyte_staging_models = sorted(
     staging_models_reading(
-        json.loads(dbt_project.manifest_path.read_text()), non_airbyte_tables
+        json.loads(dbt_project.manifest_path.read_text()),
+        non_airbyte_tables,
+        excluded={
+            POSTHOG_STAGING_MODEL,
+            *AWAITING_RAW_TABLE,
+            # Where ocw_learn_automation_sensor builds it, a daily build here
+            # would rebuild staging and the Learn views a second time for the
+            # same load.
+            *(OCW_LEARN_MODELS if DBT_AUTOMATION_ENABLED else ()),
+        },
     )
-    - {POSTHOG_STAGING_MODEL}
-    - AWAITING_RAW_TABLE
-    # Where ocw_learn_automation_sensor builds it, a daily build here would
-    # rebuild staging and the Learn views a second time for the same load.
-    - (set(OCW_LEARN_MODELS) if DBT_AUTOMATION_ENABLED else set())
 )
 non_airbyte_staging_schedules = (
     [
@@ -738,11 +756,17 @@ non_airbyte_staging_schedules = (
 # before its cutover. Production builds them through dbt_automation_sensor (the
 # OCW ones through ocw_learn_automation_sensor); QA
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
+# The same holds for the dimensional tables the b2b StarRocks views read, so the
+# job builds those too.
 #
-# Selects the models tagged qa_scheduled (the Learn views whose every QA raw
-# input exists) with their upstream staging and intermediate models. `ol-dbt
-# validate`'s qa_branch_contract check fails a tagged model that reads more than
-# one ingestion unit unless it declares every one of them in qa_branches and the
+# Selects the models tagged qa_scheduled with their upstream models: the Learn
+# views whose every QA raw input exists, the dimensional tables the b2b
+# StarRocks views read (_b2b_analytics__sources.yml), which have no other QA
+# build, and ocw_external_resource_link_report. QA loads OCW Studio with dlt
+# while the inventory's loader is Airbyte, so non_airbyte_staging_daily skips
+# that unit and only the tag gets its staging built in QA. `ol-dbt validate`'s
+# qa_branch_contract check fails a tagged model that reads more than one
+# ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held, so a QA build is complete relative
 # to QA's apps rather than a silently partial union. The
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that

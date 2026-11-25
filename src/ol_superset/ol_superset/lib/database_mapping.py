@@ -1,10 +1,10 @@
 """Database UUID mapping utilities."""
 
-import json
 import re
 import sys
 from pathlib import Path
 
+import requests
 import yaml
 
 
@@ -27,6 +27,7 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
     from ol_superset.lib.superset_api import (  # noqa: PLC0415
         create_authenticated_session,
         get_instance_config,
+        get_superset_databases,
     )
 
     config = get_instance_config(instance_name)
@@ -46,36 +47,16 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
         )
         sys.exit(1)
 
-    endpoint = f"{base_url}/api/v1/database/"
-    databases: dict[str, str] = {}
-    page = 0
-    page_size = 100
-
     try:
-        while True:
-            params = {"q": json.dumps({"page": page, "page_size": page_size})}
-            response = session.get(endpoint, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("result", [])
-            if not results:
-                break
-            for db in results:
-                name = db.get("database_name")
-                uuid = db.get("uuid")
-                if name and uuid:
-                    databases[name] = uuid
-            page += 1
-            if len(results) < page_size:
-                break
-    except Exception as e:  # noqa: BLE001
+        databases = get_superset_databases(session, base_url)
+    except requests.RequestException as e:
         print(
             f"Error: Failed to fetch databases from {instance_name}: {e}",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    return databases
+    return {str(db["database_name"]): str(db["uuid"]) for db in databases}
 
 
 def rewrite_all_assets(assets_dir: Path, target_dbs: dict[str, str]) -> None:

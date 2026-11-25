@@ -1,0 +1,96 @@
+---
+unit_tests:
+- name: test_courserun_enrollment_activity_report_dates_each_event
+  description: >
+    An enrollment counts on the day it was created, an upgrade on the day it was
+    paid (or created, with no payment time) and a certificate on the day it was
+    created. Verified reads tfact_enrollment, not the mode,
+    except for an unenrolled learner, whom the fact never marks verified. An unenrolled
+    learner
+    counts under the unenrolled status, edX.org and Emeritus rows with no
+    id stay apart, and Global Alumni is left out.
+  model: courserun_enrollment_activity_report
+  given:
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: MITx Online, courserunenrollment_id: 1, user_id: "1", courserun_readable_id: run1,
+      course_readable_id: c1, courserunenrollment_enrollment_mode: verified, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: true, courserunenrollment_created_on: "2026-10-01T10:00:00Z",
+      courserunenrollment_upgraded_on: "2026-10-03T09:00:00Z", courseruncertificate_created_on: "2026-12-01T00:00:00Z"}
+    - {platform: MITx Online, courserunenrollment_id: 2, user_id: "2", courserun_readable_id: run1,
+      course_readable_id: c1, courserunenrollment_enrollment_mode: audit, courserunenrollment_is_active: false,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-01T11:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    # verified mode but not paid: not verified in the fact
+    - {platform: MITx Online, courserunenrollment_id: 3, user_id: "3", courserun_readable_id: run1,
+      course_readable_id: c1, courserunenrollment_enrollment_mode: verified, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-05T11:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    # verified with no upgrade time: the upgrade falls on the enrollment day
+    - {platform: MITx Online, courserunenrollment_id: 4, user_id: "4", courserun_readable_id: run1,
+      course_readable_id: c1, courserunenrollment_enrollment_mode: verified, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-07T11:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    # unenrolled after paying: the fact drops it, the mode keeps it verified
+    - {platform: MITx Online, courserunenrollment_id: 5, user_id: "5", courserun_readable_id: run1,
+      course_readable_id: c1, courserunenrollment_enrollment_mode: verified, courserunenrollment_is_active: false,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-01T12:00:00Z",
+      courserunenrollment_upgraded_on: "2026-10-02T08:00:00Z", courseruncertificate_created_on: null}
+    - {platform: edX.org, courserunenrollment_id: null, user_id: "10", courserun_readable_id: run2,
+      course_readable_id: c2, courserunenrollment_enrollment_mode: audit, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-09T11:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    - {platform: edX.org, courserunenrollment_id: null, user_id: "11", courserun_readable_id: run2,
+      course_readable_id: c2, courserunenrollment_enrollment_mode: audit, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-09T12:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    # Emeritus: no id, user_id or email; the name keeps the two learners apart
+    - {platform: xPRO Emeritus, courserunenrollment_id: null, user_id: null, user_email: null,
+      user_full_name: Ada Lovelace, courserun_readable_id: run3, course_readable_id: c3,
+      courserunenrollment_enrollment_mode: null, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-11T11:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    - {platform: xPRO Emeritus, courserunenrollment_id: null, user_id: null, user_email: null,
+      user_full_name: Grace Hopper, courserun_readable_id: run3, course_readable_id: c3,
+      courserunenrollment_enrollment_mode: null, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: "2026-10-11T12:00:00Z",
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+    # Global Alumni records no enrollment time; the platform is left out
+    - {platform: xPRO Global Alumni, courserunenrollment_id: null, user_id: "20",
+      user_email: null, user_full_name: Alan Turing, courserun_readable_id: run4,
+      course_readable_id: c4, courserunenrollment_enrollment_mode: null, courserunenrollment_is_active: true,
+      courseruncertificate_is_earned: false, courserunenrollment_created_on: null,
+      courserunenrollment_upgraded_on: null, courseruncertificate_created_on: null}
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: mitxonline, enrollment_type: course, enrollment_id: "1", is_verified: true}
+    - {platform: mitxonline, enrollment_type: course, enrollment_id: "4", is_verified: true}
+  expect:
+    rows:
+    - {courserun_readable_id: run1, activity_date: 2026-10-01, enrollment_status: active,
+      enrollments: 1, verified_enrollments: 1, audit_enrollments: 0, upgrades: 0,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-10-01, enrollment_status: unenrolled,
+      enrollments: 2, verified_enrollments: 1, audit_enrollments: 1, upgrades: 0,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-10-02, enrollment_status: unenrolled,
+      enrollments: 0, verified_enrollments: 0, audit_enrollments: 0, upgrades: 1,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-10-03, enrollment_status: active,
+      enrollments: 0, verified_enrollments: 0, audit_enrollments: 0, upgrades: 1,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-10-05, enrollment_status: active,
+      enrollments: 1, verified_enrollments: 0, audit_enrollments: 0, upgrades: 0,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-10-07, enrollment_status: active,
+      enrollments: 1, verified_enrollments: 1, audit_enrollments: 0, upgrades: 1,
+      certificates: 0}
+    - {courserun_readable_id: run1, activity_date: 2026-12-01, enrollment_status: active,
+      enrollments: 0, verified_enrollments: 0, audit_enrollments: 0, upgrades: 0,
+      certificates: 1}
+    - {courserun_readable_id: run2, activity_date: 2026-10-09, enrollment_status: active,
+      enrollments: 2, verified_enrollments: 0, audit_enrollments: 2, upgrades: 0,
+      certificates: 0}
+    - {courserun_readable_id: run3, activity_date: 2026-10-11, enrollment_status: active,
+      enrollments: 2, verified_enrollments: 0, audit_enrollments: 0, upgrades: 0,
+      certificates: 0}

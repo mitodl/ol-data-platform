@@ -1775,6 +1775,8 @@ models:
 - name: orders_with_product_report
   description: Combined orders mart table with product name added
   config:
+    grants:
+      +select: ["ol_commerce_operations"]
     meta:
       # Tier1 because it carries a data contract (contracts/orders_with_product_report.yaml).
       openmetadata:
@@ -1990,6 +1992,123 @@ models:
       arguments:
         column_list: ["order_id", "line_id", "platform"]
 
+- name: order_revenue_report
+  description: Order lines with the product, the order date, prices, discounts, tax
+    and payment method, and nothing that identifies the learner or payer. orders_with_product_report
+    has those columns, for the people who look up a specific order. Use this one for
+    revenue reporting. It has no order, coupon or row key and no time finer than a
+    day, since the enrollment reports put those keys next to learner emails. Filter
+    order_state to fulfilled (and refunded states as needed) before summing amounts,
+    because failed and abandoned orders carry test amounts (one failed 2018 Bootcamps
+    order is 4.4e15). edX.org and Bootcamps orders have no product, so filter them
+    by courserun_readable_id.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  tests:
+  - dbt_utils.equal_rowcount:
+      arguments:
+        compare_model: ref('marts__combined__orders')
+      # Stands in for a unique key, so one extra row from a join has to fail.
+      config:
+        error_if: ">0"
+  columns:
+  - name: platform
+    description: str, platform the order was placed on, e.g. MITx Online, xPro, edX.org,
+      Bootcamps.
+    tests:
+    - not_null
+  - name: order_state
+    description: str, order state, e.g. fulfilled, refunded, partially_refunded, failed,
+      pending.
+    tests:
+    - not_null
+  - name: order_type
+    description: str, type of order, e.g. B2B, B2C, staff, Boeing. xPro only; null
+      on other platforms.
+  - name: order_created_date
+    description: date, the date part of the order's creation timestamp. For a B2B
+      order, when the B2B order was created.
+    tests:
+    - not_null
+  - name: order_payment_processor
+    description: str, payment processor used for the order. MITx Online only.
+  - name: product_id
+    description: int, product ID in the platform's database. Null for Bootcamps and
+      edX.org.
+  - name: product_readable_id
+    description: str, the course run, program run or program readable ID the product
+      sells. Null for Bootcamps and edX.org.
+  - name: product_type
+    description: str, course run or program. Null for Bootcamps and edX.org.
+  - name: product_name
+    description: str, title of the course run or program run, or for a program product
+      that marts__combined__products lacks, the program title from dim_program. Null
+      for Bootcamps and edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "product_readable_id is not null"
+  - name: courserun_readable_id
+    description: str, readable ID of the course run the order line is for.
+  - name: unit_price
+    description: numeric, list price at purchase for the order line, before discount.
+      For edX.org and migrated MicroMasters orders under MITx Online it is the price
+      after any coupon, as MicroMasters records no list price.
+  - name: discount
+    description: str, discount in a readable format, e.g. "$100" or "30%". A MITx
+      Online fixed-price discount is a bare number worked out from the product's price
+      today, so it can disagree with discount_amount when the price changed after
+      purchase.
+  - name: discount_amount
+    description: numeric, dollar amount off the order line, unit_price minus what
+      the line was charged. For xPro, unit_price minus line_price_paid. Null for Bootcamps,
+      edX.org and migrated MicroMasters orders under MITx Online.
+  - name: order_line_count
+    description: int, number of lines in the order this line belongs to. The line_
+      amounts are the order's amounts divided by it.
+  - name: line_price_paid
+    description: numeric, the line's even share of what the order paid, before tax.
+      Summing it over lines gives the orders' totals.
+  - name: line_tax_amount
+    description: numeric, the line's even share of the order's tax. xPro only.
+  - name: line_price_paid_plus_tax
+    description: numeric, the line's even share of what the order paid including tax.
+      Equal to line_price_paid outside xPro.
+  - name: line_payment_amount
+    description: numeric, the line's even share of the amount charged, req_amount
+      from the CyberSource payment.
+  - name: order_tax_rate
+    description: numeric, tax rate applied. xPro only.
+  - name: order_tax_rate_name
+    description: str, name of the tax rate applied. xPro only.
+  - name: order_tax_country_code
+    description: str, country code the tax was applied for. xPro only.
+  - name: coupon_name
+    description: str, name of the coupon payment the redeemed coupon belongs to. xPro
+      only.
+  - name: coupon_type
+    description: str, type of the coupon, which says when it can be redeemed.
+  - name: b2border_contract_number
+    description: str, B2B contract number for the order. xPro only.
+  - name: receipt_payment_currency
+    description: str, currency of the payment, e.g. USD.
+  - name: receipt_payment_method
+    description: str, payment method, e.g. card or paypal.
+  - name: receipt_payment_card_type
+    description: str, card type name, e.g. Visa.
+  - name: receipt_payment_transaction_type
+    description: str, CyberSource transaction type, e.g. sale.
+  - name: receipt_bill_to_address_country
+    description: str, bill-to country of the payment.
+  - name: receipt_bill_to_address_state
+    description: str, bill-to state of the payment.
+
 - name: feedback_conversation_report
   config:
     meta:
@@ -2065,6 +2184,257 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source", "conversation_id"]
+
+- name: course_feedback_report
+  config:
+    meta:
+      # Off until ol_instructor is limited to an explicit dataset list: published now,
+      # the next `ol-superset roles sync` would grant instructors every course's
+      # feedback before the RLS policy can list this dataset.
+      superset_dataset: false
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/course_structure
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/course_structure
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/app_postgres
+      - xpro/course_structure
+      - xpro/mysql
+      - xpro/tracking_logs
+  description: Learner feedback about a course run, for its course team. One row per
+    AskTIM chat, content feedback item or forum thread that resolves to a course run.
+    Zendesk tickets are excluded. No user key, though source and conversation_id join
+    back to the author through tfact_feedback. Not published to Superset yet; once
+    it is, the instructor course-scope RLS policy limits rows to the runs the viewer
+    teaches.
+  columns:
+  - name: courserun_readable_id
+    description: str, readable ID of the course run the conversation is about. The
+      instructor RLS policy filters on it.
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course run.
+  - name: platform
+    description: str, the platform the course run is on.
+  - name: source
+    description: str, the feedback source, e.g. AskTIM, Content Feedback, Course Discussion
+      Forum.
+    tests:
+    - not_null
+  - name: chat_agent
+    description: str, the AskTIM agent of the conversation. Null for other sources.
+  - name: conversation_id
+    description: str, the conversation identifier in its source system (chat session,
+      feedback record or forum thread). Unique together with source.
+    tests:
+    - not_null
+  - name: conversation_date
+    description: date, the date of the conversation's first turn.
+  - name: conversation_month
+    description: str, the month of the conversation's first turn, formatted yyyy-MM.
+  - name: turn_count
+    description: int, number of turns in the conversation.
+  - name: explicit_rating
+    description: str, the rating the learner gave, e.g. like/dislike for AskTIM, positive/negative/idea
+      for content feedback. Null when none was given.
+  - name: sentiment
+    description: str, positive, negative or neutral, from the explicit rating when
+      there is one and otherwise from the sentiment model. Null when neither applies.
+  - name: category_label
+    description: str, the feedback category assigned to the conversation. Null when
+      it has none.
+  - name: content_url
+    description: str, URL of the course page the feedback is about, without any query
+      string or fragment. Content feedback only.
+  - name: conversation_summary
+    description: str, LLM summary of the conversation. Null if not summarized.
+  - name: conversation_text
+    description: str, the redacted conversation text, turns separated by a line of
+      ---. Null until the redaction asset has processed the conversation.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source", "conversation_id"]
+
+- name: courserun_enrollment_activity_report
+  description: Course enrollment activity per course run, day and enrollment status,
+    with no learner columns. Each count is of distinct enrollments whose event (enrolling,
+    upgrading or earning a certificate) falls on activity_date, so summing over dates
+    gives a run's total and a running sum the cumulative view. Filter enrollment_status
+    to active to leave out learners who have since unenrolled, or leave it unfiltered
+    to count them. Verified status reads tfact_enrollment.is_verified for active enrollments,
+    and the enrollment mode for unenrolled ones, which the fact never marks verified.
+    Global Alumni is left out, since it records neither an enrollment time nor certificates.
+    Backs the course-run enrollment trends dashboard.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: platform
+    description: str, the platform's display name, e.g. MITx Online, edX.org, xPro.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, readable ID of the course run.
+    tests:
+    - not_null
+  - name: activity_date
+    description: date, the day the counted events happened.
+    tests:
+    - not_null
+  - name: enrollment_status
+    description: str, active if the enrollment is still active, unenrolled otherwise.
+      Every count in the row is of enrollments with this status. No unenrollment time
+      is recorded, so an unenrolled learner's events keep their original dates.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["active", "unenrolled"]
+  - name: course_readable_id
+    description: str, readable ID of the course the run belongs to.
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_title
+    description: str, title of the course run.
+  - name: courserun_start_on
+    description: str, start of the course run, as ISO 8601.
+  - name: courserun_end_on
+    description: str, end of the course run, as ISO 8601.
+  - name: courserun_is_current
+    description: boolean, whether the course run is currently running.
+  - name: enrollments
+    description: int, enrollments created on activity_date.
+    tests:
+    - not_null
+  - name: verified_enrollments
+    description: int, verified enrollments, dated by when the enrollment was created.
+  - name: audit_enrollments
+    description: int, enrollments in the audit mode, dated by when the enrollment
+      was created.
+  - name: upgrades
+    description: int, verified enrollments, dated by the upgrade payment (or the enrollment
+      when none is recorded). A run's total equals that of verified_enrollments; only
+      the dating differs, so the two cumulative curves can differ before the end.
+  - name: certificates
+    description: int, certificates earned, dated by when the certificate was created.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "courserun_readable_id", "activity_date", "enrollment_status"]
+
+- name: ocw_external_resource_link_report
+  description: >
+    One row per OCW external resource (a link to a page outside OCW) that is not
+    soft-deleted in OCW Studio, with the result of ocw-studio's link checker, its
+    license warning, and the Studio URL where the resource is edited. For the OCW
+    content team to find broken links and license warnings and fix them. Healthy
+    links are kept too, so a dashboard can show the share of links that are healthy
+    and filter to needs_review. Unchecked links are kept apart from broken ones:
+    ocw-studio marks a link unchecked when the site answers 401, 402, 403, 408, 429
+    or 503, i.e. it may have refused the checker rather than be gone.
+  columns:
+  - name: course_uuid
+    description: str, UUID of the OCW course site containing the resource
+    tests:
+    - not_null
+  - name: course_name
+    description: str, unique name of the OCW course site, as it appears in OCW Studio
+      URLs
+    tests:
+    - not_null
+  - name: course_number
+    description: str, primary course number, from the course metadata
+  - name: course_title
+    description: str, course title, from the course metadata
+  - name: course_term
+    description: str, term the course was taught, from the course metadata
+  - name: course_year
+    description: str, year the course was taught, from the course metadata
+  - name: course_live_url
+    description: str, URL of the course on the live OCW site
+  - name: course_is_unpublished
+    description: boolean, true if the course has been unpublished from the live site.
+      Null when dim_ocw_course has no row for the course.
+  - name: course_has_never_published
+    description: boolean, true if the course has never been published. Null when dim_ocw_course
+      has no row for the course.
+  - name: resource_uuid
+    description: str, UUID of the external resource
+    tests:
+    - not_null
+  - name: resource_title
+    description: str, title of the external resource
+  - name: resource_live_url
+    description: str, URL of the resource page on the live OCW site
+  - name: studio_url
+    description: str, OCW Studio URL where the resource is edited
+    tests:
+    - not_null
+  - name: external_resource_url
+    description: str, the URL outside OCW that the resource links to
+  - name: external_resource_url_status_code
+    description: str, HTTP status code from the last check that got a response. A
+      check that fails before a response (link_status check_failed) leaves the previous
+      code, so it can show 200 on a dead link. Null when no check has got a response.
+  - name: external_resource_wayback_url
+    description: str, Wayback Machine archive of the URL, when ocw-studio has one.
+      A candidate replacement for a broken link.
+  - name: external_resource_last_checked_on
+    description: timestamp, when the link checker last checked the URL
+  - name: link_status
+    description: >
+      str, the link checker's result. The checker's ExternalResourceState wins; the
+      status in the resource's metadata is used only when the resource has no state
+      row, because a check that fails before getting a response (DNS, connection or
+      TLS errors, a timeout) is recorded in the state and not in the metadata, which
+      keeps its last status. valid, broken, unchecked (the site answered 401, 402,
+      403, 408, 429 or 503, so the link may be fine), check_failed, or not_checked
+      when neither has a status or the state has never been checked (a new resource
+      waits for the weekly check).
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["valid", "broken", "unchecked", "check_failed", "not_checked"]
+  - name: is_link_broken
+    description: boolean, true when link_status is broken
+    tests:
+    - not_null
+  - name: is_url_missing
+    description: boolean, true when the resource has no external URL (null or blank)
+    tests:
+    - not_null
+  - name: has_license_warning
+    description: boolean, true when ocw-studio flagged the external site's license
+      as needing a warning to learners
+    tests:
+    - not_null
+  - name: needs_review
+    description: boolean, true when the link is broken, the check failed, the URL
+      is missing, or the resource has a license warning
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "resource_uuid"]
+  config:
+    tags: [qa_scheduled]
 
 unit_tests:
 - name: test_program_summary_report_counts_verified_from_the_fact

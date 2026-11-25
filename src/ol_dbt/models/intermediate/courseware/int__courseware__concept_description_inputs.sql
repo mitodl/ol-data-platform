@@ -51,7 +51,7 @@ with eligible_runs as (
         , courses.course_title
         , row_number() over (
             partition by mentions.concept_id, mentions.platform, mentions.courserun_readable_id
-            order by case when mentions.teaching_status = 'taught' then 0 else 1 end nulls last, length(mentions.description) desc
+            order by case when mentions.teaching_status = 'taught' then 0 else 1 end nulls last, {{ char_length('mentions.description') }} desc
         ) as run_rank
     from mentions
     left join course_runs

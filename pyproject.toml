@@ -87,7 +87,7 @@ constraint-dependencies = [
 ]
 
 [dependency-groups]
-prek = ["prek==0.5.10"]
+prek = ["prek==0.5.11"]
 # The sqlfluff hooks run in this group (see bin/sqlfluff-dbt-hook.py).
 sqlfluff = [
     "dbt-core>=1.12",

@@ -1031,6 +1031,56 @@ def list_roles(session: requests.Session, base_url: str) -> dict[str, int]:
     return result
 
 
+def get_superset_databases(
+    session: requests.Session, base_url: str
+) -> list[dict[str, object]]:
+    """
+    Fetch every database connection from the Superset API.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+
+    Returns:
+        List of dicts with 'id', 'database_name' and 'uuid'
+
+    Raises:
+        requests.HTTPError: When a page can't be fetched. A partial list would
+            make roles sync revoke database access it can't see.
+    """
+    databases: list[dict[str, object]] = []
+    page = 0
+    page_size = 100
+    while True:
+        params = {
+            "q": json.dumps(
+                {
+                    "page": page,
+                    "page_size": page_size,
+                    "columns": ["id", "database_name", "uuid"],
+                }
+            )
+        }
+        response = session.get(
+            f"{base_url}/api/v1/database/", params=params, timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("result", [])
+        databases.extend(
+            {
+                "id": db["id"],
+                "database_name": db["database_name"],
+                "uuid": db["uuid"],
+            }
+            for db in results
+        )
+        page += 1
+        if not results or page * page_size >= data.get("count", 0):
+            break
+    return databases
+
+
 def list_datasets_name_to_id(
     session: requests.Session, base_url: str
 ) -> dict[str, list[int]]:

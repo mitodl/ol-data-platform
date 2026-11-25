@@ -1,0 +1,7 @@
+---
+name: irx-simeon-mapping
+displayName: IRx tables and the Simeon file mapping
+source: src/ol_dbt/models/external/IRX_SIMEON_MAPPING.md
+owners: [{type: team, name: data-platform}]
+related:
+- {type: table, dbt_model: "irx__*"}

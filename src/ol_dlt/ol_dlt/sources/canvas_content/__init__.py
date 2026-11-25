@@ -48,7 +48,6 @@ import io
 import json
 import logging
 import mimetypes
-import re
 import zipfile
 import zlib
 from collections.abc import Iterator
@@ -76,6 +75,7 @@ from ol_dlt.extraction import (
     record_read,
 )
 from ol_dlt.sources.canvas_content import cartridge
+from ol_file_types.srt import text_from_srt
 
 logger = logging.getLogger(__name__)
 
@@ -203,15 +203,6 @@ def derived_title(source_path: str) -> str:
     """Return the title Learn falls back to, from a file's name."""
     stem = PurePosixPath(source_path).stem
     return stem.replace("_", " ").replace("-", " ").title()
-
-
-def text_from_srt(content: str) -> str:
-    """Remove the timings of an SRT transcript, as Learn does."""
-    content = re.sub(
-        r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}(\n|$)", "", content
-    )
-    content = re.sub(r"\d+\n", "", content)
-    return re.sub(r"\n\s*\n", " ", content)
 
 
 def text_from_sjson(content: str) -> str | None:

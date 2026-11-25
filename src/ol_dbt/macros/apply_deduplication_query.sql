@@ -69,7 +69,8 @@
         loader-agnostic and need no inventory entry.
 
         `then_by` appends a business-column tie-breaker after the resolved ordering,
-        so a model can keep one without naming the loader's columns itself.
+        or a list of them, so a model can keep one without naming the loader's
+        columns itself.
         `first_by` prepends one instead, for a model whose primary ordering is a
         business column (updated_on) with the loader column only breaking ties.
         When the resolved column is none, `first_by` does not force a dedup: the
@@ -117,7 +118,8 @@
     )
     {%- else %}
     {%- set resolved_columns = [resolved] if resolved is string else resolved %}
-    {%- set ordering = ([first_by] if first_by is not none else []) + resolved_columns + ([then_by] if then_by is not none else []) %}
+    {%- set tie_breakers = ([] if then_by is none else ([then_by] if then_by is string else then_by)) %}
+    {%- set ordering = ([first_by] if first_by is not none else []) + resolved_columns + tie_breakers %}
     {%- set dedup_input = source_cte ~ '_snapshot' if snapshot_by is not none else source_cte %}
     {%- if snapshot_by is not none %}
     , {{ source_cte }}_snapshot_ranked as (

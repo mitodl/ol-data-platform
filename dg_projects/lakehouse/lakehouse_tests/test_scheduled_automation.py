@@ -83,10 +83,14 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     Raw snapshot expiry builds nothing either. It trims the snapshots QA's own
     raw loads leave behind. The dbt-layer maintenance stays out of QA.
 
-    The raw and dbt-layer orphan-file passes also build nothing, and each only
-    reports until an environment is named in its asset's delete set.
+    The raw and dbt-layer orphan-file passes also build nothing. Both delete
+    in QA, since QA is named in each asset's delete set.
 
     The observation drift check reads QA raw's metadata and writes nothing.
+
+    The b2b views read the dimensional tables the Learn integrations build
+    makes in QA. The ones that read a table QA does not build are left out of
+    its job.
     """
     assert schedules_for_environment(ALL_CANDIDATES, environment="qa") == [
         "daily_sync_and_stage",
@@ -94,6 +98,7 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
         "lake_orphan_sweep_weekly",
         "iceberg_raw_orphan_files_weekly",
         "iceberg_dbt_layer_orphan_files_weekly",
+        "b2b_analytics_starrocks_nightly",
         "learn_integrations_qa_daily",
         "qa_observation_drift_daily",
     ]

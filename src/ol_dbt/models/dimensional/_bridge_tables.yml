@@ -65,10 +65,16 @@ models:
       - program_fk
       - course_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitxonline/app_postgres
+      - ocw/app_postgres
       - xpro/app_postgres
   columns:
   - name: program_fk
@@ -116,10 +122,16 @@ models:
       - contract_fk
       - course_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - edxorg/api
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitxonline/app_postgres
+      - ocw/app_postgres
       - xpro/app_postgres
   columns:
   - name: contract_fk
@@ -249,8 +261,12 @@ models:
       - user_fk
       - organization_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql
@@ -295,8 +311,12 @@ models:
       - user_fk
       - contract_fk
   config:
+    tags: [qa_scheduled]
     meta:
       qa_branches:
+      - emeritus/bigquery
+      - global_alumni/bigquery
+      - irx/bigquery
       - micromasters/app_postgres
       - mitlearn/app_postgres
       - mitx/mysql

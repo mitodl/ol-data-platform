@@ -13,6 +13,7 @@ from dagster import (
 )
 
 from lakehouse.assets.lakehouse.dbt_starrocks import (
+    UNBUILDABLE_VIEWS,
     starrocks_dbt_assets,
     starrocks_dbt_project,
 )
@@ -24,6 +25,7 @@ from lakehouse.lib.starrocks_dbt import (
     refresh_materialized_views,
     stamp_change_log,
     view_grains,
+    without_nodes,
 )
 from lakehouse.resources.starrocks import StarRocksResource
 
@@ -78,8 +80,14 @@ def refresh_starrocks_analytics_mvs(
     is part of this asset rather than a separate asset check because a check
     on a failed asset never runs, and one MV failing its refresh fails the
     asset after the rest have refreshed.
+
+    The views the environment's lake cannot build (UNBUILDABLE_VIEWS) are
+    skipped, since the b2b job never creates them there.
     """
-    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    manifest = without_nodes(
+        json.loads(starrocks_dbt_project.manifest_path.read_text()),
+        UNBUILDABLE_VIEWS,
+    )
     tracked = {view.relation: view for view in change_tracked_views(manifest)}
 
     def stamp(relation: str) -> None:

@@ -72,7 +72,9 @@ models:
   - name: external_resource_license_warning
     description: boolean, whether the external resource has a license warning
   - name: external_resource_url_status_code
-    description: int, status code of the external resource URL
+    description: str, HTTP status code of the external resource URL from the last
+      completed link check, read from ExternalResourceState and falling back to the
+      resource metadata. A failed check keeps the previous code.
   - name: external_resource_backup_url
     description: str, backup URL of the external resource
   - name: external_resource_backup_url_status_code
@@ -82,6 +84,16 @@ models:
       broken, check_failed)
   - name: external_resource_wayback_url
     description: str, Wayback Machine archive URL of the external resource
+  - name: external_resource_check_status
+    description: str, result of the link checker's last check, from its ExternalResourceState
+      (valid, broken, unchecked or check_failed). Unlike external_resource_status,
+      it records a check that failed before getting a response. Null when the resource
+      has no state row.
+  - name: external_resource_last_checked_on
+    description: timestamp, when the link checker last checked the external resource
+  - name: resource_deleted_on
+    description: timestamp, when the resource was soft-deleted in OCW Studio; null
+      when it is not deleted
   - name: image_alt_text
     description: str, alt text of the image resource
   - name: image_caption

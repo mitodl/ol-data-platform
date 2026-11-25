@@ -13,3 +13,7 @@
 
 # MicroMasters Finance dashboards + charts — unmaintained, dropped in ce937648.
 MM_Fin_*
+# The same assets after their rename to "[MMFin] ..." titles and MMFin_* filenames
+# (plus "MMFin Enrollment Raw Data", which has no brackets). They are per-course
+# copies of one template, replaced by courserun_enrollment_activity_report.
+*MMFin*

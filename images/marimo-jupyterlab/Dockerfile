@@ -1,9 +1,16 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
 # minimal-notebook provides JupyterLab, jupyterhub-singleuser, and the Z2JH
 # user/entrypoint setup (jovyan, NB_UID, start.sh hooks) without the conda
 # data-science stack. All notebook-level packages (pandas, trino, pyiceberg,
 # etc.) are declared per-notebook via PEP 723 `/// script` inline metadata.
-FROM quay.io/jupyter/minimal-notebook:latest@sha256:26ff442c8f85dace0f83c8c2b3969a4ba3ca1218c8544d4faa6740bfc2be3788
+FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
+
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS ol-notebook-wheel
+COPY --from=uv /uv /usr/bin/uv
+COPY --from=ol-notebook . /src/ol-notebook
+RUN uv build --wheel --out-dir /wheels /src/ol-notebook
+
+FROM quay.io/jupyter/minimal-notebook:latest@sha256:b97cc9adde649c3b7b8209f4aa17996b7ec0df8b5424f22aae50ce1329d900c8
 
 # marimo-jupyter-extension must be importable by JupyterLab — it registers
 # the proxy server that forwards requests to per-notebook marimo processes.
@@ -46,3 +53,10 @@ ARG GH_VERSION=2.104.0
 RUN mamba install --yes --quiet "gh=${GH_VERSION}" && \
     mamba clean --all -f -y
 COPY gitconfig /etc/gitconfig
+
+# ol_notebook (packages/ol-notebook), found by uv when a notebook names
+# `ol-notebook` in its /// script header. images/marimo-runtime ships the same
+# wheel, so a notebook that queries the warehouse here runs unchanged once
+# published. image-uv.toml says why it's an index rather than find-links.
+COPY --from=ol-notebook-wheel /wheels /opt/ol-notebook/wheels
+COPY --from=ol-notebook image-uv.toml /etc/uv/uv.toml

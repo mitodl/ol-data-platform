@@ -3196,3 +3196,27 @@ unit_tests:
       coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
     - {courserun_readable_id: course-v1:MITx+1.00x+1T2026, coursestructure_block_id: b2,
       coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+- name: test_stg__mitxonline__openedx__tracking_logs__user_activity_reads_a_zone_less_time_as_utc
+  description: >
+    Older MITx Online tracking-log rows write `time` with no zone. Open edX logs
+    UTC, so a zone-less time is staged as UTC whatever the session time zone,
+    the same as one written with +00:00. User a's time is in the 2022
+    America/New_York spring-forward gap.
+  model: stg__mitxonline__openedx__tracking_logs__user_activity
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__tracking_log_events')
+    rows:
+    - {username: a, context: '{"user_id": 1, "course_id": "course-v1:MITx+1.00x+1T2022"}',
+      event: '{}', event_source: server, event_type: problem_check, time: '2022-03-13
+        02:30:00.123456', _dlt_load_id: '1700000000.1', _file_modified_at: '2023-11-14
+        00:00:00'}
+    - {username: b, context: '{"user_id": 2, "course_id": "course-v1:MITx+1.00x+1T2022"}',
+      event: '{}', event_source: server, event_type: problem_check, time: '2022-07-15T10:00:00.5+00:00',
+      _dlt_load_id: '1700000000.1', _file_modified_at: '2023-11-14 00:00:00'}
+  expect:
+    rows:
+    - {user_username: a, useractivity_timestamp: '2022-03-13T02:30:00.123456000Z'}
+    - {user_username: b, useractivity_timestamp: '2022-07-15T10:00:00.500000000Z'}

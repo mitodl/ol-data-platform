@@ -10,12 +10,12 @@ together.
 """
 
 import pytest
+from ol_file_types.srt import text_from_srt
 from openedx.assets.transcripts import (
     assert_parsing_healthy,
     build_transcript_rows,
     is_transcript,
     text_from_sjson_content,
-    text_from_srt_content,
     text_from_vtt_content,
     transcript_text,
 )
@@ -46,7 +46,7 @@ MIT_LEARN_SJSON_EXPECTED = "This is the first subtitle. This is the second subti
 
 
 def test_srt_parses_exactly_as_mit_learn_does():
-    assert text_from_srt_content(MIT_LEARN_SRT_CONTENT) == MIT_LEARN_SRT_EXPECTED
+    assert text_from_srt(MIT_LEARN_SRT_CONTENT) == MIT_LEARN_SRT_EXPECTED
 
 
 def test_sjson_parses_exactly_as_mit_learn_does():
@@ -65,15 +65,13 @@ def test_sjson_without_text_key_is_empty():
     assert text_from_sjson_content('{"start": [0], "end": [2]}') == ""
 
 
-def test_srt_digit_only_caption_is_stripped():
-    """A caption line of only digits is removed -- mit-learn does this too.
+def test_srt_digit_only_caption_is_kept():
+    """mit-learn's bare ``\\d+\\n`` removes a caption reading "1984"; this keeps it.
 
-    The sequence-number rule is a bare ``\\d+\\n``, so it cannot tell a caption
-    reading "1984" from a subtitle index. Pinned deliberately: diverging would
-    make every such caption a spurious cutover difference.
+    The rest of Learn's SRT handling is kept; see ol_file_types.srt and its tests.
     """
     srt = "1\n00:00:00,000 --> 00:00:02,000\n1984\nThe year it began."
-    assert "1984" not in text_from_srt_content(srt)
+    assert transcript_text("static/x.srt", srt.encode()) == ("1984\nThe year it began.")
 
 
 @pytest.mark.parametrize(
@@ -402,7 +400,7 @@ def test_srt_blank_lines_between_blocks_collapse_to_a_space():
         "00:00:02,000 --> 00:00:04,000\n"
         "Second caption.\n"
     )
-    text = text_from_srt_content(srt)
+    text = text_from_srt(srt)
 
     assert "-->" not in text
     assert "First caption." in text

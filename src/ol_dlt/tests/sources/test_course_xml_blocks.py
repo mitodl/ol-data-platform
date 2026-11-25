@@ -190,6 +190,32 @@ def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
     assert row["extracted_at"] is None
     assert row["release_date"] is None
     assert row["content_file_key"] is None
+    # ...nor the platform's own flags.
+    assert row["learner_visibility"] is None
+    assert row["static_reference"] is None
+    assert row["non_content_kind"] is None
+
+
+def test_file_exclusion_row_keeps_the_platform_flags() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                "course_id": "course-v1:MITxT+7.05x+2T2026",
+                "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
+                "file_path": "static/hidden_video.srt",
+                "excluded": True,
+                "exclusion_reason": "staff_only",
+                "learner_visibility": "staff_only",
+                "static_reference": "unreferenced",
+                "non_content_kind": None,
+            }
+        ),
+        course_xml_blocks.OPENEDX_FILE_EXCLUSIONS,
+    )
+    assert row["learner_visibility"] == "staff_only"
+    assert row["static_reference"] == "unreferenced"
+    assert row["non_content_kind"] is None
 
 
 def test_file_exclusion_row_keeps_the_release_date() -> None:

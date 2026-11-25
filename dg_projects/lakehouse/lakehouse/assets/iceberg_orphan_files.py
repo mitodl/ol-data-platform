@@ -18,9 +18,8 @@ what the table's metadata can still reach (see
   ``incremental`` model keeps its directory, so its expired snapshots' files
   stay inside it (14.2 TB eligible in production staging, measured
   2026-11-16). It deletes where
-  :data:`ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so, and that
-  set is empty until a person has read an in-cluster report. The staging bucket
-  is versioned with a 30-day noncurrent expiry.
+  :data:`ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so (QA). The
+  staging bucket is versioned with a 30-day noncurrent expiry.
 
 Both report everywhere they run. An environment is added to a delete set after
 a person has read a report for it.
@@ -78,7 +77,9 @@ DBT_LAYER_GLUE_DATABASES = tuple(
 ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset(
     {"qa", "production"}
 )
-ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset()
+# QA from 2026-11-23, after its 2026-11-22 report (run 1c67ce16) and production's
+# (run 31da8636) were read. Production follows once QA's delete runs are clean.
+ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
 
 # The floor has to exceed the longest time a writer holds a file before the
 # commit that references it. A delete run refuses to start unless the Dagster

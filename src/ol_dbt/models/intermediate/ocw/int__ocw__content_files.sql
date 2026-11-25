@@ -279,14 +279,14 @@ select
     courses.courserun_readable_id
     , content_files.course_slug
     -- The directory holding data.json, with its trailing slash.
-    , substr(content_files.coursecontent_s3_key, 1, length(content_files.coursecontent_s3_key) - length('data.json'))
+    , substr(content_files.coursecontent_s3_key, 1, {{ char_length('content_files.coursecontent_s3_key') }} - length('data.json'))
         as content_file_key
     , content_files.content_type
     , content_files.title
     , content_files.description
     , {{ dbt.concat([
         "'" ~ ocw_base_url ~ "'"
-        , "substr(content_files.coursecontent_s3_key, 1, length(content_files.coursecontent_s3_key) - length('data.json'))"
+        , "substr(content_files.coursecontent_s3_key, 1, " ~ char_length('content_files.coursecontent_s3_key') ~ " - length('data.json'))"
     ]) }} as url
     , content_files.content
     , content_files.file_type

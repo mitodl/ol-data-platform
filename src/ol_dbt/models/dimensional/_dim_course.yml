@@ -16,8 +16,14 @@ models:
     The most-recent-run collapse uses a ROW_NUMBER subquery (WHERE _row_num = 1) rather
     than a QUALIFY clause because Trino does not support QUALIFY; the semantics are
     identical — exactly one row is retained per course_readable_id.
+  config:
+    tags: [qa_scheduled]
   meta:
     qa_branches:
+    - edxorg/api
+    - emeritus/bigquery
+    - global_alumni/bigquery
+    - irx/bigquery
     - micromasters/app_postgres
     - mitxonline/app_postgres
     - ocw/app_postgres

@@ -43,6 +43,8 @@ from lakehouse.lib.starrocks_dbt import (
     starrocks_credentials,
     unreadable_base_tables,
     view_grains,
+    views_reading,
+    without_nodes,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -800,6 +802,68 @@ def _probe(relations, failing):
         relations, fetch, log=logging.getLogger("test"), sleep=sleeps.append
     )
     return failures, statements, sleeps
+
+
+def _named_sources(manifest):
+    """Add the `source_name` and `name` dbt gives every source."""
+    for unique_id, source in manifest["sources"].items():
+        source["source_name"], source["name"] = unique_id.split(".")[2:]
+    return manifest
+
+
+class TestViewsReading:
+    def manifest(self):
+        return _named_sources(
+            _manifest_reading(
+                ["bridge_user_contract", "dim_contract"],
+                [
+                    _reading(
+                        _mv_node("mv_b2b_learner", ["user_pk"]),
+                        "source.open_learning.dimensional.bridge_user_contract",
+                        "source.open_learning.dimensional.dim_contract",
+                    ),
+                    _reading(
+                        _mv_node("mv_b2b_contract_utilization", ["contract_pk"]),
+                        "source.open_learning.dimensional.dim_contract",
+                    ),
+                    _reading(
+                        _model_node(
+                            "not_a_view",
+                            materialized="table",
+                            tags=["starrocks"],
+                        ),
+                        "source.open_learning.dimensional.bridge_user_contract",
+                    ),
+                ],
+            )
+        )
+
+    def test_names_only_the_views_that_read_the_source(self):
+        assert views_reading(self.manifest(), {"dimensional.bridge_user_contract"}) == {
+            "model.open_learning.mv_b2b_learner"
+        }
+
+    def test_no_sources_leaves_every_view_in(self):
+        assert views_reading(self.manifest(), frozenset()) == set()
+
+    def test_an_unknown_source_raises(self):
+        """A typo would otherwise exclude nothing, and the base-table check
+        would fail every build on the table it was meant to name.
+        """
+        with pytest.raises(ValueError, match="bridge_user_contracts"):
+            views_reading(self.manifest(), {"dimensional.bridge_user_contracts"})
+
+    def test_without_nodes_drops_them_from_every_view_helper(self):
+        manifest = self.manifest()
+        kept = without_nodes(
+            manifest, views_reading(manifest, {"dimensional.bridge_user_contract"})
+        )
+        assert materialized_view_relations(kept) == [
+            "b2b_analytics.mv_b2b_contract_utilization"
+        ]
+        assert manifest["nodes"].keys() - kept["nodes"].keys() == {
+            "model.open_learning.mv_b2b_learner"
+        }
 
 
 CONNECT_FAILURE = "(2003, \"Can't connect to MySQL server on 'starrocks-fe'\")"

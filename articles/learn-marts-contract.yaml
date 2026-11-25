@@ -1,0 +1,7 @@
+---
+name: learn-marts-contract
+displayName: Learn integration schema contract
+source: docs/learn_marts_contract.md
+owners: [{type: team, name: data-platform}]
+related:
+- {type: table, dbt_model: "integrations__learn__*"}

@@ -84,7 +84,7 @@ with ocw_table_headers as (
             files.courserun_readable_id = solution_resources.courserun_readable_id
             and files.content_file_key = solution_resources.content_file_key
     -- a scan with no text layer reads as its file name, which a problem set can share
-    where length(files.body) > 200
+    where {{ char_length('files.body') }} > 200
 )
 
 select

@@ -318,6 +318,48 @@ def _materialized_view_nodes(
     return (node for node in manifest["nodes"].values() if _is_materialized_view(node))
 
 
+def views_reading(manifest: Mapping[str, Any], sources: Collection[str]) -> set[str]:
+    """Find the materialized views that select from any of *sources*.
+
+    :param manifest: The parsed StarRocks dbt manifest.
+    :param sources: Source tables as `<source name>.<table name>`, the two
+        arguments `source()` takes.
+    :returns: The views' dbt unique ids.
+    :raises ValueError: when a name in *sources* is no source in the manifest.
+        A misspelled name would otherwise leave every view in, and the
+        base-table check would fail the build on the table it meant.
+    """
+    source_ids = {
+        f"{source['source_name']}.{source['name']}": unique_id
+        for unique_id, source in manifest["sources"].items()
+    }
+    unknown = sorted(set(sources) - source_ids.keys())
+    if unknown:
+        msg = f"No such dbt sources in the StarRocks manifest: {unknown}"
+        raise ValueError(msg)
+    wanted = {source_ids[name] for name in sources}
+    return {
+        unique_id
+        for unique_id, node in manifest["nodes"].items()
+        if _is_materialized_view(node)
+        and wanted.intersection(node["depends_on"]["nodes"])
+    }
+
+
+def without_nodes(
+    manifest: Mapping[str, Any], unique_ids: Collection[str]
+) -> dict[str, Any]:
+    """Return *manifest* with the nodes in *unique_ids* removed."""
+    return {
+        **manifest,
+        "nodes": {
+            unique_id: node
+            for unique_id, node in manifest["nodes"].items()
+            if unique_id not in unique_ids
+        },
+    }
+
+
 @dataclass(frozen=True)
 class ViewGrain:
     """The columns a StarRocks MV's grain test says identify one of its rows.

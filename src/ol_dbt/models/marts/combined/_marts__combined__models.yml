@@ -193,6 +193,10 @@ models:
   description: ecommerce regular b2c orders. A MicroMasters order migrated to MITx
     Online appears once, as its MITx Online copy.
   config:
+    # Customer service and finance look up orders here; they read none of the
+    # rest of mart.
+    grants:
+      +select: ["ol_commerce_operations"]
     meta:
       qa_branches:
       - micromasters/app_postgres
@@ -1208,6 +1212,8 @@ models:
 - name: marts__combined_discounts
   description: a table that includes coupon and enrollment codes from xpro and mitxonline
   config:
+    grants:
+      +select: ["ol_commerce_operations"]
     meta:
       qa_branches:
       - micromasters/app_postgres

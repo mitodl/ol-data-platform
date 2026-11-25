@@ -47,17 +47,18 @@ Why it is per schedule rather than per environment
 --------------------------------------------------
 Because the schedules disagree. ``daily_sync_and_stage_*`` is the ingestion path
 QA needs *more* of -- RFC 12711 step 8 revives it -- while a QA tick of
-``b2b_analytics_starrocks_nightly`` would publish silently partial B2B data. A
-single per-environment switch would have to be wrong about one of them.
+``airbyte_inventory_drift_daily`` would compare the production inventory with
+the QA workspace and report every connection missing. A single
+per-environment switch would have to be wrong about one of them.
 
 What omission also takes with it
 --------------------------------
 Most of these build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
-location too -- e.g. ``iceberg_dbt_maintenance_job`` and
-``b2b_analytics_starrocks_job`` are not manually launchable outside production,
-and ``learn_integrations_qa_job`` exists only in QA. Their ASSETS stay registered
-everywhere and can still be materialized by hand from the asset graph, so nothing
+location too -- e.g. ``iceberg_dbt_maintenance_job`` is not manually launchable
+outside production, and ``learn_integrations_qa_job`` exists only in QA. Their
+ASSETS stay registered everywhere and can still be materialized by hand from the
+asset graph, so nothing
 becomes unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
 
@@ -124,9 +125,9 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # raw snapshot expiry ran there first, so that is where most of the files
     # it strands are. Never dev: it resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
-    # The same pass over the dbt-layer databases. It only reports until
-    # ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS names an environment.
-    # QA reports too, so a delete can be enabled there first. Never dev.
+    # The same pass over the dbt-layer databases. Whether a run deletes is
+    # decided by ICEBERG_DBT_LAYER_ORPHAN_FILES_DELETE_ENVIRONMENTS (today QA
+    # only; production reports). Never dev.
     "iceberg_dbt_layer_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
@@ -140,10 +141,6 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # on the production sources. Its job is likewise registered in `jobs` in
     # every environment, so a deliberate run elsewhere stays possible.
     "dbt_source_freshness_daily": frozenset({"production"}),
-    # Builds the tag:starrocks models, then refreshes their downstream MVs.
-    # Always target-correct via STARROCKS_DBT_TARGET, but a QA run reads the
-    # empty QA lake and publishes a B2B dashboard's worth of silently partial
-    # data -- the exact failure mode RFC 12711 is about. Step 8's call to flip.
     # The only execution path for the PostHog staging model: it is fed by a dlt
     # source, so no sync_and_stage_* job covers it, and the automation sensor
     # target subtracts the staging group it belongs to. Production only, because
@@ -156,7 +153,13 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # so QA has no raw table of its own to build from, and building staging in
     # QA is RFC 12711 step 8's call.
     "non_airbyte_staging_daily": frozenset({"production"}),
-    "b2b_analytics_starrocks_nightly": frozenset({"production"}),
+    # Builds the tag:starrocks models, then refreshes their downstream MVs.
+    # QA too, since learn_integrations_qa_daily builds the dimensional tables
+    # the views read (they are tagged qa_scheduled). The job leaves out the
+    # views whose base tables QA does not build (STARROCKS_ABSENT_SOURCES in
+    # dbt_environment.py), and the base-table check fails a run that would
+    # otherwise read a missing one.
+    "b2b_analytics_starrocks_nightly": frozenset({"qa", "production"}),
     # Reads the ingestion inventory and compares it to the live Airbyte
     # workspace. Production-only because the comparison is not
     # environment-aware and the inventory describes production.
@@ -180,7 +183,9 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # in QA; this is a report, and it can only describe one workspace.
     "airbyte_inventory_drift_daily": frozenset({"production"}),
     # The dbt models tagged qa_scheduled (MIT Learn integrations views QA has
-    # every raw input for), plus their upstream. QA only: production builds
+    # every raw input for, the dimensional tables the b2b views read, and the
+    # OCW external resource link report), plus
+    # their upstream. QA only: production builds
     # them through the automation sensor. The one dbt schedule QA runs, and an
     # exception to "QA does not build" that holds only because none of its
     # models is a cross-source union QA is not shown to hold, which ol-dbt
