@@ -19,7 +19,18 @@ def test_accepts_dns_label_names(name: str) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["", "Sales", "3d", "-a", "a-", "a_b", "a.b", "x" * 41, "logout", "healthz"],
+    [
+        "",
+        "Sales",
+        "3d",
+        "-a",
+        "a-",
+        "a_b",
+        "a.b",
+        "x" * 41,
+        "logout",
+        "notebook-publisher",
+    ],
 )
 def test_rejects_other_names(name: str) -> None:
     with pytest.raises(ValidationError):

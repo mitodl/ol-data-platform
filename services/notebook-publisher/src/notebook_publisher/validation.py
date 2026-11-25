@@ -18,9 +18,13 @@ from notebook_publisher.settings import Settings
 # (<name>-route-auth-<revision>, <name>-content) stays a valid label too.
 NAME_PATTERN = r"^[a-z]([-a-z0-9]{0,38}[a-z0-9])?$"
 
-# Paths on the apps host that an app named after them would capture. The shared
-# openid-connect plugin config logs out at /logout/oidc.
-RESERVED_NAMES = frozenset({"logout", "login", "auth", "api", "healthz"})
+# Paths on the apps host that an app named after them would capture (the shared
+# openid-connect plugin config logs out at /logout/oidc), and the publisher's
+# own Service in the namespace, which the operator would take over for an app
+# with its name.
+RESERVED_NAMES = frozenset(
+    {"logout", "login", "auth", "api", "healthz", "notebook-publisher"}
+)
 
 # The reference regex from PEP 723.
 PEP_723_BLOCK = re.compile(
