@@ -10,11 +10,15 @@ from typing import Any, cast
 import pytest
 
 from ol_superset.lib.role_management import (
+    access_permission_changes,
     compute_desired_dataset_ids,
+    database_access_view_menu,
     load_governance_roles,
+    parse_allowed_databases,
     parse_allowed_datasets,
     role_dataset_access_is_managed,
     uncovered_dataset_schemas,
+    unmatched_allowed_databases,
     unmatched_allowed_datasets,
 )
 
@@ -189,6 +193,100 @@ def test_load_governance_roles_refuses_a_malformed_policy(tmp_path: Path, capsys
     )
     assert load_governance_roles(policy) == []
     assert "is not '<schema>.<table_name>'" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# allowed_databases and global access permissions
+# ---------------------------------------------------------------------------
+
+# Production's ids; QA numbers the same databases differently.
+API_DATABASES: list[dict[str, object]] = [
+    {"id": 1, "database_name": "Trino"},
+    {"id": 2, "database_name": "Superset Metadata DB"},
+    {"id": 3, "database_name": "StarRocks - Lakehouse"},
+]
+TRINO = ("database_access", "[Trino].(id:1)")
+METADATA_DB = ("database_access", "[Superset Metadata DB].(id:2)")
+STARROCKS = ("database_access", "[StarRocks - Lakehouse].(id:3)")
+ALL_DATABASES = ("all_database_access", "all_database_access")
+ALL_DATASOURCES = ("all_datasource_access", "all_datasource_access")
+
+
+def _perm(permission: str, view_menu: str) -> dict[str, dict[str, str]]:
+    return {"permission": {"name": permission}, "view_menu": {"name": view_menu}}
+
+
+def test_database_access_view_menu_matches_superset_perm():
+    assert database_access_view_menu(API_DATABASES[0]) == "[Trino].(id:1)"
+
+
+@pytest.mark.parametrize(
+    "allowed_databases", ["Trino", {"Trino": True}, [1], [""], [["Trino"]]]
+)
+def test_parse_allowed_databases_rejects_malformed(allowed_databases: Any):
+    with pytest.raises(ValueError, match="allowed_databases must be a list"):
+        parse_allowed_databases(allowed_databases)
+
+
+def test_unmatched_allowed_databases():
+    assert unmatched_allowed_databases(["Trino", "Shillelagh"], API_DATABASES) == [
+        "Shillelagh"
+    ]
+
+
+def test_allowed_databases_grants_by_name_and_revokes_the_rest():
+    role = {
+        "name": "ol_data_engineer",
+        "permissions": [_perm("can_read", "Dashboard")],
+        "allowed_databases": ["Trino", "StarRocks - Lakehouse"],
+    }
+    to_add, to_revoke = access_permission_changes(
+        role, API_DATABASES, {TRINO, METADATA_DB, ALL_DATABASES, ALL_DATASOURCES}
+    )
+    assert to_add == {STARROCKS}
+    # The metadata DB and both global grants go: either global grant opens
+    # every database in SQL Lab.
+    assert to_revoke == {METADATA_DB, ALL_DATABASES, ALL_DATASOURCES}
+
+
+def test_empty_allowed_databases_revokes_every_database():
+    role = {"name": "r", "permissions": [], "allowed_databases": []}
+    to_add, to_revoke = access_permission_changes(
+        role, API_DATABASES, {TRINO, STARROCKS}
+    )
+    assert to_add == set()
+    assert to_revoke == {TRINO, STARROCKS}
+
+
+def test_global_access_listed_in_the_definition_is_kept():
+    role = {
+        "name": "ol_data_engineer",
+        "permissions": [
+            _perm(*ALL_DATABASES),
+            _perm(*ALL_DATASOURCES),
+        ],
+    }
+    assert access_permission_changes(
+        role, API_DATABASES, {ALL_DATABASES, ALL_DATASOURCES, TRINO}
+    ) == (set(), set())
+
+
+def test_without_allowed_databases_database_access_is_left_alone():
+    role = {"name": "r", "permissions": [_perm(*ALL_DATASOURCES)]}
+    to_add, to_revoke = access_permission_changes(
+        role, API_DATABASES, {METADATA_DB, ALL_DATABASES, ALL_DATASOURCES}
+    )
+    assert to_add == set()
+    assert to_revoke == {ALL_DATABASES}
+
+
+def test_load_governance_roles_refuses_malformed_allowed_databases(
+    tmp_path: Path, capsys
+):
+    policy = tmp_path / "ol_governance_roles.json"
+    policy.write_text(json.dumps([{"name": "r", "allowed_databases": "Trino"}]))
+    assert load_governance_roles(policy) == []
+    assert "allowed_databases must be a list" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

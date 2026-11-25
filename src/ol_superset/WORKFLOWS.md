@@ -394,10 +394,22 @@ that table's dataset on every database, Trino and StarRocks alike. Use it for a 
 few tables in a schema but not the rest of it: a schema-wide grant on the mart layer also hands over
 every learner-level mart table.
 
+`allowed_databases` lists the Superset database names a role may query in SQL Lab (e.g. `["Trino",
+"StarRocks - Lakehouse"]`). Sync grants `database_access` on exactly those, looked up by name because
+the ids differ between QA and production, and revokes the role's other `database_access` grants. Leave
+the key out to leave a role's database access alone.
+
+`all_database_access` and `all_datasource_access` each open every database in SQL Lab, the Superset
+Metadata DB included. `flask fab import-roles` only adds permissions, so taking one out of a role's
+definition doesn't remove it from the live role. Sync does: it revokes `all_database_access`,
+`all_datasource_access` and `all_query_access` from any governance role whose definition no longer
+lists them.
+
 Run this after any of the following events:
 - A new Trino or StarRocks dataset is added to the YAML assets
 - A dataset is moved to a different schema
-- A new governance role is added or `allowed_schemas` / `allowed_datasets` is updated
+- A new governance role is added or `allowed_schemas` / `allowed_datasets` / `allowed_databases` is updated
+- A global access permission is taken out of a role's definition
 
 ```bash
 # Preview which permissions would be added/revoked (no changes applied)

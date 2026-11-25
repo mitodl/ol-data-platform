@@ -8,15 +8,26 @@ from typing import cast
 import requests
 import yaml
 
+# Permissions that open every database or dataset at once. Superset 6.1's
+# can_access_database() accepts all_datasource_access as well as
+# all_database_access, so either one reaches every database in SQL Lab.
+GLOBAL_ACCESS_PERMISSIONS = frozenset(
+    {"all_database_access", "all_datasource_access", "all_query_access"}
+)
+
+# A (permission name, view menu name) pair, e.g.
+# ("database_access", "[Trino].(id:1)").
+PermissionView = tuple[str, str]
+
 
 def load_governance_roles(governance_json_path: Path) -> list[dict[str, object]]:
     """
     Load role definitions from the ol_governance_roles.json file.
 
     Each entry is expected to have 'name', 'permissions', and optionally
-    'allowed_schemas' and 'allowed_datasets' fields. A malformed
-    'allowed_datasets' is reported and nothing is returned, so no command acts
-    on part of a policy.
+    'allowed_schemas', 'allowed_datasets' and 'allowed_databases' fields. A
+    malformed 'allowed_datasets' or 'allowed_databases' is reported and nothing
+    is returned, so no command acts on part of a policy.
 
     Args:
         governance_json_path: Path to ol_governance_roles.json
@@ -36,6 +47,7 @@ def load_governance_roles(governance_json_path: Path) -> list[dict[str, object]]
     try:
         for role in roles:
             parse_allowed_datasets(role.get("allowed_datasets", []))
+            parse_allowed_databases(role.get("allowed_databases", []))
     except ValueError as e:
         print(f"Error: {governance_json_path}: {e}", file=sys.stderr)
         return []
@@ -192,13 +204,59 @@ def get_all_roles(session: requests.Session, base_url: str) -> list[dict[str, ob
     return roles
 
 
+def get_superset_databases(
+    session: requests.Session, base_url: str
+) -> list[dict[str, object]]:
+    """
+    Fetch every database connection from the Superset API.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+
+    Returns:
+        List of dicts with 'id' and 'database_name'
+
+    Raises:
+        requests.HTTPError: When a page can't be fetched. A partial list would
+            make roles sync revoke database access it can't see.
+    """
+    databases: list[dict[str, object]] = []
+    page = 0
+    page_size = 100
+    while True:
+        params = {
+            "q": json.dumps(
+                {
+                    "page": page,
+                    "page_size": page_size,
+                    "columns": ["id", "database_name"],
+                }
+            )
+        }
+        response = session.get(
+            f"{base_url}/api/v1/database/", params=params, timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("result", [])
+        databases.extend(
+            {"id": db["id"], "database_name": db["database_name"]} for db in results
+        )
+        page += 1
+        if not results or page * page_size >= data.get("count", 0):
+            break
+    return databases
+
+
 def get_role_dataset_permissions(
     session: requests.Session, base_url: str, role_id: int
 ) -> list[dict[str, object]]:
     """
-    Get current dataset-access permissions for a role.
+    Get current data-access permissions for a role.
 
-    Filters to only datasource/schema-level permissions (not UI permissions).
+    Filters to datasource, schema and database-level permissions (not UI
+    permissions), global access permissions included.
 
     The GET /api/v1/security/roles/{id}/permissions/ endpoint returns flat dicts
     with keys "id", "permission_name", "view_menu_name".
@@ -211,22 +269,17 @@ def get_role_dataset_permissions(
     Returns:
         List of permission dicts with 'id', 'permission_name', 'view_menu_name'
     """
-    try:
-        response = session.get(
-            f"{base_url}/api/v1/security/roles/{role_id}/permissions/", timeout=30
-        )
-        response.raise_for_status()
-    except Exception as e:
-        print(
-            f"  ❌ Error fetching permissions for role {role_id}: {e}",
-            file=sys.stderr,
-        )
-        return []
+    # Raise rather than return nothing: an empty list reads as "holds no
+    # access", which roles sync would act on.
+    response = session.get(
+        f"{base_url}/api/v1/security/roles/{role_id}/permissions/", timeout=30
+    )
+    response.raise_for_status()
 
     data = response.json()
     results = data.get("result", [])
 
-    # Keep only datasource/schema-level permissions; the response uses flat keys.
+    # Keep only data-access permissions; the response uses flat keys.
     return [
         {
             "id": p.get("id"),
@@ -236,6 +289,8 @@ def get_role_dataset_permissions(
         for p in results
         if "datasource" in (p.get("permission_name") or "").lower()
         or "schema" in (p.get("permission_name") or "").lower()
+        or p.get("permission_name") == "database_access"
+        or p.get("permission_name") in GLOBAL_ACCESS_PERMISSIONS
     ]
 
 
@@ -256,40 +311,37 @@ def get_role_all_permission_ids(
     Returns:
         List of all PermissionView IDs assigned to the role
     """
-    try:
-        response = session.get(
-            f"{base_url}/api/v1/security/roles/{role_id}/permissions/", timeout=30
-        )
-        response.raise_for_status()
-    except Exception as e:
-        print(
-            f"  ❌ Error fetching all permissions for role {role_id}: {e}",
-            file=sys.stderr,
-        )
-        return []
+    # Raise rather than return nothing: the caller POSTs the full permission
+    # list back, so an empty one would strip the role of everything else.
+    response = session.get(
+        f"{base_url}/api/v1/security/roles/{role_id}/permissions/", timeout=30
+    )
+    response.raise_for_status()
 
     data = response.json()
     results = data.get("result", [])
     return [p["id"] for p in results if p.get("id") is not None]
 
 
-def get_all_datasource_permissions(
-    session: requests.Session, base_url: str
+def get_permission_views(
+    session: requests.Session, base_url: str, permission_names: frozenset[str]
 ) -> list[dict[str, object]]:
     """
-    Get all available datasource-level permissions from Superset.
+    Get the FAB PermissionView records for the named permissions.
 
-    These are FAB PermissionView records where permission.name == "datasource_access"
-    and view_menu.name has the form "[table_name](dataset_id)".
+    E.g. "datasource_access" records have view_menu.name
+    "[table_name](id:<dataset_id>)" and "database_access" records
+    "[database_name].(id:<database_id>)".
 
     Fetches all pages from /api/v1/security/permissions-resources/ without a
     server-side filter (the FAB rel_o_m filter requires a related-object integer
     ID, not a name string, making server-side name filtering impractical) and
-    filters client-side for "datasource_access" permissions.
+    filters client-side by permission name.
 
     Args:
         session: Authenticated requests session
         base_url: Base URL of Superset instance
+        permission_names: The permission names to keep
 
     Returns:
         List of permission dicts with 'id', 'permission_name', 'view_menu_name'
@@ -308,7 +360,7 @@ def get_all_datasource_permissions(
             )
             response.raise_for_status()
         except Exception as e:
-            print(f"  ❌ Error fetching datasource permissions: {e}", file=sys.stderr)
+            print(f"  ❌ Error fetching permissions: {e}", file=sys.stderr)
             break
 
         data = response.json()
@@ -317,9 +369,8 @@ def get_all_datasource_permissions(
             break
 
         for p in results:
-            # FAB stores this permission as "datasource_access" (underscore)
             perm_name = p.get("permission", {}).get("name", "")
-            if perm_name == "datasource_access":
+            if perm_name in permission_names:
                 permissions.append(
                     {
                         "id": p.get("id"),
@@ -388,6 +439,110 @@ def parse_allowed_datasets(allowed_datasets: list[str]) -> set[tuple[str, str]]:
             raise ValueError(msg)
         pairs.add((schema, table_name))
     return pairs
+
+
+def parse_allowed_databases(allowed_databases: list[str]) -> set[str]:
+    """
+    Validate a role's ``allowed_databases`` entries, the Superset database names
+    (e.g. ``"Trino"``) the role may query in SQL Lab.
+
+    Names, not ids, because the ids differ between QA and production.
+
+    Args:
+        allowed_databases: The role's ``allowed_databases`` entries
+
+    Returns:
+        The database names
+
+    Raises:
+        ValueError: When the field is not a list of non-empty strings
+    """
+    if not isinstance(allowed_databases, list) or not all(
+        isinstance(entry, str) and entry for entry in allowed_databases
+    ):
+        msg = "allowed_databases must be a list of Superset database names"
+        raise ValueError(msg)
+    return set(allowed_databases)
+
+
+def database_access_view_menu(database: dict[str, object]) -> str:
+    """
+    Return the view menu name Superset gives a database's ``database_access``.
+
+    Superset 6.1 names it ``Database.perm``: ``[<database_name>].(id:<id>)``.
+
+    Args:
+        database: A database from ``get_superset_databases``
+
+    Returns:
+        The view menu name, e.g. ``[Trino].(id:1)``
+    """
+    return f"[{database['database_name']}].(id:{database['id']})"
+
+
+def unmatched_allowed_databases(
+    allowed_databases: list[str], api_databases: list[dict[str, object]]
+) -> list[str]:
+    """
+    Return the ``allowed_databases`` entries that name no database.
+
+    Args:
+        allowed_databases: The role's ``allowed_databases`` entries
+        api_databases: Databases from ``get_superset_databases``
+
+    Returns:
+        The unmatched names, sorted
+    """
+    present = {db["database_name"] for db in api_databases}
+    return sorted(parse_allowed_databases(allowed_databases) - present)
+
+
+def access_permission_changes(
+    gov_role: dict[str, object],
+    api_databases: list[dict[str, object]],
+    held: set[PermissionView],
+) -> tuple[set[PermissionView], set[PermissionView]]:
+    """
+    Compute the database-level permissions to add to and revoke from a role.
+
+    ``flask fab import-roles`` only ever adds permissions, so taking a global
+    access permission out of ol_governance_roles.json leaves it on the live
+    role. Any global access permission the role holds but its definition no
+    longer lists is revoked here.
+
+    A role with an ``allowed_databases`` key gets ``database_access`` on exactly
+    those databases; its other ``database_access`` grants are revoked, so an
+    empty list revokes them all.
+
+    Args:
+        gov_role: A role definition from ``load_governance_roles``
+        api_databases: Databases from ``get_superset_databases``
+        held: The (permission, view menu) pairs the live role holds
+
+    Returns:
+        The pairs to add and the pairs to revoke
+    """
+    listed: set[PermissionView] = {
+        (p["permission"]["name"], p["view_menu"]["name"])
+        for p in cast(list[dict[str, dict[str, str]]], gov_role.get("permissions", []))
+    }
+    to_revoke = {
+        pv for pv in held if pv[0] in GLOBAL_ACCESS_PERMISSIONS and pv not in listed
+    }
+    to_add: set[PermissionView] = set()
+    if "allowed_databases" in gov_role:
+        allowed = parse_allowed_databases(
+            cast(list[str], gov_role["allowed_databases"])
+        )
+        desired = {
+            ("database_access", database_access_view_menu(db))
+            for db in api_databases
+            if db["database_name"] in allowed
+        }
+        current = {pv for pv in held if pv[0] == "database_access"}
+        to_add = desired - current
+        to_revoke |= current - desired
+    return to_add, to_revoke
 
 
 def unmatched_allowed_datasets(
