@@ -19,7 +19,7 @@ displayName: Learn integration schema contract
 source: docs/learn_marts_contract.md  # repository-relative markdown
 owners: [{type: team, name: data-platform}]
 related:                              # what the article is attached to
-- {type: table, dbt_model: "integrations__learn__*"}   # a model name or fnmatch pattern
+- {type: table, dbt_model: "integrations__learn__*"}   # a model, seed or snapshot name, or an fnmatch pattern
 - {type: table, dbt_source: ol_warehouse_raw_data.raw__mitlearn__app__postgres__learning_resources_learningresource}
 - {type: table, fqn: "Glue.610119931565.ol_warehouse_production_external.some_table"}
 ```

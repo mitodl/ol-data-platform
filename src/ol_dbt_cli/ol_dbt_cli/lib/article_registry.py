@@ -14,7 +14,7 @@ article, attached to the assets it describes:
 
 The markdown stays where it is, so the file is the one copy, edited in pull
 requests. A ``dbt_model`` may be an ``fnmatch`` pattern, which sync expands
-against the manifest's models.
+against the manifest's models, seeds and snapshots.
 """
 
 from __future__ import annotations
@@ -69,20 +69,26 @@ def load_articles(articles_dir: Path, repo_root: Path) -> list[Article]:
 
     :param repo_root: what each ``source`` is relative to.
     :raises ValueError: when a file does not parse, names a source that does
-        not exist, or reuses another file's name.
+        not exist or is a link out of *repo_root*, or reuses another file's name.
     :rtype: list[Article]
     """
     if not articles_dir.is_dir():
         msg = f"{articles_dir} is not a directory"
         raise ValueError(msg)
+    root = repo_root.resolve()
     articles = []
     for path in sorted(p for p in articles_dir.iterdir() if p.suffix in _ARTICLE_SUFFIXES):
         try:
             spec = ArticleSpec.model_validate(yaml.safe_load(path.read_text()))
-        except ValidationError as exc:
+        except (yaml.YAMLError, ValidationError) as exc:
             msg = f"{path}: {exc}"
             raise ValueError(msg) from exc
-        if not (repo_root / spec.source).is_file():
+        # The sync bot publishes whatever the path resolves to.
+        source = (root / spec.source).resolve()
+        if not source.is_relative_to(root):
+            msg = f"{path}: source {spec.source} resolves outside the repository"
+            raise ValueError(msg)
+        if not source.is_file():
             msg = f"{path}: source {spec.source} does not exist"
             raise ValueError(msg)
         related = tuple(parse_binding(path, raw, label=f"`related[{index}]`") for index, raw in enumerate(spec.related))

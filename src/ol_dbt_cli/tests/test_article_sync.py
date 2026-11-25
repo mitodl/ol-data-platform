@@ -22,21 +22,21 @@ from ol_dbt_cli.commands import articles as articles_command
 from ol_dbt_cli.lib.article_registry import DEFAULT_ARTICLES_DIR, load_articles
 from ol_dbt_cli.lib.article_sync import REPO_BLOB_URL, REPO_RAW_URL, related_entities, render_body
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
-from ol_dbt_cli.lib.openmetadata import JSON_PATCH_CONTENT_TYPE, OpenMetadataClient, OpenMetadataError
+from ol_dbt_cli.lib.openmetadata import JSON_PATCH_CONTENT_TYPE
+from tests.openmetadata_fakes import NOT_FOUND, TEAM_ID, RecordingOpenMetadata, install
 
 REPO_ROOT = Path(__file__).parents[3]
 SERVICE = "Starburst Galaxy"
 STARROCKS_SERVICE = "StarRocks"
-TEAM_ID = "team-1"
 LAKE_MODELS = ("integrations__learn__ocw_courses", "integrations__learn__xpro_courses", "dim_user")
 SANITIZED = "<!-- sanitized -->"
 
 
-def _model(name: str, **fields: Any) -> ManifestModel:
+def _model(name: str, resource_type: str = "model", **fields: Any) -> ManifestModel:
     return ManifestModel(
-        unique_id=f"model.open_learning.{name}",
+        unique_id=f"{resource_type}.open_learning.{name}",
         name=name,
-        resource_type="model",
+        resource_type=resource_type,
         original_file_path="",
         schema="ol_warehouse_production_integrations",
         database="ol_data_lake_production",
@@ -60,30 +60,18 @@ def _fqn(name: str) -> str:
     return f"{SERVICE}.ol_data_lake_production.ol_warehouse_production_integrations.{name}"
 
 
-class FakeOpenMetadata(OpenMetadataClient):
+class FakeOpenMetadata(RecordingOpenMetadata):
     """Holds tables by FQN and pages by name."""
 
     def __init__(self, tables: list[str]) -> None:
-        super().__init__("https://om.example/api", "token")
+        super().__init__()
         self.tables = {fqn: f"table-{index}" for index, fqn in enumerate(tables)}
         self.pages: dict[str, dict[str, Any]] = {}
-        self.calls: list[tuple[str, str, Any]] = []
 
-    def writes(self) -> list[tuple[str, str, Any]]:
-        return [c for c in self.calls if c[0] != "GET"]
-
-    def request(
-        self,
-        method: str,
-        path: str,
-        body: Any = None,
-        query: dict[str, str] | None = None,
-        content_type: str = "application/json",
+    def route(
+        self, method: str, parts: tuple[str, ...], body: Any, query: dict[str, str] | None, content_type: str
     ) -> Any:
-        self.calls.append((method, path, copy.deepcopy(body)))
-        match (method, *path.strip("/").split("/")[1:]):
-            case ("GET", "teams", "name", "data-platform"):
-                return {"id": TEAM_ID}
+        match (method, *parts):
             case ("GET", "tables", "name", fqn) if unquote(fqn) in self.tables:
                 return {"id": self.tables[unquote(fqn)]}
             case ("GET", "contextCenter", "pages", "name", name) if unquote(name) in self.pages:
@@ -109,7 +97,7 @@ class FakeOpenMetadata(OpenMetadataClient):
                     value = op["value"]
                     page[field] = SANITIZED + value if field == "description" else copy.deepcopy(value)
                 return copy.deepcopy(page)
-        raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
+        return NOT_FOUND
 
 
 @pytest.fixture
@@ -139,9 +127,7 @@ def _write(repo: Path, name: str, **fields: Any) -> None:
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch, repo: Path) -> FakeOpenMetadata:
     fake = FakeOpenMetadata([_fqn(name) for name in LAKE_MODELS])
-    monkeypatch.setattr(OpenMetadataClient, "from_env", classmethod(lambda cls: fake))
-    monkeypatch.setattr(articles_command, "get_repo_root", lambda: repo)
-    monkeypatch.setattr(articles_command, "load_catalog_manifest", lambda dbt_dir, path: _manifest())
+    install(monkeypatch, articles_command, fake, repo, _manifest)
     return fake
 
 
@@ -175,6 +161,21 @@ def test_the_repository_articles_load() -> None:
 def test_a_bad_article_file_is_refused(repo: Path, fields: dict[str, Any], error: str) -> None:
     _write(repo, "bad", **{"related": [{"type": "table", "dbt_model": "x"}], **fields})
     with pytest.raises(ValueError, match=error):
+        load_articles(repo / DEFAULT_ARTICLES_DIR, repo)
+
+
+def test_a_source_linked_out_of_the_repository_is_refused(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    outside = tmp_path_factory.mktemp("outside") / "secret.md"
+    outside.write_text("not for publishing\n")
+    (repo / "docs" / "linked.md").symlink_to(outside)
+    _write(repo, "contract", source="docs/linked.md", related=[{"type": "table", "dbt_model": "x"}])
+    with pytest.raises(ValueError, match="resolves outside the repository"):
+        load_articles(repo / DEFAULT_ARTICLES_DIR, repo)
+
+
+def test_a_file_that_is_not_yaml_is_refused_as_a_value_error(repo: Path) -> None:
+    (repo / DEFAULT_ARTICLES_DIR / "broken.yaml").write_text("name: [unclosed\n")
+    with pytest.raises(ValueError, match=r"broken\.yaml"):
         load_articles(repo / DEFAULT_ARTICLES_DIR, repo)
 
 
@@ -212,10 +213,19 @@ def test_related_patterns_expand_to_lake_models_and_starrocks_views_only(repo: P
     ]
 
 
+@pytest.mark.parametrize("resource_type", ["seed", "snapshot"])
+def test_a_pattern_attaches_the_seeds_and_snapshots_it_matches(repo: Path, resource_type: str) -> None:
+    manifest = _manifest()
+    name = "integrations__learn__mapping"
+    manifest.by_name[name] = _model(name, resource_type=resource_type)
+    [article] = load_articles(repo / DEFAULT_ARTICLES_DIR, repo)
+    assert _fqn(name) in [s.fqn for s in related_entities(article, manifest, SERVICE, STARROCKS_SERVICE)]
+
+
 def test_a_pattern_that_matches_nothing_fails_the_article(repo: Path) -> None:
     _write(repo, "contract", related=[{"type": "table", "dbt_model": "nothing__*"}])
     [article] = load_articles(repo / DEFAULT_ARTICLES_DIR, repo)
-    with pytest.raises(ValueError, match="matches no model"):
+    with pytest.raises(ValueError, match="matches nothing built"):
         related_entities(article, _manifest(), SERVICE, STARROCKS_SERVICE)
 
 

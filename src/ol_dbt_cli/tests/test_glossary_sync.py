@@ -22,26 +22,21 @@ import yaml
 from ol_dbt_cli.commands import glossary as glossary_command
 from ol_dbt_cli.lib import openmetadata
 from ol_dbt_cli.lib.glossary_registry import load_glossaries
-from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, OpenMetadataError
+from ol_dbt_cli.lib.openmetadata import OpenMetadataError
+from tests.openmetadata_fakes import NOT_FOUND, TEAM_ID, RecordingOpenMetadata, install
 
 REPO_GLOSSARY = Path(__file__).parents[3] / "glossary"
-TEAM_ID = "team-1"
 RELATED = "relatedTerms"
 FQN = "fullyQualifiedName"
 
 
-class FakeOpenMetadata(OpenMetadataClient):
+class FakeOpenMetadata(RecordingOpenMetadata):
     """Holds glossaries and terms in memory, keyed by FQN."""
 
     def __init__(self) -> None:
-        super().__init__("https://om.example/api", "token")
-        self.teams = {"data-platform": TEAM_ID}
+        super().__init__()
         self.glossaries: dict[str, dict[str, Any]] = {}
         self.terms: dict[str, dict[str, Any]] = {}
-        self.calls: list[tuple[str, str, Any]] = []
-
-    def writes(self) -> list[tuple[str, str, Any]]:
-        return [c for c in self.calls if c[0] != "GET"]
 
     def _by_id(self, entity_id: str) -> dict[str, Any]:
         [entity] = [e for e in (*self.glossaries.values(), *self.terms.values()) if e["id"] == entity_id]
@@ -100,19 +95,10 @@ class FakeOpenMetadata(OpenMetadataClient):
                 entity[field] = copy.deepcopy(op["value"])
         return copy.deepcopy(entity)
 
-    def request(
-        self,
-        method: str,
-        path: str,
-        body: Any = None,
-        query: dict[str, str] | None = None,
-        content_type: str = "application/json",
+    def route(
+        self, method: str, parts: tuple[str, ...], body: Any, query: dict[str, str] | None, content_type: str
     ) -> Any:
-        self.calls.append((method, path, copy.deepcopy(body)))
-        route = (method, *path.strip("/").split("/")[1:])
-        match route:
-            case ("GET", "teams", "name", team) if team in self.teams:
-                return {"id": self.teams[team]}
+        match (method, *parts):
             case ("GET", "glossaries", "name", name):
                 return self._get(self.glossaries, name, query)
             case ("GET", "glossaryTerms", "name", fqn):
@@ -126,7 +112,7 @@ class FakeOpenMetadata(OpenMetadataClient):
             case ("PATCH", "glossaries" | "glossaryTerms", entity_id):
                 assert content_type == openmetadata.JSON_PATCH_CONTENT_TYPE
                 return self._patch(self._by_id(entity_id), body)
-        raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
+        return NOT_FOUND
 
 
 @pytest.fixture
@@ -138,8 +124,7 @@ def glossary_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch, glossary_dir: Path) -> FakeOpenMetadata:
     fake = FakeOpenMetadata()
-    monkeypatch.setattr(OpenMetadataClient, "from_env", classmethod(lambda cls: fake))
-    monkeypatch.setattr(glossary_command, "get_repo_root", lambda: glossary_dir.parent)
+    install(monkeypatch, glossary_command, fake, glossary_dir.parent)
     return fake
 
 

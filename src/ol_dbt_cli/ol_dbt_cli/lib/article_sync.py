@@ -33,14 +33,14 @@ from typing import TYPE_CHECKING, Any
 
 from markdown_it import MarkdownIt
 
-from ol_dbt_cli.lib.data_contracts import EntityBinding, om_fqn
-from ol_dbt_cli.lib.metric_sync import STARROCKS_TAG, LineageSource, starrocks_fqn
+from ol_dbt_cli.lib.data_contracts import EntityBinding
+from ol_dbt_cli.lib.metric_sync import STARROCKS_TAG, LineageSource, lineage_source
 
 if TYPE_CHECKING:
     from pathlib import PurePosixPath
 
     from ol_dbt_cli.lib.article_registry import Article
-    from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
+    from ol_dbt_cli.lib.manifest import ManifestRegistry
 
 PAGES_PATH = "/v1/contextCenter/pages"
 PAGE_FIELDS = "relatedEntities"
@@ -92,13 +92,25 @@ def render_body(text: str, source: PurePosixPath) -> str:
     return f"{body}{footer}"
 
 
-def _model_node(name: str, manifest: ManifestRegistry) -> ManifestModel | None:
-    node = manifest.get_model(name)
-    if node is not None:
-        return node if node.is_model else None
+def _built(name: str, manifest: ManifestRegistry) -> bool:
+    # by_name holds the models, seeds and snapshots the manifest builds. A
+    # disabled model is built only when it is a StarRocks view.
     disabled = manifest.disabled.get(name)
-    # A model disabled for any other reason is built nowhere.
-    return disabled if disabled is not None and STARROCKS_TAG in disabled.tags else None
+    return name in manifest.by_name or (disabled is not None and STARROCKS_TAG in disabled.tags)
+
+
+def _expand(binding: EntityBinding, manifest: ManifestRegistry, article: Article) -> list[EntityBinding]:
+    if binding.kind != "dbt_model":
+        return [binding]
+    names = sorted(
+        n
+        for n in manifest.by_name.keys() | manifest.disabled.keys()
+        if fnmatch.fnmatchcase(n, binding.target) and _built(n, manifest)
+    )
+    if not names:
+        msg = f"{article.path.name}: dbt_model {binding.target!r} matches nothing built in the manifest"
+        raise ValueError(msg)
+    return [EntityBinding(binding.entity_type, "dbt_model", name) for name in names]
 
 
 def related_entities(
@@ -106,34 +118,18 @@ def related_entities(
 ) -> list[LineageSource]:
     """Resolve the article's ``related`` bindings to the entities OpenMetadata catalogs, in file order.
 
-    A ``dbt_model`` pattern expands to every matching model, a dbt model tagged
-    ``starrocks`` resolves under *starrocks_service* and every other dbt
-    binding under *service*.
+    A ``dbt_model`` pattern expands to every model, seed and snapshot it
+    matches, each resolved by :func:`lineage_source`.
 
-    :raises ValueError: when a ``dbt_model`` name or pattern matches no model
+    :raises ValueError: when a ``dbt_model`` name or pattern matches nothing
         built anywhere, or a ``dbt_source`` is not in the manifest.
     :rtype: list[LineageSource]
     """
-    sources: list[LineageSource] = []
-    for binding in article.related:
-        if binding.kind != "dbt_model":
-            sources.append(LineageSource(binding.entity_type, om_fqn(binding, manifest, service)))
-            continue
-        names = sorted(
-            n for n in manifest.by_name.keys() | manifest.disabled.keys() if fnmatch.fnmatchcase(n, binding.target)
-        )
-        nodes = [node for node in (_model_node(name, manifest) for name in names) if node is not None]
-        if not nodes:
-            msg = f"{article.path.name}: dbt_model {binding.target!r} matches no model in the manifest"
-            raise ValueError(msg)
-        for node in nodes:
-            if STARROCKS_TAG in node.tags:
-                sources.append(
-                    LineageSource(binding.entity_type, starrocks_fqn(node, starrocks_service), starrocks=True)
-                )
-            else:
-                exact = EntityBinding(binding.entity_type, "dbt_model", node.name)
-                sources.append(LineageSource(binding.entity_type, om_fqn(exact, manifest, service)))
+    sources = [
+        lineage_source(exact, manifest, service, starrocks_service)
+        for binding in article.related
+        for exact in _expand(binding, manifest, article)
+    ]
     return list(dict.fromkeys(sources))
 
 

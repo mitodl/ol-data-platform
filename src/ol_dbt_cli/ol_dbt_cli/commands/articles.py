@@ -14,6 +14,7 @@ from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
+from ol_dbt_cli.commands._openmetadata_output import apply_patch, say
 from ol_dbt_cli.lib.article_registry import DEFAULT_ARTICLES_DIR, Article, load_articles
 from ol_dbt_cli.lib.article_sync import (
     PAGE_FIELDS,
@@ -25,17 +26,11 @@ from ol_dbt_cli.lib.article_sync import (
     source_digest,
 )
 from ol_dbt_cli.lib.git_utils import get_repo_root
-from ol_dbt_cli.lib.openmetadata import (
-    JSON_PATCH_CONTENT_TYPE,
-    OpenMetadataClient,
-    load_catalog_manifest,
-    quote_fqn,
-)
+from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, load_catalog_manifest, quote_fqn
 
 if TYPE_CHECKING:
     from ol_dbt_cli.lib.manifest import ManifestRegistry
 
-console = Console()
 err_console = Console(stderr=True)
 
 articles_app = App(
@@ -59,39 +54,37 @@ def _sync_one(  # noqa: PLR0913
     :raises ValueError: when a related entity cannot be resolved.
     :raises OpenMetadataError: when OpenMetadata refuses a request.
     """
-    name = escape(article.spec.name)
+    name = article.spec.name
     related = []
     for source in related_entities(article, manifest, service, starrocks_service):
         entity_id = client.entity_id_or_none(source.entity_type, source.fqn)
         if entity_id is None:
             # Catalogued only after the next ingestion of its service, as for a new model.
-            console.print(f"[yellow]skipped[/]   {name}: {escape(source.fqn)} is not in OpenMetadata yet")
+            say("yellow", "skipped", name, f"{source.fqn} is not in OpenMetadata yet")
             continue
         related.append({"id": entity_id, "type": source.entity_type})
     if not related:
-        console.print(f"[yellow]skipped[/]   {name}: none of its related entities is in OpenMetadata yet")
+        say("yellow", "skipped", name, "none of its related entities is in OpenMetadata yet")
         return
     text = (repo_root / article.spec.source).read_text()
     description = render_body(text, PurePosixPath(article.spec.source.as_posix()))
-    live = client.get_or_none(f"{PAGES_PATH}/name/{quote_fqn(article.spec.name)}", query={"fields": PAGE_FIELDS})
+    live = client.get_or_none(f"{PAGES_PATH}/name/{quote_fqn(name)}", query={"fields": PAGE_FIELDS})
     if live is None:
         if dry_run:
-            console.print(f"[green]would[/]     {name}: create, attached to {len(related)} entities")
+            say("green", "would", name, f"create, attached to {len(related)} entities")
             return
         owners = client.named_refs([owner.model_dump() for owner in article.spec.owners])
         client.request("POST", PAGES_PATH, page_body(article, description, owners, related))
-        console.print(f"[green]created[/]   {name}: attached to {len(related)} entities")
+        say("green", "created", name, f"attached to {len(related)} entities")
         return
-    ops = patch_ops(live, source_digest(text), description, related)
-    if not ops:
-        console.print(f"[green]unchanged[/] {name}: matches {article.spec.source}")
-        return
-    fields = ", ".join(op["path"].lstrip("/") for op in ops)
-    if dry_run:
-        console.print(f"[green]would[/]     {name}: PATCH {fields}")
-        return
-    client.request("PATCH", f"{PAGES_PATH}/{live['id']}", ops, content_type=JSON_PATCH_CONTENT_TYPE)
-    console.print(f"[green]patched[/]   {name}: {fields}")
+    apply_patch(
+        client,
+        name,
+        f"{PAGES_PATH}/{live['id']}",
+        patch_ops(live, source_digest(text), description, related),
+        dry_run=dry_run,
+        unchanged=f"matches {article.spec.source}",
+    )
 
 
 @articles_app.command
@@ -157,7 +150,7 @@ def sync(  # noqa: PLR0913
         try:
             _sync_one(client, article, source_root, manifest, service, starrocks_service, dry_run=dry_run)
         except (ValueError, RuntimeError, OSError) as exc:
-            console.print(f"[bold red]failed[/]    {escape(article.spec.name)}: {escape(str(exc))}")
+            say("bold red", "failed", article.spec.name, str(exc))
             failures += 1
     if failures:
         sys.exit(1)
