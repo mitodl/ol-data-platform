@@ -73,7 +73,7 @@ with
                 order by
                     case members.learn_read_status
                         when 'extracted' then 1 when 'failed' then 2 when 'unreadable' then 3 else 4
-                    end,
+                    end nulls last,
                     members.coursecontent_member_path desc
             ) as key_rank
         from members
