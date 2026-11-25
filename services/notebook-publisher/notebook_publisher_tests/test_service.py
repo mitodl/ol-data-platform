@@ -249,3 +249,32 @@ def test_restore_retries_a_conflict_from_a_status_write(
     with pytest.raises(RolloutFailedError):
         publisher.update(ALICE, "q3", NotebookUpdate(content=NOTEBOOK + "\n"))
     assert _revision(cluster, "q3") == first
+
+
+def test_update_waits_for_an_in_flight_revision(
+    publisher: Publisher, cluster: FakeCluster
+) -> None:
+    publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+    # Another update has moved the notebook but not the route yet.
+    cluster.notebooks["q3"]["metadata"]["annotations"][render.REVISION_ANNOTATION] = (
+        "rolling"
+    )
+    with pytest.raises(ConcurrentChangeError):
+        publisher.update(ALICE, "q3", NotebookUpdate(content=NOTEBOOK))
+    assert _revision(cluster, "q3") == "rolling"
+
+
+def test_status_ignores_a_pod_left_by_a_previous_owner(
+    publisher: Publisher, cluster: FakeCluster
+) -> None:
+    publisher.publish(ALICE, NotebookPublish(name="q3", content=NOTEBOOK))
+
+    def previous_owners_pod(pod: dict[str, Any]) -> dict[str, Any]:
+        pod["metadata"]["ownerReferences"] = [{"uid": "unpublished-notebook"}]
+        return pod
+
+    cluster.pod_hook = previous_owners_pod
+    result = publisher.status(ALICE, "q3")
+    assert result.logs == ""
+    assert result.events == []
+    assert not result.ready

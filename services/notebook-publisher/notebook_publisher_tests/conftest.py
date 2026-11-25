@@ -69,7 +69,12 @@ def operator_pod(notebook: dict[str, Any]) -> dict[str, Any]:
     for override in overrides.pop("initContainers", []):
         init_containers.setdefault(override["name"], {}).update(override)
     return {
-        "metadata": {"name": name},
+        "metadata": {
+            "name": name,
+            # A new pod for every revision, like the operator's recreate.
+            "uid": f"pod-{notebook['metadata']['uid']}-{secret}",
+            "ownerReferences": [{"uid": notebook["metadata"]["uid"]}],
+        },
         "spec": {
             "containers": list(containers.values()),
             "initContainers": list(init_containers.values()),
@@ -188,7 +193,7 @@ class FakeCluster:
             "error: no solution found"
         )
 
-    def pod_events(self, name: str) -> list[str]:  # noqa: ARG002
+    def pod_events(self, uid: str) -> list[str]:  # noqa: ARG002
         return ["Normal Started: Started container marimo"]
 
     def app_healthy(self, name: str, port: int) -> bool:  # noqa: ARG002

@@ -334,6 +334,11 @@ class Publisher:
         previous_revision = current["metadata"]["annotations"][
             render.REVISION_ANNOTATION
         ]
+        # Only build on a revision the route serves. One that is still rolling
+        # out may yet fail and have its Secrets deleted, and restoring to it
+        # would leave the app on a token that no longer exists.
+        if self._served_revision(name) != previous_revision:
+            raise ConcurrentChangeError(name)
         revision = secrets.token_hex(4)
         owner = render.owner_reference(current)
         rendered = render.render_notebook(
@@ -373,6 +378,17 @@ class Publisher:
             raise
         self._delete_secrets(name, previous_revision)
         return self.status(user, name)
+
+    def _served_revision(self, name: str) -> str | None:
+        """Return the revision whose token the app's route injects."""
+        route = self.cluster.get_route(name)
+        if route is None:
+            return None
+        prefix = render.route_auth_secret_name(name, "")
+        for plugin in route["spec"]["http"][0]["plugins"]:
+            if plugin["name"] == "proxy-rewrite":
+                return str(plugin["secretRef"]).removeprefix(prefix)
+        return None
 
     def _restore(self, previous: dict[str, Any], failed_revision: str) -> None:
         """Put the previous MarimoNotebook back after a failed update.
@@ -419,10 +435,33 @@ class Publisher:
             if notebook["metadata"]["annotations"][render.OWNER_ANNOTATION] == user
         ]
 
+    def _pod_of(self, notebook: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the notebook's pod, or None if the pod by its name is another's.
+
+        After an unpublish the old pod can outlive its MarimoNotebook while
+        someone else publishes the same name.
+        """
+        pod = self.cluster.get_pod(notebook["metadata"]["name"])
+        if pod is None or not any(
+            owner["uid"] == notebook["metadata"]["uid"]
+            for owner in pod["metadata"].get("ownerReferences", [])
+        ):
+            return None
+        return pod
+
+    def _pod_logs(self, pod: dict[str, Any]) -> str:
+        """Return a pod's redacted log, or "" if the pod changed while reading."""
+        name = pod["metadata"]["name"]
+        logs = self._logs(name)
+        after = self.cluster.get_pod(name)
+        if after is None or after["metadata"]["uid"] != pod["metadata"]["uid"]:
+            return ""
+        return logs
+
     def status(self, user: str, name: str) -> NotebookStatus:
         """Return the caller's notebook with its pod's state, events and log."""
         notebook = self._owned(name, user)
-        pod = self.cluster.get_pod(name)
+        pod = self._pod_of(notebook)
         pod_status = (pod or {}).get("status", {})
         return NotebookStatus(
             **_summary(notebook, self.settings).model_dump(),
@@ -432,8 +471,8 @@ class Publisher:
                 container.get("restartCount", 0)
                 for container in pod_status.get("containerStatuses", [])
             ),
-            events=self.cluster.pod_events(name) if pod else [],
-            logs=self._logs(name) if pod else "",
+            events=self.cluster.pod_events(pod["metadata"]["uid"]) if pod else [],
+            logs=self._pod_logs(pod) if pod else "",
         )
 
     def unpublish(self, user: str, name: str) -> None:

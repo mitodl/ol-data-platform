@@ -28,6 +28,14 @@ HTTP_OK = 200
 HEALTH_TIMEOUT_SECONDS = 5
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_: Any, **__: Any) -> None:
+        return None
+
+
+_NO_REDIRECTS = urllib.request.build_opener(_RefuseRedirects)
+
+
 class Cluster:
     """Reads and writes one namespace's published-notebook objects."""
 
@@ -155,11 +163,11 @@ class Cluster:
                 return ""
             raise
 
-    def pod_events(self, name: str) -> list[str]:
-        """Return the events recorded against a Pod, oldest first."""
+    def pod_events(self, uid: str) -> list[str]:
+        """Return the events recorded against one Pod, by its uid, oldest first."""
         events = self.core.list_namespaced_event(
             self.namespace,
-            field_selector=f"involvedObject.kind=Pod,involvedObject.name={name}",
+            field_selector=f"involvedObject.kind=Pod,involvedObject.uid={uid}",
         )
         return [
             f"{event.type} {event.reason}: {event.message}"
@@ -173,9 +181,9 @@ class Cluster:
         """Return whether marimo answers its unauthenticated health check."""
         url = f"http://{name}.{self.namespace}.svc:{port}/{name}/health"
         try:
-            with urllib.request.urlopen(
-                url, timeout=HEALTH_TIMEOUT_SECONDS
-            ) as response:
+            # The app's author controls what answers here, so a redirect must
+            # not send the publisher anywhere else.
+            with _NO_REDIRECTS.open(url, timeout=HEALTH_TIMEOUT_SECONDS) as response:
                 return bool(response.status == HTTP_OK)
         except (urllib.error.URLError, TimeoutError, ConnectionError):
             return False
