@@ -17,7 +17,13 @@
         "afact_discussion_engagement",
         "afact_problem_engagement",
         "afact_video_engagement",
-        "data_detail_problems"
+        "data_detail_problems",
+        "data_detail_nav",
+        "data_detail_video",
+        "discussion_detail_report",
+        "engagement_problem_completion_raw",
+        "page_engagement_views_report",
+        "course_staff_report"
       ],
       "roles": ["ol_instructor"]
     },
@@ -51,6 +57,12 @@
         "afact_problem_engagement",
         "afact_video_engagement",
         "data_detail_problems",
+        "data_detail_nav",
+        "data_detail_video",
+        "discussion_detail_report",
+        "engagement_problem_completion_raw",
+        "page_engagement_views_report",
+        "course_staff_report",
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
         "marts__combined_course_engagements"
