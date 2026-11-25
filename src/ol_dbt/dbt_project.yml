@@ -41,6 +41,20 @@ vars:
     ol_data_lake_production: "s3://ol-data-lake-staging-production/processed"
     ol_data_lake_ci: "s3://ol-data-lake-staging-ci/processed"
     ol_data_lake_local: "s3://ol-data-lake-local/warehouse"
+  # Targets whose builds apply the grants config (macro apply_grants).
+  grant_targets: ["production", "starrocks_production_lake"]
+  # The roles each engine's grants may name; each engine drops the others
+  # (macro engine_grant_config). On StarRocks these are the layer-scoped
+  # governance roles of ol-infrastructure's data_lake_access. Every other role
+  # (ol_platform_admin, ol_data_engineer, the Vault service roles) gets its lake
+  # access from ol-infrastructure, and dbt leaves its grants alone. Drop the
+  # trino entry with dbt-trino.
+  grant_roles:
+    trino: ["accountadmin", "business_intelligence", "finance", "mit_irx", "mit_learn_etl",
+      "ol_business_analyst", "ol_data_analyst", "ol_data_engineer", "ol_platform_admin",
+      "production_analyst", "read_only_production"]
+    starrocks: ["ol_data_analyst", "ol_business_analyst", "ol_commerce_operations",
+      "ol_researcher", "ol_instructor"]
 
   open_learning:
     platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\
@@ -130,6 +144,7 @@ vars:
 # using the `{{ config(...) }}` macro.
 models:
   open_learning:
+    +post-hook: "{{ starrocks_table_grants() }}"
     +grants:
       select: ["read_only_production", "ol_data_analyst", "production_analyst", "ol_data_engineer"]
       insert: ["production_analyst", "ol_data_engineer"]
