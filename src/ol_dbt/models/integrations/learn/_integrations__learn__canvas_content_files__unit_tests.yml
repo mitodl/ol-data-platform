@@ -1,0 +1,85 @@
+---
+unit_tests:
+- name: test_integrations__learn__canvas_content_files_applies_learns_remaining_rules
+  description: >
+    Only members Learn treats as published, of a text type and outside a "draft"
+    folder, become content files. A PDF pypdf cannot read is a failure whatever
+    Tika read from it. A key's files are one content file: the one with the best
+    outcome, then the last by path. A file at the root gets Learn's leading slash.
+  model: integrations__learn__canvas_content_files
+  given:
+  - input: ref('stg__canvas__s3__course_content')
+    rows:
+    - {course_id: '1', coursecontent_kind: course, course_code: A, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # One key, two files: the docx has text, the PDF is invalid.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/a.docx,
+      coursecontent_file_extension: .docx, coursecontent_text: Docx, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k1, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/a.pdf,
+      coursecontent_file_extension: .pdf, coursecontent_text: Tika read it, coursecontent_text_extraction_status: extracted,
+      coursecontent_pdf_is_valid: false, coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k1, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # An invalid PDF alone: a failure with no text.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/b.pdf,
+      coursecontent_file_extension: .pdf, coursecontent_text: Tika read it, coursecontent_text_extraction_status: extracted,
+      coursecontent_pdf_is_valid: false, coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k2, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # Not published, in a draft folder, not a text type, or no text: left out.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/c.txt,
+      coursecontent_file_extension: .txt, coursecontent_text: Hidden, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: false, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: null, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/rough_drafts/d.txt,
+      coursecontent_file_extension: .txt, coursecontent_text: Draft, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: true,
+      coursecontent_learn_key: k4, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/e.mp4,
+      coursecontent_file_extension: .mp4, coursecontent_text: null, coursecontent_text_extraction_status: not_read,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k5, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/h.txt,
+      coursecontent_file_extension: .txt, coursecontent_text: null, coursecontent_text_extraction_status: empty,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k7, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # One key, two files with text: the last by path.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/f.md,
+      coursecontent_file_extension: .md, coursecontent_text: Md, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: web_resources/n/f.txt,
+      coursecontent_file_extension: .txt, coursecontent_text: Txt, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k6, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    # At the root of the archive.
+    - {course_id: '1', coursecontent_kind: member, coursecontent_member_path: g.html,
+      coursecontent_file_extension: .html, coursecontent_text: Root, coursecontent_text_extraction_status: extracted,
+      coursecontent_learn_published: true, coursecontent_draft_in_parent_path: false,
+      coursecontent_learn_key: k8, coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+  expect:
+    rows:
+    - {run_readable_id: 1-A+canvas, key: k1, source_path: web_resources/n/a.docx,
+      extraction_status: extracted, content: Docx}
+    - {run_readable_id: 1-A+canvas, key: k2, source_path: web_resources/n/b.pdf, extraction_status: failed,
+      content: null}
+    - {run_readable_id: 1-A+canvas, key: k6, source_path: web_resources/n/f.txt, extraction_status: extracted,
+      content: Txt}
+    - {run_readable_id: 1-A+canvas, key: k8, source_path: /g.html, extraction_status: extracted,
+      content: Root}
+- name: test_integrations__learn__canvas_courses_fills_learns_fallbacks
+  description: >
+    The run id and URL are built as Learn builds them, and a course with no title
+    gets Learn's "canvas course <id>".
+  model: integrations__learn__canvas_courses
+  given:
+  - input: ref('stg__canvas__s3__course_content')
+    rows:
+    - {course_id: '7', coursecontent_kind: course, course_code: '6.100', course_title: null,
+      course_canvas_domain: canvas.mit.edu, course_canvas_id: '42', coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+    - {course_id: '8', coursecontent_kind: course, course_code: null, course_title: Eight,
+      course_canvas_domain: null, course_canvas_id: '43', coursecontent_retrieved_on: '2026-11-25T05:00:00Z'}
+  expect:
+    rows:
+    - {course_id: '7', readable_id: 7-6.100, run_id: 7-6.100+canvas, title: canvas
+        course 7, url: 'https://canvas.mit.edu/courses/42/'}
+    - {course_id: '8', readable_id: 8-None, run_id: 8-None+canvas, title: Eight, url: 'https://None/courses/43/'}

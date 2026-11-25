@@ -7,16 +7,27 @@ the course's URLs:
     canvas/course_content/<course_id>/<version>.imscc
     canvas/course_content/<course_id>/<version>.metadata.json
 
-MIT Learn builds its Canvas course and ContentFiles from the newest export of
-each course (``learning_resources/etl/canvas.py`` in mit-learn). This source
-reads the same objects and follows the same rules (``cartridge``), so the
-warehouse holds what Learn would have parsed, except tutor problem files
-(``load_problem_files``), which are not ContentFiles and have no table here:
+Every member of each course's newest export lands, whoever can see it:
 
     the course's settings                   -> content_kind = course
-    each published file with a text type    -> content_kind = file
-        + the text Tika extracts from it
+    each file in the archive                -> content_kind = member
+        + what the export records about it (``cartridge.member_facts``)
+        + the text Tika extracts, for a member of a text type
     -> raw__canvas__s3__course_content
+
+Who can see a member is left to the reader: the ``files_*``, ``page_*``,
+``api_*`` and ``module_items`` columns carry what Canvas recorded, with dates in
+UTC, and nothing is dropped for being hidden, locked, a draft or an instructor's.
+
+MIT Learn builds its Canvas course and ContentFiles from the same exports
+(``learning_resources/etl/canvas.py`` in mit-learn). What Learn would treat as
+published at the time of the read is in the ``learn_*`` columns, from Learn's own
+rules (``cartridge.published_items``), together with the key, title and URL
+Learn would give the file. Those columns are Learn-parity data, for
+``integrations__learn__canvas_content_files``, which applies Learn's remaining
+rules (text types, the ``draft`` folder test, one file per key). Tutor problem
+files are members like any other here (``in_tutor_folder``); Learn loads them
+by another path (``load_problem_files``) and never as ContentFiles.
 
 A course is read whole, and only when it changed. Its version is
 ``cartridge.course_checksum``, held in dlt state, which also moves when a file's
@@ -28,7 +39,8 @@ row, which becomes its newest set and so empties it downstream.
 The PDFs differ from Learn. Learn sends a PDF of up to ``OCR_PDF_MAX_PAGE_THRESHOLD``
 pages through opendataloader and an LLM (``_extract_content_with_ocr``, with
 mit-learn #4126's changes), and falls back to Tika for a longer one or a failed
-conversion. Here every PDF goes through Tika. See
+conversion. Here every PDF goes through Tika, including one pypdf cannot read,
+which Learn drops (``pdf_is_valid``). See
 ``integrations__learn__canvas_content_files``.
 
 One load covers at most ``budget_bytes`` of archive members. The caller re-runs
@@ -64,8 +76,6 @@ import s3fs
 from ol_dlt import config, tika
 from ol_dlt.extraction import (
     STATUS_EMPTY,
-    STATUS_EXTRACTED,
-    STATUS_FAILED,
     STATUS_UNREADABLE,
     Extraction,
     TikaUnavailableError,
@@ -85,7 +95,9 @@ BUCKET = "ol-data-lake-landing-zone-production"
 PREFIX = "canvas/course_content"
 RAW_TABLE = "raw__canvas__s3__course_content"
 
-# VALID_TEXT_FILE_TYPES in mit-learn's learning_resources/constants.py.
+# The types a member's text is extracted from: VALID_TEXT_FILE_TYPES in
+# mit-learn's learning_resources/constants.py, which is also the list the Learn
+# view keeps.
 VALID_TEXT_FILE_TYPES = frozenset(
     {
         ".doc",
@@ -126,36 +138,81 @@ MAX_FILE_BYTES = 256 * 1024**2
 ARCHIVE_BLOCK_BYTES = 1024**2
 
 KIND_COURSE = "course"
-KIND_FILE = "file"
+KIND_MEMBER = "member"
 KIND_UNPUBLISHED = "unpublished"
+
+# A member whose text is not extracted: not a text type, or the manifest or a
+# course_settings/ file the version leaves out (see cartridge.CHECKSUM_EXCLUDED).
+STATUS_NOT_READ = "not_read"
+
+_TIMESTAMP = pa.timestamp("us", tz="UTC")
 
 SCHEMA = pa.schema(
     [
         pa.field("course_id", pa.string()),
         pa.field("content_kind", pa.string()),
         pa.field("archive_key", pa.string()),
-        pa.field("run_readable_id", pa.string()),
+        pa.field("parse_rule", pa.int64()),
         # A course row's.
         pa.field("course_code", pa.string()),
         pa.field("course_title", pa.string()),
-        pa.field("course_url", pa.string()),
+        pa.field("canvas_domain", pa.string()),
+        pa.field("canvas_course_id", pa.string()),
         pa.field("course_start_at", pa.string()),
         pa.field("course_end_at", pa.string()),
-        # A file row's.
-        pa.field("file_key", pa.string()),
-        pa.field("source_path", pa.string()),
+        pa.field("files_tab_hidden", pa.bool_()),
+        pa.field("public_syllabus", pa.string()),
+        pa.field("public_syllabus_to_auth", pa.string()),
+        # A member row's.
+        pa.field("member_path", pa.string()),
         pa.field("file_extension", pa.string()),
-        pa.field("title", pa.string()),
-        pa.field("content_title", pa.string()),
-        pa.field("url", pa.string()),
         pa.field("file_md5", pa.string()),
         pa.field("file_size_bytes", pa.int64()),
         pa.field("content", pa.string()),
         pa.field("extraction_status", pa.string()),
+        pa.field("pdf_is_valid", pa.bool_()),
+        pa.field("in_tutor_folder", pa.bool_()),
+        pa.field("draft_in_parent_path", pa.bool_()),
+        pa.field("folder_restricted", pa.bool_()),
+        pa.field("files_display_name", pa.string()),
+        pa.field("files_hidden", pa.bool_()),
+        pa.field("files_locked", pa.bool_()),
+        pa.field("files_visibility", pa.string()),
+        pa.field("files_lock_at", _TIMESTAMP),
+        pa.field("files_unlock_at", _TIMESTAMP),
+        pa.field("module_items", pa.string()),
+        pa.field("page_title", pa.string()),
+        pa.field("page_workflow_state", pa.string()),
+        pa.field("page_is_assignment", pa.bool_()),
+        pa.field("page_intended_role", pa.string()),
+        pa.field("page_is_syllabus", pa.bool_()),
+        pa.field("page_lock_at", _TIMESTAMP),
+        pa.field("page_unlock_at", _TIMESTAMP),
+        pa.field("page_only_visible_to_overrides", pa.bool_()),
+        pa.field("page_hide_in_gradebook", pa.bool_()),
+        pa.field("page_module_locked", pa.bool_()),
+        pa.field("linked_from_pages", pa.string()),
+        pa.field("api_published", pa.bool_()),
+        pa.field("api_hidden", pa.bool_()),
+        pa.field("api_locked", pa.bool_()),
+        pa.field("api_lock_at", _TIMESTAMP),
+        pa.field("api_unlock_at", _TIMESTAMP),
+        pa.field("api_folder_hidden", pa.bool_()),
+        pa.field("api_folder_locked", pa.bool_()),
+        pa.field("api_url", pa.string()),
+        # Learn-parity: what MIT Learn's rules make of the member at the read.
+        pa.field("learn_published", pa.bool_()),
+        pa.field("learn_key", pa.string()),
+        pa.field("learn_title", pa.string()),
+        pa.field("learn_content_title", pa.string()),
+        pa.field("learn_url", pa.string()),
         pa.field("course_version", pa.string()),
-        pa.field("course_retrieved_at", pa.timestamp("us", tz="UTC")),
+        pa.field("course_retrieved_at", _TIMESTAMP),
     ]
 )
+
+# The facts cartridge.member_facts returns as lists, landed as JSON text.
+_JSON_FACTS = ("module_items", "linked_from_pages")
 
 # Without the system's mime.types, so a type does not depend on the image.
 _MIMETYPES = mimetypes.MimeTypes(filenames=())
@@ -231,50 +288,18 @@ def pdf_is_valid(body: bytes) -> bool:
     return False
 
 
-def documents(
-    archive: zipfile.ZipFile, published: dict[str, dict[str, Any]], run: str
-) -> dict[str, list[zipfile.ZipInfo]]:
-    """Return the archive members Learn would extract text from, by key.
+def is_text_member(info: zipfile.ZipInfo, published: dict[str, dict[str, Any]]) -> bool:
+    """Tell whether a member's text is extracted.
 
-    A key can have several: the extension is not part of it. ``chosen`` picks
-    one once they have been read.
-
-    :param archive: The course's ``.imscc``.
-    :param published: The course's ``cartridge.published_items``.
-    :param run: The course's run id.
-    :returns: The members of each ``ContentFile.key``, sorted by path.
+    Every member of a text type is, published or not, except the manifest and
+    the course_settings/ files Canvas rewrites on every export, which the
+    version leaves out, so their text could go stale. A published one of those
+    (the syllabus) is read.
     """
-    members: dict[str, list[zipfile.ZipInfo]] = {}
-    for info in sorted(archive.infolist(), key=lambda info: info.filename):
-        path = PurePosixPath(info.filename)
-        if (
-            info.filename in published
-            and not info.is_dir()
-            and DRAFT_MARKER not in str(path.parent)
-            and path.suffix.lower() in VALID_TEXT_FILE_TYPES
-        ):
-            key = file_key(source_path(info.filename), run)
-            members.setdefault(key, []).append(info)
-    return members
-
-
-def chosen(
-    candidates: list[tuple[zipfile.ZipInfo, Extraction]],
-) -> tuple[zipfile.ZipInfo, Extraction]:
-    """Return the file of a key that becomes its ContentFile.
-
-    Learn loads each file of a key in turn, so the last it read text from is the
-    one that stays (which is arbitrary there, and the last by path here). A file
-    with no text loads nothing, so one only counts when no file has text.
-
-    :param candidates: The key's files and how each was read, sorted by path.
-    :returns: The file to keep, with how it was read.
-    """
-    for status in (STATUS_EXTRACTED, STATUS_FAILED, STATUS_UNREADABLE):
-        matching = [pair for pair in candidates if pair[1][1] == status]
-        if matching:
-            return matching[-1]
-    return candidates[-1]
+    return PurePosixPath(info.filename).suffix.lower() in VALID_TEXT_FILE_TYPES and (
+        info.filename in published
+        or not info.filename.startswith(cartridge.CHECKSUM_EXCLUDED)
+    )
 
 
 def source_path(member: str) -> str:
@@ -299,8 +324,13 @@ def _read_member(
     archive: zipfile.ZipFile,
     info: zipfile.ZipInfo,
     md5s: dict[str, str],
+    valid_pdfs: dict[str, bool],
 ) -> Extraction:
-    """Return a member's extraction, noting the MD5 of its bytes in ``md5s``."""
+    """Return a member's extraction.
+
+    Notes the MD5 of its bytes in ``md5s`` and, for a PDF, whether pypdf can
+    read it in ``valid_pdfs``. Tika reads a PDF either way.
+    """
     if info.file_size > MAX_FILE_BYTES:
         logger.warning("%s is over the limit; not extracted", info.filename)
         return None, STATUS_UNREADABLE, False
@@ -313,8 +343,8 @@ def _read_member(
         return None, STATUS_UNREADABLE, False
     md5s[info.filename] = hashlib.md5(body, usedforsecurity=False).hexdigest()
     extension = PurePosixPath(info.filename).suffix.lower()
-    if extension == ".pdf" and not pdf_is_valid(body):
-        return None, STATUS_UNREADABLE, False
+    if extension == ".pdf":
+        valid_pdfs[info.filename] = pdf_is_valid(body)
     text, status, retry = extract(
         client,
         body,
@@ -340,23 +370,65 @@ def course_row(  # noqa: PLR0913
     version: str,
     retrieved_at: datetime,
 ) -> dict[str, Any]:
-    """Build the row ``run_for_canvas_archive`` makes a course and run from."""
-    course_code = settings.get("course_code")
-    domain, canvas_id = context.get("canvas_domain"), context.get("course_id")
+    """Build the course's row from its settings and context."""
     return {
         **dict.fromkeys(SCHEMA.names),
         "course_id": course_id,
         "content_kind": KIND_COURSE,
         "archive_key": archive_key,
-        "run_readable_id": run_id(course_id, course_code),
-        "course_code": course_code,
-        "course_title": settings.get("title", f"canvas course {course_id}"),
-        "course_url": f"https://{domain}/courses/{canvas_id}/",
-        "course_start_at": settings.get("start_at"),
-        "course_end_at": settings.get("conclude_at"),
+        "parse_rule": cartridge.PARSE_RULE,
+        **dict(zip(_COURSE_FIELDS, course_fields(settings, context), strict=True)),
         "course_version": version,
         "course_retrieved_at": retrieved_at,
     }
+
+
+def member_row(  # noqa: PLR0913
+    info: zipfile.ZipInfo,
+    facts: dict[str, Any],
+    extraction: Extraction | None,
+    *,
+    md5: str | None,
+    pdf_valid: bool | None,
+    published: dict[str, dict[str, Any]],
+    config_by_key: dict[str, dict[str, Any]],
+    run: str,
+) -> dict[str, Any]:
+    """Build a member's row, apart from the course's own columns.
+
+    :param extraction: How the member's text was read; None when it was not.
+    :param run: The course's run id in Learn, for ``learn_key``.
+    """
+    text, status = (None, STATUS_NOT_READ) if extraction is None else extraction[:2]
+    path = source_path(info.filename)
+    parent = PurePosixPath(info.filename).parent
+    row: dict[str, Any] = {
+        "member_path": info.filename,
+        "file_extension": PurePosixPath(info.filename).suffix.lower(),
+        "file_md5": md5,
+        "file_size_bytes": info.file_size,
+        "content": text,
+        "extraction_status": status,
+        "pdf_is_valid": pdf_valid,
+        "in_tutor_folder": info.filename.startswith(cartridge.TUTOR_FOLDER),
+        "draft_in_parent_path": DRAFT_MARKER in str(parent),
+        **{
+            key: json.dumps(value) if key in _JSON_FACTS else value
+            for key, value in facts.items()
+        },
+        "learn_published": info.filename in published,
+    }
+    if row["learn_published"]:
+        item = published.get(path, {})
+        row |= {
+            "learn_key": file_key(path, run),
+            # A reused file gets its previous content_title as its title in
+            # Learn, so every read after the first ends here. See the model.
+            "learn_title": item.get("title") or derived_title(path),
+            "learn_content_title": item.get("title"),
+            "learn_url": file_url(path, item, config_by_key),
+        }
+    return row
 
 
 def read_course(  # noqa: PLR0913
@@ -368,63 +440,62 @@ def read_course(  # noqa: PLR0913
     archive_key: str,
     published: dict[str, dict[str, Any]],
     config_by_key: dict[str, dict[str, Any]],
+    facts: dict[str, dict[str, Any]],
     version: str,
 ) -> tuple[list[dict[str, Any]], int, bool]:
-    """Read one course's published files through Tika.
+    """Read one course: a row for it and for each member, with text from Tika.
 
+    :param published: The course's ``cartridge.published_items``.
+    :param facts: The course's ``cartridge.member_facts``.
     :returns: The course's rows, how many member bytes they were read from, and
         whether a file failed in a way another read might not.
     :raises TikaUnavailableError: Tika is down.
     """
     retrieved_at = datetime.now(tz=UTC)
+    settings = cartridge.parse_settings(archive)
     course = course_row(
         course_id,
         archive_key,
-        cartridge.parse_settings(archive),
+        settings,
         cartridge.parse_context(archive),
         version,
         retrieved_at,
     )
-    run = course["run_readable_id"]
-    members = documents(archive, published, run)
-    infos = [info for candidates in members.values() for info in candidates]
+    members = sorted(
+        (info for info in archive.infolist() if not info.is_dir()),
+        key=lambda info: info.filename,
+    )
+    infos = [info for info in members if is_text_member(info, published)]
     md5s: dict[str, str] = {}
+    valid_pdfs: dict[str, bool] = {}
     extractions = collect(
         client,
         course_id,
-        pool.map(lambda info: _read_member(client, archive, info, md5s), infos),
+        pool.map(
+            lambda info: _read_member(client, archive, info, md5s, valid_pdfs), infos
+        ),
     )
     by_member = dict(zip(infos, extractions, strict=True))
 
+    run = run_id(course_id, settings.get("course_code"))
     rows = [course]
-    for key, candidates in members.items():
-        info, (text, status, _retry) = chosen(
-            [(candidate, by_member[candidate]) for candidate in candidates]
-        )
-        path = source_path(info.filename)
-        item = published.get(path, {})
+    for info in members:
         rows.append(
             {
                 **dict.fromkeys(SCHEMA.names),
                 "course_id": course_id,
-                "content_kind": KIND_FILE,
+                "content_kind": KIND_MEMBER,
                 "archive_key": archive_key,
-                "run_readable_id": run,
-                "file_key": key,
-                "source_path": path,
-                "file_extension": PurePosixPath(info.filename).suffix.lower(),
-                # A reused file gets its previous content_title as its title in
-                # Learn, so every read after the first ends here. See the model.
-                "title": item.get("title") or derived_title(path),
-                "content_title": item.get("title"),
-                "url": file_url(path, item, config_by_key),
-                "file_md5": md5s.get(info.filename),
-                "file_size_bytes": info.file_size,
-                "content": text,
-                # Only a read needs to tell these apart. Downstream both are a
-                # file with no text whose row keeps a prune from taking it.
-                "extraction_status": (
-                    STATUS_FAILED if status == STATUS_UNREADABLE else status
+                "parse_rule": cartridge.PARSE_RULE,
+                **member_row(
+                    info,
+                    facts.get(info.filename, {}),
+                    by_member.get(info),
+                    md5=md5s.get(info.filename),
+                    pdf_valid=valid_pdfs.get(info.filename),
+                    published=published,
+                    config_by_key=config_by_key,
+                    run=run,
                 ),
                 "course_version": version,
                 "course_retrieved_at": retrieved_at,
@@ -443,10 +514,25 @@ def _unpublished_row(course_id: str, retrieved_at: datetime) -> dict[str, Any]:
     }
 
 
+# The course row's own columns, in the order course_fields returns them.
+_COURSE_FIELDS = (
+    "course_title",
+    "course_code",
+    "course_start_at",
+    "course_end_at",
+    "canvas_domain",
+    "canvas_course_id",
+    "files_tab_hidden",
+    "public_syllabus",
+    "public_syllabus_to_auth",
+)
+
+
 def course_fields(
     settings: dict[str, Any], context: dict[str, str | None]
-) -> list[str | None]:
-    """Return what the course's own row is built from, for its version."""
+) -> list[Any]:
+    """Return the course row's own columns, which its version also digests."""
+    tabs = settings.get("tab_configuration") or {}
     return [
         settings.get("title"),
         settings.get("course_code"),
@@ -454,6 +540,9 @@ def course_fields(
         settings.get("conclude_at"),
         context.get("canvas_domain"),
         context.get("course_id"),
+        bool(tabs.get(cartridge.FILES_TAB_ID, {}).get("hidden", False)),
+        settings.get("public_syllabus"),
+        settings.get("public_syllabus_to_auth"),
     ]
 
 
@@ -532,6 +621,7 @@ def canvas_content_source(
                         published = cartridge.published_items(
                             archive, config_by_key, now
                         )
+                        facts = cartridge.member_facts(archive, config_by_key)
                         version = cartridge.course_checksum(
                             archive,
                             published,
@@ -540,6 +630,7 @@ def canvas_content_source(
                                 cartridge.parse_settings(archive),
                                 cartridge.parse_context(archive),
                             ),
+                            facts,
                         )
                         recorded = versions.get(course_id)
                         if not needs_read(recorded, version, now):
@@ -552,6 +643,7 @@ def canvas_content_source(
                             archive_key=key,
                             published=published,
                             config_by_key=config_by_key,
+                            facts=facts,
                             version=version,
                         )
                 except FileNotFoundError:
