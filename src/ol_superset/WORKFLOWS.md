@@ -399,6 +399,11 @@ every learner-level mart table.
 the ids differ between QA and production, and revokes the role's other `database_access` grants. Leave
 the key out to leave a role's database access alone.
 
+`allowed_databases` is not the only way into SQL Lab. A `datasource_access` grant on any one dataset
+lists that dataset's database in SQL Lab and lets queries that touch only that dataset's table run.
+The Superset Metadata DB's `tables` dataset is in schema `public`, so a role that lists `public` in
+`allowed_schemas` can query that table whatever `allowed_databases` says.
+
 `all_database_access` and `all_datasource_access` each open every database in SQL Lab, the Superset
 Metadata DB included. `flask fab import-roles` only adds permissions, so taking one out of a role's
 definition doesn't remove it from the live role. Sync does: it revokes `all_database_access`,

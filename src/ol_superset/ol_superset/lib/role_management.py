@@ -345,6 +345,9 @@ def get_permission_views(
 
     Returns:
         List of permission dicts with 'id', 'permission_name', 'view_menu_name'
+
+    Raises:
+        requests.HTTPError: When a page can't be fetched
     """
     permissions: list[dict[str, object]] = []
     page = 0
@@ -352,16 +355,14 @@ def get_permission_views(
 
     while True:
         params = {"q": json.dumps({"page": page, "page_size": page_size})}
-        try:
-            response = session.get(
-                f"{base_url}/api/v1/security/permissions-resources/",
-                params=params,
-                timeout=30,
-            )
-            response.raise_for_status()
-        except Exception as e:
-            print(f"  ❌ Error fetching permissions: {e}", file=sys.stderr)
-            break
+        # Raise rather than return part of the list: roles sync would revoke a
+        # global grant and then find no database_access permission to add.
+        response = session.get(
+            f"{base_url}/api/v1/security/permissions-resources/",
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
 
         data = response.json()
         results = data.get("result", [])
