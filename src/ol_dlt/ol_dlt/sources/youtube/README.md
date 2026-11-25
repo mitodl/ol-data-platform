@@ -30,12 +30,15 @@ GitHub (mitodl/open-video-data/youtube/*.yaml)
         → raw__youtube__api__playlists   (one row per ingested playlist)
         → raw__youtube__api__playlist_items (one row per playlist + video)
         → raw__youtube__api__videos      (one row per video)
-    → youtube-transcript-api
-        → raw__youtube__api__transcripts (one row per video with a transcript)
+    → YouTube Data API v3 captions (captions.list / captions.download, OAuth)
+        → raw__youtube__api__transcripts (one row per caption track of a video, keyed
+  by video_id, language_code and is_generated, and one status row per video with
+  no language saying how its listing went; only videos OCW has no transcript for)
 ```
 
 All tables use `write_disposition="merge"` keyed on the entity id (playlist
-items on `playlist_id` + `video_id`) so reruns update in place. Merge never
+items on `playlist_id` + `video_id`, transcripts on `video_id` +
+`language_code` + `is_generated`) so reruns update in place. Merge never
 deletes, so a playlist, video or membership that disappears keeps its last
 `_dlt_load_id`; the dbt integrations models filter on load recency for that.
 
@@ -57,21 +60,74 @@ only through `all` takes the channel's.
   fails the run. Skipping it would load a short channel set that the dbt
   integrations models read as complete.
 
-- The Data API is called directly over HTTP with `requests` (API-key auth via
-  the `key` query param), not the `google-api-python-client` SDK, to stay
-  consistent with the other ol_dlt sources.
-- Transcripts are **not** part of the Data API; they are fetched separately with
-  `youtube-transcript-api` (coded against its 1.x `fetch()` instance API).
-  Videos whose transcripts are disabled or unavailable are skipped (logged),
-  not raised.
+- The Data API is called directly over HTTP with `requests`, not the
+  `google-api-python-client` SDK, to stay consistent with the other ol_dlt
+  sources. Channels, playlists and videos are public data, read with the API
+  key (the `key` query param).
+- Transcripts are caption tracks. `captions.list` and `captions.download` need
+  OAuth (scope `youtube.force-ssl`), and a download "requires the user to have
+  permission to edit the video", so they are read as the channel itself. A
+  refresh token authorizes as the one channel picked at consent, so there is a
+  token per channel, and the run asks `channels.list?mine=true` (1 unit) which
+  channel each is for. Each video is read with the token of the channel that
+  owns it (`snippet.channelId`); a video on a channel no token is for is not
+  listed. A token Google refuses, or that gets three `forbidden` listings in a
+  row, stops only its own channel for the run. A service account
+  cannot do it: "YouTube does not support Service Accounts" (the
+  `youtubeSignupRequired` entry of the [Data API
+  errors](https://developers.google.com/youtube/v3/docs/errors)). A video its
+  channel's token cannot edit gets `fetch_status` `forbidden`.
+- `captions.list` costs 50 quota units and `captions.download` 200, so a run
+  spends at most `caption_quota_units` (default 9,000, under the 10,000 a day
+  a project gets by default) across every channel, and covers a few dozen
+  videos. It skips videos OCW
+  has transcript text for (`int__ocw__content_files`, read from the dbt build),
+  then lists videos never listed, those with uploaded captions
+  (`contentDetails.caption`) first, then those listed more than 90 days ago.
+  The resource state keeps when each video was listed and the `lastUpdated` of
+  each track downloaded, so an unchanged track is not downloaded again. When
+  the quota runs out (`quotaExceeded`), the run stops.
+- The `transcript_tracks` source option picks the tracks: `native` (default)
+  downloads every uploaded track and the auto-generated (ASR) track in the
+  video's language (from the `videos.list` snippet), `all` every serving,
+  non-draft track. Tracks are downloaded as SRT; `segments` holds the cues and
+  `transcript` their text. Each video listed gets a status row (empty
+  `language_code`) with `fetch_status` (`fetched`, `none`, `unavailable`,
+  `forbidden`, `failed`), any errors and `listed_tracks`. A failed download
+  writes no row of its own, so the last good text stays. A private or deleted
+  video is not returned by `videos.list`, so it is not listed and keeps
+  whatever rows it had (`unavailable` is only for one that goes private
+  between the two calls).
 
 ## Configuration
 
-- **Secret:** YouTube Data API v3 key, resolved lazily at run time. The `qa` and
-  `production` profiles read `developer_key` from Vault at
+- **API key:** YouTube Data API v3 key, resolved lazily at run time. The `qa`
+  and `production` profiles read `developer_key` from Vault at
   `secret-data/pipelines/youtube` (written by the dagster stack in
   ol-infrastructure from MIT Learn's SOPS secrets). Other profiles read
   `YOUTUBE_DEVELOPER_KEY` from the environment.
+- **Caption credentials:** an OAuth client id and secret and a refresh token
+  per channel, as `captions_client_id`, `captions_client_secret` and
+  `captions_refresh_tokens` in the same Vault secret, or
+  `YOUTUBE_CAPTIONS_CLIENT_ID`, `YOUTUBE_CAPTIONS_CLIENT_SECRET` and
+  `YOUTUBE_CAPTIONS_REFRESH_TOKENS` outside the deployed profiles. The refresh
+  tokens are a mapping (or its JSON) of a label to a token, e.g.
+  `{"ocw": "1//...", "residential": "1//..."}`; the label only names the token
+  in logs. Without them the transcripts table is not loaded. The OAuth client
+  is made by hand in
+  `mitol01` (Google has no API for OAuth clients; see ol-infrastructure's
+  `src/ol_infrastructure/infrastructure/gcp/README.md`). Its consent screen is
+  External and published: a Gmail account owns the OCW channel, which an
+  Internal screen refuses, and one in Testing status issues refresh tokens
+  that expire in 7 days. Each
+  refresh token comes from one consent with `access_type=offline` (Google's
+  [installed app
+  flow](https://developers.google.com/youtube/v3/guides/auth/installed-apps))
+  by someone who can pick the channel in Google's account chooser at the
+  consent screen (the owner of the channel or of its Brand Account; YouTube
+  Studio's Manager and Editor permissions are reported not to carry to the
+  API, which Google's docs do not say either way). A token
+  stops working if it goes unused for six months or is revoked.
 - **Destination:** built by `ol_dlt.config.pipeline_for("youtube")` from the
   active `DLT_PROFILE` (no per-source `.dlt/config.toml` block).
 

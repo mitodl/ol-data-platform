@@ -2074,7 +2074,6 @@ dependencies = [
     { name = "pypdf", extra = ["crypto"] },
     { name = "python-dateutil" },
     { name = "requests" },
-    { name = "youtube-transcript-api" },
 ]
 
 [package.metadata]
@@ -2092,7 +2091,6 @@ requires-dist = [
     { name = "pypdf", extras = ["crypto"], specifier = ">=7,<8" },
     { name = "python-dateutil", specifier = ">=2.9" },
     { name = "requests", specifier = ">=2.32" },
-    { name = "youtube-transcript-api", specifier = ">=1.0,<2" },
 ]
 
 [package.metadata.requires-dev]
@@ -3903,19 +3901,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/37/20/4b44e31e5a1bfe09624267656dc02c31fe920e35e81697722dd45caac9f1/yaspin-3.5.1.tar.gz", hash = "sha256:5cb55fb774eae3543fdd30b5958c46e348dfd316a8b289c9f8db2c6f8a511846", size = 44488, upload-time = "2026-09-18T19:05:39.82Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/53/54/74737771bfc9b945b7e11968100c096fc2d1af075644e43d5fa51ab773a7/yaspin-3.5.1-py3-none-any.whl", hash = "sha256:193ef981f0796a93f77d91221dd19bd2c83b0f6a26f43edbc0507c457c54c1cb", size = 22875, upload-time = "2026-09-18T19:05:38.334Z" },
-]
-
-[[package]]
-name = "youtube-transcript-api"
-version = "1.2.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "defusedxml" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/01/4d/e5ab63c432a4a818ec5ca9eb18584472653bbdd845cc46bf9d227bad6c4d/youtube_transcript_api-1.2.5.tar.gz", hash = "sha256:5e750bd1bac188c1b4afeaf20464ba4dd7a5fb05617f48463f9faa5bace683cc", size = 470631, upload-time = "2026-11-05T11:23:21.571Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/ee/6463d3dafe3bf671af6b8c149cd746d4a48f43eb23de4b906f8e010b796f/youtube_transcript_api-1.2.5-py3-none-any.whl", hash = "sha256:e79323bcb2daebed25773fef51a8dd10fee2ff39fb5993dccbe060470d6721ea", size = 485658, upload-time = "2026-11-05T11:23:20.365Z" },
 ]
 
 [[package]]

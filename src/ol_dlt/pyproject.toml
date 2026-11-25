@@ -27,7 +27,6 @@ dependencies = [
     # legacy_openedx already reads them with.
     "pymysql~=1.1",
     "hvac>=2.3",
-    "youtube-transcript-api>=1.0,<2",
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
     # arguments -- a date window and a chunk size -- rather than env vars.
     "cyclopts~=5.5.1",
