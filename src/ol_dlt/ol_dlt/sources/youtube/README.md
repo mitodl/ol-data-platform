@@ -116,9 +116,10 @@ only through `all` takes the channel's.
   in logs. Without them the transcripts table is not loaded. The OAuth client
   is made by hand in
   `mitol01` (Google has no API for OAuth clients; see ol-infrastructure's
-  `src/ol_infrastructure/infrastructure/gcp/README.md`). An External consent
-  screen in Testing status issues refresh tokens that expire in 7 days, so the
-  client's consent screen is Internal (an mit.edu account) or published. Each
+  `src/ol_infrastructure/infrastructure/gcp/README.md`). Its consent screen is
+  External and published: a Gmail account owns the OCW channel, which an
+  Internal screen refuses, and one in Testing status issues refresh tokens
+  that expire in 7 days. Each
   refresh token comes from one consent with `access_type=offline` (Google's
   [installed app
   flow](https://developers.google.com/youtube/v3/guides/auth/installed-apps))
