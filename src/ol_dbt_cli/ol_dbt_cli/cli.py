@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_dbt_cli.commands.articles import articles_app
 from ol_dbt_cli.commands.contracts import contracts_app
 from ol_dbt_cli.commands.diff import diff
 from ol_dbt_cli.commands.exposures import exposures_app
@@ -87,6 +88,7 @@ app.command(ingest_app)
 app.command(contracts_app)
 app.command(metrics_app)
 app.command(glossary_app)
+app.command(articles_app)
 app.command(exposures_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")

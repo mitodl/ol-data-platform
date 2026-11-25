@@ -93,6 +93,7 @@ from typing import TYPE_CHECKING, Any
 from ol_dbt_cli.lib.data_contracts import om_fqn
 
 if TYPE_CHECKING:
+    from ol_dbt_cli.lib.data_contracts import EntityBinding
     from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
     from ol_dbt_cli.lib.metric_registry import MetricDefinition
 
@@ -186,33 +187,36 @@ def starrocks_fqn(node: ManifestModel, service: str) -> str:
     return ".".join((service, STARROCKS_CATALOG, node.custom_schema, node.alias or node.name))
 
 
-def lineage_sources(
-    metric: MetricDefinition, manifest: ManifestRegistry, service: str, starrocks_service: str
-) -> list[LineageSource]:
-    """Resolve each ``implemented_by`` entry to the entity OpenMetadata catalogs.
+def lineage_source(
+    binding: EntityBinding, manifest: ManifestRegistry, service: str, starrocks_service: str
+) -> LineageSource:
+    """Resolve one binding to the entity OpenMetadata catalogs.
 
     A dbt model tagged ``starrocks`` is a StarRocks view under
     *starrocks_service* (``starrocks_fqn``); a production (Trino) manifest
     lists it under ``disabled``. Every other dbt binding is a relation under
     *service*.
 
-    :returns: the entities to link, each StarRocks view marked ``starrocks``.
-    :rtype: list[LineageSource]
+    :returns: the entity, marked ``starrocks`` when it is a StarRocks view.
+    :rtype: LineageSource
     :raises ValueError: when a dbt binding is in neither the manifest's nodes
         nor its StarRocks-only disabled models.
     """
-    sources: list[LineageSource] = []
-    for implementation in metric.implemented_by:
-        binding = implementation.binding
-        if binding.kind == "dbt_model":
-            node = manifest.get_model(binding.target) or manifest.disabled.get(binding.target)
-            if node is not None and STARROCKS_TAG in node.tags:
-                sources.append(
-                    LineageSource(binding.entity_type, starrocks_fqn(node, starrocks_service), starrocks=True)
-                )
-                continue
-        sources.append(LineageSource(binding.entity_type, om_fqn(binding, manifest, service)))
-    return sources
+    if binding.kind == "dbt_model":
+        node = manifest.get_model(binding.target) or manifest.disabled.get(binding.target)
+        if node is not None and STARROCKS_TAG in node.tags:
+            return LineageSource(binding.entity_type, starrocks_fqn(node, starrocks_service), starrocks=True)
+    return LineageSource(binding.entity_type, om_fqn(binding, manifest, service))
+
+
+def lineage_sources(
+    metric: MetricDefinition, manifest: ManifestRegistry, service: str, starrocks_service: str
+) -> list[LineageSource]:
+    """Resolve each ``implemented_by`` entry with :func:`lineage_source`.
+
+    :rtype: list[LineageSource]
+    """
+    return [lineage_source(i.binding, manifest, service, starrocks_service) for i in metric.implemented_by]
 
 
 def _live_refs(refs: list[dict[str, Any]] | None) -> list[dict[str, str]]:
