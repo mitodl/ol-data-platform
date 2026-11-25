@@ -12,10 +12,13 @@
     past a release that contains it.
 
     This is the 1.12.2 materialization verbatim (Apache-2.0, Copyright
-    2021-present StarRocks, Inc.) apart from that one line. A materialization
-    in the root project takes precedence over the adapter's.
+    2021-present StarRocks, Inc.) apart from that one line and the
+    grant_config line: 1.12.2 passes apply_grants a grant_config it never
+    sets, which renders undefined, so incremental models got no grants.
+    A materialization in the root project takes precedence over the adapter's.
 #}
 {%- materialization incremental, adapter='starrocks' -%}
+    {%- set grant_config = config.get('grants') -%}
     {%- set keys = config.get('keys', validator=validation.any[list]) -%}
     {%- set full_refresh_mode = (should_full_refresh()) -%}
     {%- set identifier = this.name -%}

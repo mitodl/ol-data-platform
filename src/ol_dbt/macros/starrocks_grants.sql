@@ -70,17 +70,24 @@
         {{ return(none) }}
     {% endif %}
     {#-- One statement per call: the connection runs a single statement at a
-         time. The session goes back to the profile's catalog afterwards. --#}
-    {% do run_query("set catalog " ~ catalog) %}
+         time. A relation in another catalog switches the session there and
+         back to the profile's afterwards. --#}
+    {% set switch_catalog = catalog != target.catalog %}
+    {% if switch_catalog %}
+        {% do run_query("set catalog " ~ catalog) %}
+    {% endif %}
     {% for statement in statements %}
         {% do run_query(statement) %}
     {% endfor %}
-    {% do run_query("set catalog " ~ target.catalog) %}
+    {% if switch_catalog %}
+        {% do run_query("set catalog " ~ target.catalog) %}
+    {% endif %}
 {% endmacro %}
 
 {#-- Project post-hook: grants for the table materialization, which in
-     dbt-starrocks 1.12.2 never applies them. Incremental (overridden in
-     starrocks_incremental_materialization.sql) and snapshots already do. --#}
+     dbt-starrocks 1.12.2 never applies them. The incremental override
+     (starrocks_incremental_materialization.sql) and dbt-core's snapshot
+     materialization apply them themselves. --#}
 {% macro starrocks_table_grants() %}
     {% if execute and target.type == "starrocks" and config.get("materialized") == "table" %}
         {% do apply_grants(this.incorporate(type="table"), config.get("grants"), should_revoke=True) %}
