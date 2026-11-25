@@ -269,13 +269,14 @@ models:
       # (https://github.com/StarRocks/dbt-starrocks/issues/128).
       # A refresh runs in the MV's resource_group, not the refreshing user's
       # classified group, and StarRocks defaults it to default_mv_wg, which
-      # competes with interactive queries. `batch` is defined in
-      # ol-infrastructure substructure/starrocks/resource_groups.py. The local
-      # cluster (local-dev in ol-infrastructure) has no batch group, and CREATE
-      # MATERIALIZED VIEW fails on a group that doesn't exist.
-      +properties:
-        resource_group: "{{ 'default_mv_wg' if target.name == 'starrocks_local_b2b'\
-          \ else 'batch' }}"
+      # competes with interactive queries. `batch` is declared per environment
+      # in ol-infrastructure substructure/starrocks/Pulumi.lakehouse.*.yaml
+      # (starrocks:resource_groups). The local cluster (local-dev in
+      # ol-infrastructure) has none, and CREATE MATERIALIZED VIEW fails on a
+      # group that doesn't exist, so it keeps the default. A model that sets its
+      # own `properties` replaces this dict, so it must repeat resource_group.
+      +properties: "{{ none if target.name == 'starrocks_local_b2b' else {'resource_group':\
+        \ 'batch'} }}"
       +meta:
         required_docs: true
         iceberg_maintenance:
@@ -297,9 +298,8 @@ models:
         delete: []
         all privileges: []
       # As in b2b_analytics above
-      +properties:
-        resource_group: "{{ 'default_mv_wg' if target.name == 'starrocks_local_b2b'\
-          \ else 'batch' }}"
+      +properties: "{{ none if target.name == 'starrocks_local_b2b' else {'resource_group':\
+        \ 'batch'} }}"
       +meta:
         required_docs: true
         iceberg_maintenance:
