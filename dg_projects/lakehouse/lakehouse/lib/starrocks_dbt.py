@@ -198,10 +198,11 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
     return relations
 
 
-# Two ways a REFRESH fails because the Trino project rebuilt an Iceberg base
-# table under it. Every `dimensional` table the MVs read is materialized='table',
-# so each Trino build replaces it with a new Iceberg table, and the automation
-# sensor runs that build several times a day on no fixed schedule.
+# REFRESH failures that clear on a later attempt. The first two come from the
+# Trino project rebuilding an Iceberg base table under the MV. Every
+# `dimensional` table the MVs read is materialized='table', so each Trino build
+# replaces it with a new Iceberg table, and the automation sensor runs that
+# build several times a day on no fixed schedule.
 #
 # "does not exist when collecting snapshot infos" -- the REFRESH landed inside
 # the swap itself. On 2026-09-25 run 1889c9b0 rebuilt bridge_organization_courserun
@@ -218,9 +219,17 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
 # error wasn't retried on 09-25 (the retries never got back to that MV), so
 # that it clears once the new table exists is inferred. The delay covers a
 # swap still in progress (the 09-25 CREATE TABLE ran 22s).
+#
+# "Failed to allocate resource to query: pending timeout" -- the MVs refresh
+# in the batch resource group (their resource_group property), and with query
+# queue v1 a refresh waits for a batch slot and fails after
+# query_queue_pending_timeout_second. A build overrunning into the refresh
+# can hold every slot. Reproduced on StarRocks 4.1.7 with a batch
+# concurrency_limit of 1 held by another INSERT.
 MV_REFRESH_RETRIABLE_PATTERN = re.compile(
     r"does not exist when collecting snapshot infos"
     r"|was recreated but its table type is not supported for automatic meta repair"
+    r"|Failed to allocate resource to query: pending timeout"
 )
 MAX_MV_REFRESH_ATTEMPTS = 3
 MV_REFRESH_RETRY_DELAY_SECONDS = 30

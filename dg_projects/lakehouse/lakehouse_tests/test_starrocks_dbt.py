@@ -526,6 +526,14 @@ BASE_TABLE_RECREATED_FAILURE = (
     "not supported for automatic meta repair. Only Hive tables support automatic "
     'repair. Please manually refresh the MV.")'
 )
+# Verbatim (stack trace trimmed) from a StarRocks 4.1.7 REFRESH ... WITH SYNC MODE
+# while another INSERT held the batch group's only slot (2026-11-25).
+BATCH_QUEUE_PENDING_TIMEOUT_FAILURE = (
+    "(1064, 'execute task mv-11018 failed: Refresh mv mv_batch failed after 1 "
+    "times, try lock failed: 0, error-msg : com.starrocks.common.StarRocksException: "
+    "Failed to allocate resource to query: pending timeout [5s], you could modify "
+    "the session variable [query_queue_pending_timeout_second] to pending more time')"
+)
 UNRELATED_REFRESH_FAILURE = (
     "(1064, 'Getting analyzing error. Detail message: Unknown column org_key.')"
 )
@@ -557,10 +565,17 @@ def _refresh(starrocks, relations, sleeps):
 
 class TestRefreshMaterializedViews:
     @pytest.mark.parametrize(
-        "message", [BASE_TABLE_MID_SWAP_FAILURE, BASE_TABLE_RECREATED_FAILURE]
+        "message",
+        [
+            BASE_TABLE_MID_SWAP_FAILURE,
+            BASE_TABLE_RECREATED_FAILURE,
+            BATCH_QUEUE_PENDING_TIMEOUT_FAILURE,
+        ],
     )
-    def test_a_rebuilt_base_table_is_retried(self, message):
-        """Both 09-25 failures clear on the next REFRESH once the new table exists."""
+    def test_a_transient_failure_is_retried(self, message):
+        """Both 09-25 failures clear on the next REFRESH once the new table exists,
+        and a batch queue timeout clears once a slot frees.
+        """
         starrocks = ScriptedStarRocks({"b2b_analytics.mv_a": [message]})
         sleeps: list[float] = []
         _refresh(starrocks, ["b2b_analytics.mv_a"], sleeps)

@@ -263,11 +263,20 @@ models:
         update: []
         delete: []
         all privileges: []
-      # Clears the root Iceberg `format` property, which StarRocks native tables
-      # and materialized views reject. The empty value is null, not {}:
-      # dbt-starrocks 1.12.2 renders {} as an empty PROPERTIES () block that
-      # fails to parse (https://github.com/StarRocks/dbt-starrocks/issues/128).
-      +properties:
+      # Replaces the root Iceberg `format` property, which StarRocks native
+      # tables and materialized views reject. Never set it to {}: dbt-starrocks
+      # 1.12.2 renders {} as an empty PROPERTIES () block that fails to parse
+      # (https://github.com/StarRocks/dbt-starrocks/issues/128).
+      # A refresh runs in the MV's resource_group, not the refreshing user's
+      # classified group, and StarRocks defaults it to default_mv_wg, which
+      # competes with interactive queries. `batch` is declared per environment
+      # in ol-infrastructure substructure/starrocks/Pulumi.lakehouse.*.yaml
+      # (starrocks:resource_groups). The local cluster (local-dev in
+      # ol-infrastructure) has none, and CREATE MATERIALIZED VIEW fails on a
+      # group that doesn't exist, so it keeps the default. A model that sets its
+      # own `properties` replaces this dict, so it must repeat resource_group.
+      +properties: "{{ none if target.name == 'starrocks_local_b2b' else {'resource_group':\
+        \ 'batch'} }}"
       +meta:
         required_docs: true
         iceberg_maintenance:
@@ -288,8 +297,9 @@ models:
         update: []
         delete: []
         all privileges: []
-      # null, not {}, as in b2b_analytics above
-      +properties:
+      # As in b2b_analytics above
+      +properties: "{{ none if target.name == 'starrocks_local_b2b' else {'resource_group':\
+        \ 'batch'} }}"
       +meta:
         required_docs: true
         iceberg_maintenance:
