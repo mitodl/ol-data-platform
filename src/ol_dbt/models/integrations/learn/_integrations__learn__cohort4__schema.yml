@@ -290,9 +290,12 @@ models:
   description: >
     One row per ContentFile of a Canvas course's run, for the warehouse pull that
     replaces ingest_canvas_course. A scoped pull filters and prunes on
-    (etl_source, run_readable_id). Built from the newest export of each course in
-    the landing zone by the same rules as learning_resources/etl/canvas.py, with
-    the text Tika extracts. Tutor problem files are not here: ingest_canvas_course
+    (etl_source, run_readable_id). Built from stg__canvas__s3__course_content,
+    which has every member of each course's newest export: Learn's whole-archive
+    visibility rules ran at read time into its learn_* columns, and this model
+    applies the rest of learning_resources/etl/canvas.py (text types, the draft
+    folder test, unreadable PDFs, one file per key), with the text Tika
+    extracts. Tutor problem files are not here: ingest_canvas_course
     also loads those, so flipping Canvas stops them unless Learn gets them another
     way. Not at parity for PDFs: Learn converts a PDF of up to
     OCR_PDF_MAX_PAGE_THRESHOLD pages with opendataloader and an LLM (mit-learn

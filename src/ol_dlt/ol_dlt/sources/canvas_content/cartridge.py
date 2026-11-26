@@ -1,18 +1,27 @@
-"""What MIT Learn reads from a Canvas Common Cartridge export.
+"""What a Canvas Common Cartridge export says about each of its members.
 
-A port of ``learning_resources/etl/canvas_utils.py`` in mit-learn, working on
-an open ``zipfile.ZipFile`` so a course can be read over S3 byte ranges rather
-than downloaded: the largest export is 24 GB, nearly all of it video no rule
-here reads. A published item is an entry in the map ``published_items`` returns,
-keyed by its path in the archive. The rules follow Learn's, odd ones included,
-because a Sync task replaces what Learn's own parser wrote:
+Two things come out of an archive, opened as a ``zipfile.ZipFile`` so a course
+can be read over S3 byte ranges rather than downloaded (the largest export is
+24 GB, nearly all of it video):
 
-- Every file of a module item's resource counts, so a quiz in a module brings
-  in ``assessment_meta.xml`` and an assignment its ``assignment_settings.xml``.
-- A file is read for its folder's visibility, its own, and the Files tab, but a
-  file a published page links to needs only not to be locked.
-- Whether something is locked depends on the time of the read, so the version
-  (``course_checksum``) digests the published set.
+- ``member_facts``: what the export records about each member, in Canvas's own
+  terms, with no judgment of who can see it. Dates are read as the UTC Canvas
+  writes. These are platform data.
+- ``published_items``: the members MIT Learn would treat as visible to students
+  at a given time. A port of ``learning_resources/etl/canvas_utils.py`` in
+  mit-learn, odd rules included, so its output is Learn-parity data and is
+  labelled so in the raw table (``learn_*`` columns). It runs here rather than
+  in the Learn view because its rules need the whole archive (the manifest's
+  resources, module items, page links and the Files tab). The rules:
+
+  - Every file of a module item's resource counts, so a quiz in a module brings
+    in ``assessment_meta.xml`` and an assignment its ``assignment_settings.xml``.
+  - A file is read for its folder's visibility, its own, and the Files tab, but
+    a file a published page links to needs only not to be locked.
+  - Availability dates are read as US/Eastern (``is_date_locked``), which is
+    Learn's misreading of Canvas's UTC.
+  - Whether something is locked depends on the time of the read, so the version
+    (``course_checksum``) digests the published set.
 """
 
 import hashlib
@@ -63,8 +72,9 @@ CHECKSUM_EXCLUDED = (MANIFEST, "course_settings/")
 # Part of every course version, so that changing it reads every course again.
 # Raise it when a rule here or in the source picks different files or text for
 # an archive that has not changed.
-PARSE_RULE = 1
+PARSE_RULE = 2
 
+# Learn's reading of Canvas's dates. See is_date_locked.
 LOCK_TIMEZONE = ZoneInfo("US/Eastern")
 
 
@@ -72,11 +82,29 @@ def _parse_datetime(value: str) -> datetime:
     return dateutil.parser.parse(value).replace(tzinfo=LOCK_TIMEZONE).astimezone(UTC)
 
 
+def parse_utc(value: str | None) -> datetime | None:
+    """Read a date Canvas wrote, which is UTC when it carries no offset.
+
+    :returns: The instant, or None for an empty, ``nil`` or unreadable value.
+    """
+    if not value or value.lower() == "nil":
+        return None
+    try:
+        parsed = dateutil.parser.parse(value)
+    except (ValueError, OverflowError):
+        logger.warning("Could not parse the date %s", value)
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
 def is_date_locked(lock_at: str | None, unlock_at: str | None, now: datetime) -> bool:
     """Tell whether a resource is outside its availability dates at ``now``.
 
-    Canvas writes both as UTC, and Learn reads them as US/Eastern. Kept, because
-    the choice decides which side of a boundary a file is on for four hours.
+    Learn-parity: Canvas writes both as UTC, and Learn reads them as US/Eastern,
+    which moves a boundary by four or five hours. Kept for ``published_items``
+    only; ``parse_utc`` is the reading the platform's columns use.
     """
     for value, is_locked in (
         (unlock_at, lambda at: now < at),
@@ -183,53 +211,76 @@ def parse_context(archive: zipfile.ZipFile) -> dict[str, str | None]:
     return context
 
 
+def files_meta_entries(archive: zipfile.ZipFile) -> list[tuple[str, dict[str, Any]]]:
+    """Return each file ``files_meta.xml`` has an entry for, with the entry."""
+    if FILES_META not in archive.namelist():
+        return []
+    resources = resources_by_identifier(archive.read(MANIFEST))
+    root = ElementTree.fromstring(archive.read(FILES_META))
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for element in root.findall(".//cccv1p0:file", NAMESPACES):
+        meta: dict[str, Any] = dict(element.attrib)
+        for child in element:
+            nil = child.attrib.get("nil") == "true"
+            meta[child.tag.split("}")[-1]] = None if nil else (child.text or "").strip()
+        entries.extend(
+            (file, meta)
+            for file in resources.get(meta.get("identifier") or "", {}).get("files", [])
+        )
+    return entries
+
+
 def parse_files_meta(
     archive: zipfile.ZipFile, now: datetime
 ) -> dict[str, list[dict[str, Any]]]:
     """Sort the files ``files_meta.xml`` names by whether they are published."""
     status: dict[str, list[dict[str, Any]]] = {"active": [], "unpublished": []}
-    if FILES_META not in archive.namelist():
-        return status
-    resources = resources_by_identifier(archive.read(MANIFEST))
-    root = ElementTree.fromstring(archive.read(FILES_META))
-    for element in root.findall(".//cccv1p0:file", NAMESPACES):
-        meta = dict(element.attrib)
-        for child in element:
-            nil = child.attrib.get("nil") == "true"
-            meta[child.tag.split("}")[-1]] = None if nil else (child.text or "").strip()
-        published = is_file_published(meta, now)
-        for file in resources.get(meta.get("identifier") or "", {}).get("files", []):
-            active = published and not file.startswith(TUTOR_FOLDER)
-            status["active" if active else "unpublished"].append(
-                {"path": file, "title": meta.get("display_name")}
-            )
+    for file, meta in files_meta_entries(archive):
+        active = is_file_published(meta, now) and not file.startswith(TUTOR_FOLDER)
+        status["active" if active else "unpublished"].append(
+            {"path": file, "title": meta.get("display_name")}
+        )
     return status
 
 
-def parse_module_meta(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
-    """Return every file of every active module item."""
+def module_items(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
+    """Return every file of every module item, with the item's workflow_state."""
     if MODULE_META not in archive.namelist():
         return []
     resources = resources_by_identifierref(archive.read(MANIFEST))
     items: list[dict[str, Any]] = []
     root = ElementTree.fromstring(archive.read(MODULE_META))
+    # A module without a title, or an item without a workflow_state, title or
+    # content_type, raises, as Learn's parse_module_meta fails the course on any
+    # of them, whatever the item's state and whether it holds files.
     for module in root.findall(".//cccv1p0:module", NAMESPACES):
         module_title = module.find("cccv1p0:title", NAMESPACES).text
         for item in module.findall("cccv1p0:items/cccv1p0:item", NAMESPACES):
-            if item.find("cccv1p0:workflow_state", NAMESPACES).text != "active":
-                continue
+            state = item.find("cccv1p0:workflow_state", NAMESPACES).text
+            title = item.find("cccv1p0:title", NAMESPACES).text
+            item.find("cccv1p0:content_type", NAMESPACES).text  # noqa: B018
             reference = item.find("cccv1p0:identifierref", NAMESPACES)
             identifierref = reference.text if reference is not None else None
             for files in resources.get(identifierref or "", []):
                 items.extend(
                     {
                         "path": file,
-                        "title": item.find("cccv1p0:title", NAMESPACES).text,
+                        "title": title,
                         "module": module_title,
+                        "workflow_state": state,
                     }
                     for file in files
                 )
     return items
+
+
+def parse_module_meta(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
+    """Return every file of every active module item."""
+    return [
+        {"path": item["path"], "title": item["title"], "module": item["module"]}
+        for item in module_items(archive)
+        if item["workflow_state"] == "active"
+    ]
 
 
 def _embedded_files(html: bytes) -> list[str]:
@@ -243,51 +294,59 @@ def _embedded_files(html: bytes) -> list[str]:
     return links
 
 
-def _assignment_state(xml: bytes, now: datetime) -> str:
-    """Return ``published`` when a student can see an assignment at ``now``."""
+# The fields of assignment_settings.xml a page's facts keep.
+ASSIGNMENT_FIELDS = (
+    "title",
+    "workflow_state",
+    "only_visible_to_overrides",
+    "hide_in_gradebook",
+    "module_locked",
+    "lock_at",
+    "unlock_at",
+)
+
+
+def _assignment_fields(xml: bytes) -> dict[str, str] | None:
+    """Return an assignment's settings, or None when they do not parse."""
     try:
         root = ElementTree.fromstring(xml)
     except ParseError:
         logger.exception("Could not parse an assignment's settings")
-        return "unpublished"
+        return None
 
     def text(tag: str) -> str:
         element = root.find(f"cccv1p0:{tag}", NAMESPACES)
         return element.text.strip() if element is not None and element.text else ""
 
+    return {field: text(field) for field in ASSIGNMENT_FIELDS}
+
+
+def _assignment_state(fields: dict[str, str] | None, now: datetime) -> str:
+    """Return ``published`` when a student can see an assignment at ``now``."""
+    if fields is None:
+        return "unpublished"
     visible = (
-        text("workflow_state") == "published"
-        and text("only_visible_to_overrides") != "true"
-        and text("hide_in_gradebook") != "true"
-        and text("module_locked") != "true"
+        fields["workflow_state"] == "published"
+        and fields["only_visible_to_overrides"] != "true"
+        and fields["hide_in_gradebook"] != "true"
+        and fields["module_locked"] != "true"
     )
-    locked = is_date_locked(text("lock_at"), text("unlock_at"), now)
+    locked = is_date_locked(fields["lock_at"], fields["unlock_at"], now)
     return "published" if visible and not locked else "unpublished"
 
 
-def _assignment_title(xml: bytes) -> str:
-    try:
-        root = ElementTree.fromstring(xml)
-    except ParseError:
-        logger.exception("Could not parse an assignment's settings")
-        return ""
-    element = root.find("cccv1p0:title", NAMESPACES)
-    return element.text.strip() if element is not None and element.text else ""
+def web_items(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
+    """Return each HTML page and assignment of the manifest with what sets its state.
 
-
-def parse_web_content(
-    archive: zipfile.ZipFile, settings: dict[str, Any], now: datetime
-) -> dict[str, list[dict[str, Any]]]:
-    """Sort a course's HTML pages and assignments by whether they are published."""
-    status: dict[str, list[dict[str, Any]]] = {"active": [], "unpublished": []}
-    state: Any
+    ``assignment`` is the assignment's settings (None for a page, or for an
+    assignment whose settings do not parse, which ``assignment_parse_failed``
+    tells apart); a page's ``workflow_state`` is its ``workflow_state`` meta tag.
+    ``intended_role`` is the resource's intendedEndUserRole, which Canvas sets to
+    ``Instructor`` for a page only its authors see.
+    """
     if MANIFEST not in archive.namelist():
-        return status
-    # Unset counts as public, as it does in Learn.
-    ingest_syllabus = not (
-        (settings.get("public_syllabus") or "true").lower() == "false"
-        and (settings.get("public_syllabus_to_auth") or "true").lower() == "false"
-    )
+        return []
+    items = []
     for resource in resources_by_identifier(archive.read(MANIFEST)).values():
         href = resource["href"]
         if not href or not href.endswith(".html"):
@@ -301,26 +360,63 @@ def parse_web_content(
             ),
             None,
         )
+        assignment = None
         if settings_file:
-            xml = archive.read(settings_file)
-            state = _assignment_state(xml, now)
-            title = _assignment_title(xml)
+            assignment = _assignment_fields(archive.read(settings_file))
+            title = (assignment or {}).get("title", "")
+            state = (assignment or {}).get("workflow_state")
         else:
             soup = BeautifulSoup(html, "html.parser")
             meta = soup.find("meta", attrs={"name": "workflow_state"})
             state = meta.get("content") if meta else None
             title_element = soup.find("title")
             title = title_element.get_text().strip() if title_element else ""
-
         educational = resource["metadata"].get("lom", {}).get("educational") or {}
-        role: str = (educational.get("intendedEndUserRole") or {}).get("value") or ""
+        items.append(
+            {
+                "path": href,
+                "title": title,
+                "workflow_state": state,
+                "is_assignment": settings_file is not None,
+                "assignment": assignment,
+                "intended_role": (
+                    (educational.get("intendedEndUserRole") or {}).get("value") or ""
+                ),
+                "is_syllabus": resource["intendeduse"] == "syllabus",
+                "embedded_files": _embedded_files(html),
+            }
+        )
+    return items
+
+
+def parse_web_content(
+    archive: zipfile.ZipFile, settings: dict[str, Any], now: datetime
+) -> dict[str, list[dict[str, Any]]]:
+    """Sort a course's HTML pages and assignments by whether they are published."""
+    status: dict[str, list[dict[str, Any]]] = {"active": [], "unpublished": []}
+    # Unset counts as public, as it does in Learn.
+    ingest_syllabus = not (
+        (settings.get("public_syllabus") or "true").lower() == "false"
+        and (settings.get("public_syllabus_to_auth") or "true").lower() == "false"
+    )
+    for item in web_items(archive):
+        state = (
+            _assignment_state(item["assignment"], now)
+            if item["is_assignment"]
+            else item["workflow_state"]
+        )
+        role = item["intended_role"]
         authors_only = bool(role) and role.lower() != "student"
-        syllabus = resource["intendeduse"] == "syllabus"
+        syllabus = item["is_syllabus"]
         active = (
             state in {"active", "published"} and not authors_only and not syllabus
         ) or (ingest_syllabus and syllabus)
         status["active" if active else "unpublished"].append(
-            {"path": href, "title": title, "embedded_files": _embedded_files(html)}
+            {
+                "path": item["path"],
+                "title": item["title"],
+                "embedded_files": item["embedded_files"],
+            }
         )
     return status
 
@@ -340,6 +436,14 @@ def restricted_folders(archive: zipfile.ZipFile) -> set[str]:
         if path and "true" in flags:
             restricted.add(path)
     return restricted
+
+
+def in_restricted_folder(file: str, restricted: set[str]) -> bool:
+    """Tell whether a file under ``web_resources/`` is in a hidden or locked folder."""
+    parts = file.removeprefix(f"{WEB_RESOURCES}/").split("/")[:-1]
+    return any(
+        "/".join(parts[: depth + 1]) in restricted for depth in range(len(parts))
+    )
 
 
 def parse_course_files(archive: zipfile.ZipFile, now: datetime) -> list[dict[str, Any]]:
@@ -365,12 +469,7 @@ def parse_course_files(archive: zipfile.ZipFile, now: datetime) -> list[dict[str
             seen.add(file)
             if file.endswith(".html") or file.startswith(TUTOR_FOLDER):
                 continue
-            parts = file.removeprefix(f"{WEB_RESOURCES}/").split("/")[:-1]
-            in_restricted = any(
-                "/".join(parts[: depth + 1]) in restricted
-                for depth in range(len(parts))
-            )
-            if not in_restricted and file not in unpublished:
+            if not in_restricted_folder(file, restricted) and file not in unpublished:
                 active.append({"path": file, "title": posixpath.basename(file)})
     return active
 
@@ -427,7 +526,10 @@ def _config_visible(
 def published_items(
     archive: zipfile.ZipFile, config: dict[str, dict[str, Any]], now: datetime
 ) -> dict[str, dict[str, Any]]:
-    """Return what students can reach in a course at ``now``, keyed by path.
+    """Return what MIT Learn treats as visible in a course at ``now``, by path.
+
+    A page's linked files are admitted whether or not the page itself is
+    visible, as in Learn.
 
     :param archive: The course's ``.imscc``.
     :param config: The export's ``url_config``.
@@ -463,23 +565,121 @@ def published_items(
     return published
 
 
-def course_checksum(
+def _flag(value: Any) -> bool | None:  # noqa: ANN401
+    """Read a Canvas true/false, which the XML writes as text; None when absent."""
+    if value is None or isinstance(value, bool):
+        return value
+    return str(value).strip().lower() == "true"
+
+
+def member_facts(
+    archive: zipfile.ZipFile, config: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Return what the export records about its members, keyed by path.
+
+    No visibility rule is applied: each fact is Canvas's own, and dates are read
+    as the UTC Canvas writes (``parse_utc``). A member nothing records a fact for
+    has no entry. The keys:
+
+    - ``folder_restricted``: a file under ``web_resources/`` is in a folder
+      ``files_meta.xml`` marks hidden or locked.
+    - ``files_*``: the file's own ``files_meta.xml`` entry.
+    - ``module_items``: each module item whose resource includes the member.
+    - ``page_*``: an HTML page or assignment of the manifest; ``page_lock_at``
+      and the flags after it are an assignment's settings.
+    - ``linked_from_pages``: the pages that link to a file.
+    - ``api_*``: the member's entry in the export's metadata JSON, which the
+      Canvas API wrote, looked up as ``published_items`` looks a file or page up.
+
+    :param archive: The course's ``.imscc``.
+    :param config: The export's ``url_config``.
+    """
+    facts: dict[str, dict[str, Any]] = defaultdict(dict)
+    restricted = restricted_folders(archive)
+    for info in archive.infolist():
+        if info.filename.startswith(f"{WEB_RESOURCES}/") and not info.is_dir():
+            facts[info.filename]["folder_restricted"] = in_restricted_folder(
+                info.filename, restricted
+            )
+    for file, meta in files_meta_entries(archive):
+        facts[file].update(
+            files_display_name=meta.get("display_name"),
+            files_hidden=_flag(meta.get("hidden")),
+            files_locked=_flag(meta.get("locked")),
+            files_visibility=meta.get("visibility"),
+            files_lock_at=parse_utc(meta.get("lock_at")),
+            files_unlock_at=parse_utc(meta.get("unlock_at")),
+        )
+    for item in module_items(archive):
+        facts[item["path"]].setdefault("module_items", []).append(
+            {
+                "module": item["module"],
+                "title": item["title"],
+                "workflow_state": item["workflow_state"],
+            }
+        )
+    for item in web_items(archive):
+        assignment = item["assignment"] or {}
+        facts[item["path"]].update(
+            page_title=item["title"],
+            page_workflow_state=item["workflow_state"],
+            page_is_assignment=item["is_assignment"],
+            page_intended_role=item["intended_role"] or None,
+            page_is_syllabus=item["is_syllabus"],
+            page_lock_at=parse_utc(assignment.get("lock_at")),
+            page_unlock_at=parse_utc(assignment.get("unlock_at")),
+            page_only_visible_to_overrides=_flag(
+                assignment.get("only_visible_to_overrides")
+            ),
+            page_hide_in_gradebook=_flag(assignment.get("hide_in_gradebook")),
+            page_module_locked=_flag(assignment.get("module_locked")),
+        )
+        for linked in item["embedded_files"]:
+            facts[posixpath.normpath(linked)].setdefault(
+                "linked_from_pages", []
+            ).append(item["path"])
+    for path, member in facts.items():
+        # Canvas reorders the manifest's resources between exports, and the
+        # version digests these facts.
+        if "linked_from_pages" in member:
+            member["linked_from_pages"] = sorted(set(member["linked_from_pages"]))
+        key = _config_key({"path": path, "title": member.get("page_title") or ""})
+        entry = config.get(key) if key else None
+        if entry:
+            folder = entry.get("folder") or {}
+            member.update(
+                api_published=_flag(entry.get("published")),
+                api_hidden=_flag(entry.get("hidden")),
+                api_locked=_flag(entry.get("locked")),
+                api_lock_at=parse_utc(entry.get("lock_at")),
+                api_unlock_at=parse_utc(entry.get("unlock_at")),
+                api_folder_hidden=_flag(folder.get("hidden")),
+                api_folder_locked=_flag(folder.get("locked")),
+                api_url=entry.get("url"),
+            )
+    return dict(facts)
+
+
+def course_checksum(  # noqa: PLR0913
     archive: zipfile.ZipFile,
     published: dict[str, dict[str, Any]],
     config: dict[str, dict[str, Any]],
-    course_fields: list[str | None],
+    course_fields: list[Any],
+    facts: dict[str, dict[str, Any]],
 ) -> str:
     """Digest what a read of the course depends on, as ``canvas_course_checksum``.
 
-    It changes with a content member's bytes, the published set or a title, the
-    url config, or the fields of the course's own row, and not across Canvas's
-    no-op exports. Learn's digest leaves the last out because Learn writes the
-    course before it checks the digest. Here the digest decides whether the course
-    row is written at all, so a new course code has to move it.
+    It changes with a content member's bytes, the published set or a title, a
+    member's facts, the url config, or the fields of the course's own row, and
+    not across Canvas's no-op exports. Learn's digest leaves the course's fields
+    out because Learn writes the course before it checks the digest. Here the
+    digest decides whether the course row is written at all, so a new course code
+    has to move it.
     """
     digest = hashlib.md5(usedforsecurity=False)
     digest.update(f"parse_rule\t{PARSE_RULE}\n".encode())
     digest.update(json.dumps(course_fields).encode())
+    digest.update(json.dumps(facts, sort_keys=True, default=str).encode())
     for info in sorted(archive.infolist(), key=lambda info: info.filename):
         if info.filename in published or not info.filename.startswith(
             CHECKSUM_EXCLUDED

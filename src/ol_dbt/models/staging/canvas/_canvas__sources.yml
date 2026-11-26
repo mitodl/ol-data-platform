@@ -10,62 +10,142 @@ sources:
   - name: raw__canvas__s3__course_content
     description: >
       The newest Common Cartridge export of every Canvas course in the landing
-      zone (canvas/course_content/<course_id>/), parsed as MIT Learn parses it:
-      one row for the course and one for each published file of a type Learn
-      extracts text from, with the text Tika extracted. Loaded by the ol_dlt
-      canvas_content source, which appends a full set of rows for a course each
-      time its version changes; staging keeps each course's newest set.
+      zone (canvas/course_content/<course_id>/): one row for the course and one for
+      each member of the archive, whoever can see it, with what the export records
+      about the member and the text Tika extracted from a member of a text type
+      that MIT Learn loads (learn_published).
+      The learn_* columns are MIT Learn's reading of the archive at the time of the
+      read (Learn-parity data). Loaded by the ol_dlt canvas_content source, which
+      appends a full set of rows for a course each time its version changes;
+      staging keeps each course's newest set. Rows written before parse rule 2 have
+      a null parse_rule and another shape (one row per file Learn would load, with
+      run_readable_id, file_key, source_path, title, content_title, url and
+      course_url columns), and staging leaves them out. See
+      stg__canvas__s3__course_content for what each fact column means.
     columns:
     - name: course_id
       description: str, the Canvas course id, the export's folder in the landing zone
     - name: content_kind
-      description: str, course, file, or unpublished for the one row marking a course
-        that left the landing zone
+      description: str, course, member, or unpublished for the one row marking a course
+        that left the landing zone (file on rows before parse rule 2)
     - name: archive_key
       description: str, S3 key of the .imscc the row was read from; null on an unpublished
         row
-    - name: run_readable_id
-      description: str, the id of the course's run in Learn, <course_id>-<course_code>+canvas
+    - name: parse_rule
+      description: bigint, the source's cartridge.PARSE_RULE when the row was read
     - name: course_code
       description: str, course_code in the course's settings; on a course row
     - name: course_title
       description: str, title in the course's settings; on a course row
-    - name: course_url
-      description: str, the course's home in Canvas; on a course row
+    - name: canvas_domain
+      description: str, canvas_domain in the export's context.xml; on a course row
+    - name: canvas_course_id
+      description: str, course_id in the export's context.xml; on a course row
     - name: course_start_at
       description: str, start_at in the course's settings as Canvas wrote it; on a
         course row
     - name: course_end_at
       description: str, conclude_at in the course's settings as Canvas wrote it; on
         a course row
-    - name: file_key
-      description: str, ContentFile.key, an edX-style module id built from the file's
-        folder and name; on a file row
-    - name: source_path
-      description: str, the file's path in the archive
+    - name: files_tab_hidden
+      description: boolean, the course's tab_configuration hides the Files tab; on
+        a course row
+    - name: public_syllabus
+      description: str, public_syllabus in the course's settings; on a course row
+    - name: public_syllabus_to_auth
+      description: str, public_syllabus_to_auth in the course's settings; on a course
+        row
+    - name: member_path
+      description: str, the member's path in the archive; on a member row
     - name: file_extension
-      description: str, the file's extension with its dot, in lower case
-    - name: title
-      description: str, the title of the module item, file or page that publishes
-        the file, or one derived from the file name when it has none
-    - name: content_title
-      description: str, the title of the module item, file or page that publishes
-        the file; empty for a file only a page links to
-    - name: url
-      description: str, the file's, assignment's or page's Canvas URL, from the export's
-        metadata JSON; null when the metadata has no entry for it
+      description: str, the member's extension with its dot, in lower case
     - name: file_md5
-      description: str, MD5 of the file's bytes; null when the file was too large
-        to read
+      description: str, MD5 of the member's bytes; null when its text was not read,
+        or it was too large to read
     - name: file_size_bytes
-      description: bigint, uncompressed size of the file in the archive
+      description: bigint, uncompressed size of the member in the archive
     - name: content
-      description: str, the text Tika extracted from the file. Null unless extraction_status
+      description: str, the text Tika extracted from the member. Null unless extraction_status
         is extracted
     - name: extraction_status
-      description: str, extracted, empty (Tika found no text), or failed
+      description: str, extracted, empty, failed, unreadable or not_read
+    - name: pdf_is_valid
+      description: boolean, pypdf can read the PDF; null for a member that is not
+        a PDF or was not read
+    - name: in_tutor_folder
+      description: boolean, the member is under web_resources/ai/tutor/
+    - name: draft_in_parent_path
+      description: boolean, the member's folder path contains "draft"
+    - name: folder_restricted
+      description: boolean, the member is in a folder files_meta.xml marks hidden
+        or locked; null outside web_resources/
+    - name: files_display_name
+      description: str, display_name in the member's files_meta.xml entry
+    - name: files_hidden
+      description: boolean, hidden in the member's files_meta.xml entry
+    - name: files_locked
+      description: boolean, locked in the member's files_meta.xml entry
+    - name: files_visibility
+      description: str, visibility in the member's files_meta.xml entry
+    - name: files_lock_at
+      description: timestamp, lock_at in the member's files_meta.xml entry, read as
+        UTC
+    - name: files_unlock_at
+      description: timestamp, unlock_at in the member's files_meta.xml entry, read
+        as UTC
+    - name: module_items
+      description: str, JSON array of the module items holding the member
+    - name: page_title
+      description: str, a page's or assignment's title
+    - name: page_workflow_state
+      description: str, a page's or assignment's workflow_state
+    - name: page_is_assignment
+      description: boolean, the page is an assignment's
+    - name: page_intended_role
+      description: str, the page's intendedEndUserRole in the manifest
+    - name: page_is_syllabus
+      description: boolean, the manifest marks the page as the syllabus
+    - name: page_lock_at
+      description: timestamp, an assignment's lock_at, read as UTC
+    - name: page_unlock_at
+      description: timestamp, an assignment's unlock_at, read as UTC
+    - name: page_only_visible_to_overrides
+      description: boolean, an assignment's only_visible_to_overrides
+    - name: page_hide_in_gradebook
+      description: boolean, an assignment's hide_in_gradebook
+    - name: page_module_locked
+      description: boolean, an assignment's module_locked
+    - name: linked_from_pages
+      description: str, JSON array of the pages that link to the member
+    - name: api_published
+      description: boolean, published in the member's metadata JSON entry
+    - name: api_hidden
+      description: boolean, hidden in the member's metadata JSON entry
+    - name: api_locked
+      description: boolean, locked in the member's metadata JSON entry
+    - name: api_lock_at
+      description: timestamp, lock_at in the member's metadata JSON entry, as UTC
+    - name: api_unlock_at
+      description: timestamp, unlock_at in the member's metadata JSON entry, as UTC
+    - name: api_folder_hidden
+      description: boolean, the member's folder is hidden, per the metadata JSON
+    - name: api_folder_locked
+      description: boolean, the member's folder is locked, per the metadata JSON
+    - name: api_url
+      description: str, the member's Canvas URL in the metadata JSON
+    - name: learn_published
+      description: boolean, Learn-parity. MIT Learn's rules treat the member as visible
+        to students at the time of the read
+    - name: learn_key
+      description: str, Learn-parity. ContentFile.key; null unless learn_published
+    - name: learn_title
+      description: str, Learn-parity. ContentFile.title; null unless learn_published
+    - name: learn_content_title
+      description: str, Learn-parity. ContentFile.content_title
+    - name: learn_url
+      description: str, Learn-parity. ContentFile.url
     - name: course_version
-      description: str, digest of the archive's members, the course's published files
-        and its metadata JSON
+      description: str, digest of the archive's members and their facts, the course's
+        published files and its metadata JSON
     - name: course_retrieved_at
       description: timestamp, when this set of the course's rows was read

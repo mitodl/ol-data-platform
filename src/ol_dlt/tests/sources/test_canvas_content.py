@@ -283,24 +283,159 @@ def test_url_config_keys_files_by_path_and_items_by_name() -> None:
     assert config_by_key["Week"]["url"] == "https://p"
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, None),
+        ("nil", None),
+        ("not a date", None),
+        # Canvas writes UTC with no offset.
+        ("2026-06-01T01:00:00", datetime(2026, 6, 1, 1, tzinfo=UTC)),
+        ("2026-06-01T01:00:00Z", datetime(2026, 6, 1, 1, tzinfo=UTC)),
+        ("2026-06-01T01:00:00-04:00", datetime(2026, 6, 1, 5, tzinfo=UTC)),
+    ],
+)
+def test_parse_utc_reads_canvas_dates_as_utc(
+    value: str | None, expected: datetime | None
+) -> None:
+    assert cartridge.parse_utc(value) == expected
+
+
+def test_member_facts_record_what_canvas_says_without_judging_it() -> None:
+    tabs = json.dumps([{"id": cartridge.FILES_TAB_ID, "hidden": True}])
+    link = '<a href="$IMS-CC-FILEBASE$/notes/linked.pdf">x</a>'
+    members = {
+        cartridge.MANIFEST: (
+            f"<manifest {_IMS}><organizations><item>"
+            '<item identifierref="m"/></item></organizations><resources>'
+            f"{_webcontent('h', 'web_resources/notes/hidden.pdf')}"
+            f"{_webcontent('s', 'web_resources/secret/a.pdf')}"
+            f"{_webcontent('m', 'web_resources/notes/old.pdf')}"
+            f"{_webcontent('l', 'web_resources/notes/linked.pdf')}"
+            f"{_page('p', 'wiki_content/week.html')}"
+            '<resource identifier="g" type="associatedcontent" href="g1/a.html">'
+            '<file href="g1/a.html"/><file href="g1/assignment_settings.xml"/>'
+            "</resource></resources></manifest>"
+        ),
+        cartridge.FILES_META: (
+            f'<fileMeta {_CC}><folders><folder path="secret"><locked>true</locked>'
+            '</folder></folders><files><file identifier="h"><hidden>true</hidden>'
+            "<display_name>Hidden</display_name>"
+            "<lock_at>2026-05-01T04:00:00</lock_at></file></files></fileMeta>"
+        ),
+        cartridge.MODULE_META: (
+            f"<modules {_CC}><module><title>Week 1</title><items><item>"
+            "<workflow_state>unpublished</workflow_state><title>Old reading</title>"
+            "<identifierref>m</identifierref><content_type>Attachment</content_type>"
+            "</item></items></module></modules>"
+        ),
+        "web_resources/notes/hidden.pdf": "x",
+        "web_resources/secret/a.pdf": "x",
+        "web_resources/notes/old.pdf": "x",
+        "web_resources/notes/linked.pdf": "x",
+        "wiki_content/week.html": _html("Week", state="unpublished", body=link),
+        "g1/a.html": "<html></html>",
+        "g1/assignment_settings.xml": (
+            f"<assignment {_CC}><title>PS1</title>"
+            "<workflow_state>published</workflow_state>"
+            "<hide_in_gradebook>true</hide_in_gradebook>"
+            "<unlock_at>2026-07-01T00:00:00</unlock_at></assignment>"
+        ),
+    }
+    archive = _open(
+        _archive(members, settings=f"<tab_configuration>{tabs}</tab_configuration>")
+    )
+    config_by_key = {
+        "/notes/linked.pdf": {
+            "published": False,
+            "lock_at": "2026-05-02T00:00:00Z",
+            "folder": {"hidden": True},
+            "url": "https://canvas.mit.edu/files/9",
+        },
+        "Week": {"url": "https://canvas.mit.edu/pages/week"},
+    }
+    facts = cartridge.member_facts(archive, config_by_key)
+
+    hidden = facts["web_resources/notes/hidden.pdf"]
+    assert hidden["files_hidden"] is True
+    assert hidden["files_display_name"] == "Hidden"
+    assert hidden["files_lock_at"] == datetime(2026, 5, 1, 4, tzinfo=UTC)
+    assert hidden["folder_restricted"] is False
+    assert facts["web_resources/secret/a.pdf"]["folder_restricted"] is True
+    assert facts["web_resources/notes/old.pdf"]["module_items"] == [
+        {"module": "Week 1", "title": "Old reading", "workflow_state": "unpublished"}
+    ]
+    linked = facts["web_resources/notes/linked.pdf"]
+    assert linked["linked_from_pages"] == ["wiki_content/week.html"]
+    assert linked["api_published"] is False
+    assert linked["api_folder_hidden"] is True
+    assert linked["api_lock_at"] == datetime(2026, 5, 2, tzinfo=UTC)
+    assert linked["api_url"] == "https://canvas.mit.edu/files/9"
+    week = facts["wiki_content/week.html"]
+    assert week["page_workflow_state"] == "unpublished"
+    assert week["page_is_assignment"] is False
+    assert week["api_url"] == "https://canvas.mit.edu/pages/week"
+    assignment = facts["g1/a.html"]
+    assert assignment["page_title"] == "PS1"
+    assert assignment["page_is_assignment"] is True
+    assert assignment["page_hide_in_gradebook"] is True
+    assert assignment["page_only_visible_to_overrides"] is False
+    assert assignment["page_unlock_at"] == datetime(2026, 7, 1, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "<title>Reading</title><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        "<workflow_state>active</workflow_state><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        # Learn reads every item's title, so an unpublished one fails too.
+        "<workflow_state>unpublished</workflow_state><identifierref>m</identifierref>"
+        "<content_type>Attachment</content_type>",
+        # And every item's content_type, whether or not it holds files.
+        "<workflow_state>active</workflow_state><title>Reading</title>"
+        "<identifierref>nothing</identifierref>",
+    ],
+)
+def test_a_malformed_module_item_fails_the_course_as_in_learn(item: str) -> None:
+    members = {
+        cartridge.MANIFEST: (
+            f"<manifest {_IMS}><organizations><item><item identifierref='m'/></item>"
+            f"</organizations><resources>{_webcontent('m', 'web_resources/a.pdf')}"
+            "</resources></manifest>"
+        ),
+        cartridge.MODULE_META: (
+            f"<modules {_CC}><module><title>Week 1</title><items><item>{item}"
+            "</item></items></module></modules>"
+        ),
+    }
+    with pytest.raises(AttributeError):
+        cartridge.module_items(_open(_archive(members)))
+
+
 def test_the_checksum_ignores_export_noise_and_follows_the_published_set() -> None:
     def checksum(
         manifest_note: str,
         published: dict[str, dict[str, Any]],
         fields: list[str | None] | None = None,
+        facts: dict[str, dict[str, Any]] | None = None,
     ) -> str:
         members = {
             cartridge.MANIFEST: _manifest([]) + manifest_note,
             "web_resources/a.pdf": "x",
         }
         return cartridge.course_checksum(
-            _open(_archive(members)), published, {}, fields or []
+            _open(_archive(members)), published, {}, fields or [], facts or {}
         )
 
     item = {"web_resources/a.pdf": {"title": "A"}}
     assert checksum("", item) == checksum("<!-- exported later -->", item)
     assert checksum("", item) != checksum("", {})
     assert checksum("", item) != checksum("", item, ["A new course code"])
+    # A hidden file is in no published set, but its facts are its version.
+    hidden = {"web_resources/b.pdf": {"files_hidden": True}}
+    assert checksum("", item) != checksum("", item, facts=hidden)
 
 
 def test_the_checksum_covers_a_published_member_under_the_settings_folder() -> None:
@@ -308,7 +443,7 @@ def test_the_checksum_covers_a_published_member_under_the_settings_folder() -> N
 
     def checksum(body: str, published: dict[str, dict[str, Any]]) -> str:
         archive = _open(_archive({syllabus: body}))
-        return cartridge.course_checksum(archive, published, {}, [])
+        return cartridge.course_checksum(archive, published, {}, [], {})
 
     item = {syllabus: {"title": "Syllabus"}}
     assert checksum("<p>Old</p>", item) != checksum("<p>New</p>", item)
@@ -339,22 +474,23 @@ def test_derived_title() -> None:
     assert canvas_content.derived_title("a/lecture-1_notes.pdf") == "Lecture 1 Notes"
 
 
-def test_documents_takes_published_text_files_and_groups_them_by_key() -> None:
+def test_only_text_members_students_can_reach_are_read() -> None:
     names = [
-        "web_resources/a.pdf",
-        "web_resources/a.docx",
-        "web_resources/movie.mp4",
         "web_resources/not-published.pdf",
         "web_resources/draft_notes/b.pdf",
+        "web_resources/movie.mp4",
+        "course_settings/syllabus.html",
     ]
-    published: dict[str, dict[str, Any]] = {
-        name: {} for name in names if name != names[3]
-    }
     archive = _open(_archive(dict.fromkeys(names, "x")))
-    members = canvas_content.documents(archive, published, "1-A+canvas")
-    assert [
-        [info.filename for info in candidates] for candidates in members.values()
-    ] == [["web_resources/a.docx", "web_resources/a.pdf"]]
+    published: dict[str, dict[str, Any]] = {
+        name: {} for name in names if name != "web_resources/not-published.pdf"
+    }
+    read = [
+        info.filename
+        for info in archive.infolist()
+        if canvas_content.is_text_member(info, published)
+    ]
+    assert read == ["web_resources/draft_notes/b.pdf", "course_settings/syllabus.html"]
 
 
 @pytest.mark.parametrize(
@@ -451,9 +587,18 @@ def _export(course_id: str, version: str, members: dict[str, str]) -> dict[str, 
 
 _MEMBERS = {
     cartridge.MANIFEST: _manifest(
-        [_webcontent("a", "web_resources/notes.txt"), _page("p", "wiki_content/w.html")]
+        [
+            _webcontent("a", "web_resources/notes.txt"),
+            _webcontent("h", "web_resources/hidden.txt"),
+            _page("p", "wiki_content/w.html"),
+        ]
+    ),
+    cartridge.FILES_META: (
+        f'<fileMeta {_CC}><files><file identifier="h"><hidden>true</hidden>'
+        "</file></files></fileMeta>"
     ),
     "web_resources/notes.txt": "Notes",
+    "web_resources/hidden.txt": "Hidden",
     "wiki_content/w.html": _html("Week 1"),
 }
 
@@ -485,25 +630,48 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
 
 
 @pytest.mark.usefixtures("test_profile", "bucket")
-def test_load_writes_the_course_and_its_files(fake_tika: FakeTika) -> None:
+def test_load_writes_the_course_and_every_member(fake_tika: FakeTika) -> None:
     rows = _load()
     course = next(row for row in rows if row["content_kind"] == "course")
-    assert course["run_readable_id"] == "42-6.100+canvas"
+    assert course["parse_rule"] == cartridge.PARSE_RULE
+    assert course["course_code"] == "6.100"
     assert course["course_title"] == "Intro"
-    assert course["course_url"] == "https://canvas.mit.edu/courses/42/"
+    assert course["canvas_domain"] == "canvas.mit.edu"
+    assert course["canvas_course_id"] == "42"
     assert course["course_start_at"] == "2026-02-01T05:00:00"
+    assert course["files_tab_hidden"] is False
 
-    files = {r["source_path"]: r for r in rows if r["content_kind"] == "file"}
-    notes = files["web_resources/notes.txt"]
+    members = {r["member_path"]: r for r in rows if r["content_kind"] == "member"}
+    assert set(members) == {
+        cartridge.MANIFEST,
+        cartridge.SETTINGS,
+        cartridge.CONTEXT,
+        cartridge.FILES_META,
+        "web_resources/notes.txt",
+        "wiki_content/w.html",
+        "web_resources/hidden.txt",
+    }
+    notes = members["web_resources/notes.txt"]
+    assert notes["learn_published"] is True
     assert (
-        notes["file_key"] == "block-v1:42-6.100+canvas+type@web_resources+block@notes"
+        notes["learn_key"] == "block-v1:42-6.100+canvas+type@web_resources+block@notes"
     )
-    assert notes["title"] == notes["content_title"] == "notes.txt"
-    assert notes["url"] == "https://canvas.mit.edu/courses/42/files/1/"
+    assert notes["learn_title"] == notes["learn_content_title"] == "notes.txt"
+    assert notes["learn_url"] == "https://canvas.mit.edu/courses/42/files/1/"
     # Stripped, as Learn strips what Tika returns.
     assert notes["content"] == "text of 5 bytes"
     assert notes["extraction_status"] == "extracted"
-    assert files["wiki_content/w.html"]["title"] == "Week 1"
+    assert members["wiki_content/w.html"]["learn_title"] == "Week 1"
+    assert members["wiki_content/w.html"]["page_title"] == "Week 1"
+    # A hidden file lands with what hid it, without its text.
+    hidden = members["web_resources/hidden.txt"]
+    assert hidden["extraction_status"] == "not_read"
+    assert hidden["content"] is None
+    assert hidden["files_hidden"] is True
+    assert hidden["learn_published"] is False
+    assert hidden["learn_key"] is None
+    # The settings Canvas rewrites on every export are rows, not read.
+    assert members[cartridge.SETTINGS]["extraction_status"] == "not_read"
     assert set(fake_tika.calls) == {"text/plain", "text/html"}
 
 
@@ -541,9 +709,12 @@ def test_a_new_course_code_alone_writes_the_new_run(bucket: FakeS3) -> None:
     bucket.modified[f"{root}.imscc"] = _NOW + timedelta(hours=6)
     rows = _load()
     newest = max(row["course_retrieved_at"] for row in rows)
-    assert {
-        row["run_readable_id"] for row in rows if row["course_retrieved_at"] == newest
-    } == {"42-6.100L+canvas"}
+    latest = [row for row in rows if row["course_retrieved_at"] == newest]
+    assert {row["course_code"] for row in latest if row["course_code"]} == {"6.100L"}
+    assert {row["learn_key"] for row in latest if row["learn_key"]} == {
+        "block-v1:42-6.100L+canvas+type@web_resources+block@notes",
+        "block-v1:42-6.100L+canvas+type@wiki_content+block@w",
+    }
 
 
 @pytest.mark.usefixtures("test_profile", "fake_tika")
@@ -606,8 +777,8 @@ def test_a_file_tika_fails_on_is_recorded_and_read_again_later(
     fake = FakeTika(fail=True, probe_ok=True)
     monkeypatch.setattr(canvas_content.tika, "client_for_profile", lambda: fake)
     rows = _load()
-    statuses = {r["extraction_status"] for r in rows if r["content_kind"] == "file"}
-    assert statuses == {"failed"}
+    statuses = {r["extraction_status"] for r in rows if r["content_kind"] == "member"}
+    assert statuses == {"failed", "not_read"}
     # Another read waits WAIT_BETWEEN_READS, so the second load reads nothing.
     calls = len(fake.calls)
     _load()
@@ -651,6 +822,7 @@ def test_a_run_of_failures_is_probed_before_the_rest_of_the_course() -> None:
             archive_key="k",
             published=published,
             config_by_key={},
+            facts={},
             version="v",
         )
     pool.shutdown(wait=False, cancel_futures=True)
@@ -660,7 +832,7 @@ def test_a_run_of_failures_is_probed_before_the_rest_of_the_course() -> None:
 def _read(
     members: dict[str, str], tika_client: FakeTika, course_id: str = "42"
 ) -> list[dict[str, Any]]:
-    """Read a course with every member published, and return its file rows."""
+    """Read a course with every member published, and return its member rows."""
     archive = _open(_archive(members))
     pool = canvas_content.ThreadPoolExecutor(max_workers=1)
     rows, _bytes, _retry = canvas_content.read_course(
@@ -671,42 +843,63 @@ def _read(
         archive_key="k",
         published={name: {} for name in members},
         config_by_key={},
+        facts={},
         version="v",
     )
     pool.shutdown(wait=False, cancel_futures=True)
-    return [row for row in rows if row["content_kind"] == "file"]
+    return [row for row in rows if row["member_path"] in members]
 
 
-@pytest.mark.parametrize(
-    ("members", "kept"),
-    [
-        # The PDF sorts last and cannot be read, so the docx is the one with text.
-        ({"web_resources/a.docx": "x", "web_resources/a.pdf": "bad"}, ".docx"),
-        ({"web_resources/a.docx": "x", "web_resources/a.txt": "y"}, ".txt"),
-    ],
-)
-def test_the_last_file_with_text_is_the_one_a_key_keeps(
-    members: dict[str, str], kept: str
-) -> None:
-    (row,) = _read(members, FakeTika())
-    assert row["file_extension"] == kept
+def test_every_file_of_a_learn_key_is_its_own_row() -> None:
+    """Learn's one-file-per-key choice is the Learn view's to make."""
+    rows = _read({"web_resources/a.docx": "x", "web_resources/a.txt": "y"}, FakeTika())
+    assert [(row["member_path"], row["extraction_status"]) for row in rows] == [
+        ("web_resources/a.docx", "extracted"),
+        ("web_resources/a.txt", "extracted"),
+    ]
+    assert {row["learn_key"] for row in rows} == {
+        "block-v1:42-6.100+canvas+type@web_resources+block@a"
+    }
+
+
+def test_a_pdf_pypdf_cannot_read_still_goes_to_tika() -> None:
+    tika_client = FakeTika()
+    (row,) = _read({"web_resources/bad.pdf": "not a pdf"}, tika_client)
+    assert tika_client.calls == ["application/pdf"]
+    assert row["pdf_is_valid"] is False
     assert row["extraction_status"] == "extracted"
+    assert row["content"] == "text of 9 bytes"
 
 
-def test_a_key_with_no_readable_file_is_failed() -> None:
-    (row,) = _read(
-        {"web_resources/a.pdf": "bad", "web_resources/a.txt": ""}, FakeTika()
-    )
-    assert row["file_extension"] == ".pdf"
-    assert row["extraction_status"] == "failed"
+def test_members_are_flagged_where_learn_would_drop_them() -> None:
+    rows = {
+        row["member_path"]: row
+        for row in _read(
+            {
+                f"{cartridge.TUTOR_FOLDER}set1/solution.pdf": "x",
+                "web_resources/rough_drafts/notes.txt": "x",
+                "web_resources/notes.txt": "x",
+            },
+            FakeTika(),
+        )
+    }
+    tutor = rows[f"{cartridge.TUTOR_FOLDER}set1/solution.pdf"]
+    assert tutor["in_tutor_folder"] is True
+    assert tutor["extraction_status"] == "extracted"
+    assert rows["web_resources/rough_drafts/notes.txt"]["draft_in_parent_path"] is True
+    assert rows["web_resources/notes.txt"]["draft_in_parent_path"] is False
+    assert rows["web_resources/notes.txt"]["in_tutor_folder"] is False
 
 
-def test_files_that_never_reach_tika_are_no_reason_to_probe_it() -> None:
-    members = {f"web_resources/{number}.pdf": "bad" for number in range(10)}
+def test_files_that_never_reach_tika_are_no_reason_to_probe_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(canvas_content, "MAX_FILE_BYTES", 3)
+    members = {f"web_resources/{number}.pdf": "too big" for number in range(10)}
     fake = FakeTika(fail=True)
     rows = _read(members, fake)
     assert fake.calls == []
-    assert {row["extraction_status"] for row in rows} == {"failed"}
+    assert {row["extraction_status"] for row in rows} == {"unreadable"}
 
 
 def test_an_unreadable_file_does_not_hide_a_tika_outage() -> None:
@@ -729,7 +922,7 @@ def test_a_member_zipfile_refuses_is_failed(
     monkeypatch.setattr(zipfile.ZipFile, "read", refuse, raising=True)
     archive = zipfile.ZipFile(io.BytesIO(_zip_of({"web_resources/a.txt": "x"})))
     extraction = canvas_content._read_member(  # noqa: SLF001
-        FakeTika(), archive, archive.getinfo("web_resources/a.txt"), {}
+        FakeTika(), archive, archive.getinfo("web_resources/a.txt"), {}, {}
     )
     assert extraction == (None, "unreadable", False)
 
@@ -798,21 +991,23 @@ def test_an_oversized_file_is_failed_without_being_read(
         archive,
         archive.getinfo("web_resources/big.txt"),
         md5s,
+        {},
     )
     assert extraction == (None, "unreadable", False)
     assert md5s == {}
     assert tika_client.calls == []
 
 
-def test_an_unreadable_pdf_is_failed_without_going_to_tika() -> None:
-    tika_client = FakeTika()
-    for content in ("not a pdf", ""):
-        archive = _open(_archive({"web_resources/bad.pdf": content}))
-        extraction = canvas_content._read_member(  # noqa: SLF001
-            tika_client,
-            archive,
-            archive.getinfo("web_resources/bad.pdf"),
-            {},
-        )
-        assert extraction == (None, "unreadable", False)
-    assert tika_client.calls == []
+@pytest.mark.parametrize(("body", "valid"), [(b"not a pdf", False), (None, True)])
+def test_a_pdf_is_noted_as_readable_by_pypdf_or_not(
+    body: bytes | None, *, valid: bool
+) -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as writer:
+        writer.writestr("web_resources/a.pdf", body or _pdf())
+    archive = zipfile.ZipFile(buffer)
+    valid_pdfs: dict[str, bool] = {}
+    canvas_content._read_member(  # noqa: SLF001
+        FakeTika(), archive, archive.getinfo("web_resources/a.pdf"), {}, valid_pdfs
+    )
+    assert valid_pdfs == {"web_resources/a.pdf": valid}

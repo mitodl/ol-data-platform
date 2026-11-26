@@ -8,18 +8,26 @@
 
   Each course has the one run Learn creates for it. Learn keeps a Canvas resource
   unpublished and in test mode, which is for its Sync task to set, so neither is
-  here.
+  here. Learn's fallbacks are reproduced: a course with no title in its settings
+  is "canvas course <id>", and a missing domain or Canvas id reads "None" in the
+  URL, as Python formats it.
 #}
 with courses as (select * from {{ ref("stg__canvas__s3__course_content") }} where coursecontent_kind = 'course')
 
 select
     'canvas' as etl_source,
     course_id,
-    replace(courserun_readable_id, '+canvas', '') as readable_id,
-    courserun_readable_id as run_id,
+    replace({{ canvas_run_readable_id("course_id", "course_code") }}, '+canvas', '') as readable_id,
+    {{ canvas_run_readable_id("course_id", "course_code") }} as run_id,
     course_code,
-    course_title as title,
-    course_url as url,
+    coalesce(course_title, concat('canvas course ', course_id)) as title,
+    concat(
+        'https://',
+        coalesce(course_canvas_domain, 'None'),
+        '/courses/',
+        coalesce(course_canvas_id, 'None'),
+        '/'
+    ) as url,
     course_start_on as start_date,
     course_end_on as end_date,
     coursecontent_retrieved_on as last_modified
