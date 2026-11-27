@@ -73,3 +73,64 @@
         and for an account no longer under the manager. -#}
     'America/New_York'
 {%- endmacro %}
+
+
+{% macro google_ads_clean_keyword(keyword_expr) -%}
+    {#- ad_opt_v2's clean_keyword_text: no quotes, brackets or +, one space between words, lowercase. -#}
+    lower(trim({{ regexp_replace_all(regexp_replace_all(keyword_expr, "'[''\"+\\[\\]]'", "''"), "'\\s+'", "' '") }}))
+{%- endmacro %}
+
+
+{% macro google_ads_campaign_region(campaign_expr) -%}
+    {#- ad_opt_v2's region rule: the first "-"-separated part naming USA/US, or A, B or C (optionally "Region A"). -#}
+    {%- set pattern = "'(?:^|-)(?:[^-]*\\b(USA?)\\b|\\s*(?:Region )?([ABC])(?:[ /(]|\\s*(?:-|$)))'" -%}
+    case
+        when {{ regexp_extract_or_null(campaign_expr, pattern, 1) }} is not null then 'USA'
+        else {{ regexp_extract_or_null(campaign_expr, pattern, 2) }}
+    end
+{%- endmacro %}
+
+
+{% macro google_ads_is_search_campaign(campaign_name_expr, channel_type_expr) -%}
+    {#- ad_opt_v2's shared campaign filter on every pull. -#}
+    {{ channel_type_expr }} = 'SEARCH'
+    and {{ campaign_name_expr }} not like 'EXCLUDE%'
+    and {{ campaign_name_expr }} not like '%Experiment%'
+{%- endmacro %}
+
+
+{% macro google_ads_is_excluded_campaign(campaign_name_expr) -%}
+    {#- ad_opt_v2's excluded_campaign_patterns: Search remarketing targets past visitors, a
+        different audience, so it is left out of training and planning. -#}
+    lower({{ campaign_name_expr }}) like '%remarketing%'
+{%- endmacro %}
+
+
+{% macro google_ads_excluded_campaigns(source_relation) -%}
+    select distinct named.course, named.campaign_name
+    from {{ source_relation }} as named
+    where {{ google_ads_is_excluded_campaign('named.campaign_name') }}
+{%- endmacro %}
+
+
+{% macro google_ads_search_network_only(course_expr, ad_network_expr) -%}
+    {#- ad_opt_v2's MicroMasters ad_networks: Search Partners took most of their clicks at a
+        few cents each, so their pull keeps the Google Search network only. -#}
+    (
+        {{ course_expr }} is null
+        or {{ course_expr }} not in ('mm_dedp', 'mm_ds', 'mm_finance', 'mm_pom', 'mm_scm')
+        or {{ ad_network_expr }} = 'SEARCH'
+    )
+{%- endmacro %}
+
+
+{% macro google_ads_conversion_actions() -%}
+    {#- The conversion actions that count, by name; each account names its customer
+        conversion differently, and no two accounts share a name. -#}
+    (
+        'MIT Learn (web) purchase'
+        , 'HubSpot - Customer'
+        , 'HubSpot - Customers'
+        , 'MITx Online Production (GA4 for Catalog Site)  (web) purchase'
+    )
+{%- endmacro %}

@@ -1,0 +1,564 @@
+---
+version: 2
+
+models:
+- name: int__google_ads__keyword_daily
+  description: Each course's keyword clicks, cost and conversions per day, as ad_opt_v2's
+    keyword-day panel after clean_kw_day_panel (the KwDayPanel schema in ads-optimizer).
+    Keeps Search campaigns not named EXCLUDE or Experiment, the three keyword match
+    types, days from the account's history_start_date, the Google Search network only
+    for the MicroMasters courses, and ad group keywords with clicks or counted conversions.
+    Where ad_opt_v2 keeps one ad group's row for a keyword, this adds the ad groups
+    together.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
+  - name: report_date
+    description: date, the report day in the account's time zone
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the campaign's latest name, from int__google_ads__campaign_names
+    tests:
+    - not_null
+  - name: campaign_region
+    description: str, USA, A, B or C, from the campaign name; null when the name has
+      none
+  - name: keyword_text
+    description: str, keyword without quotes, brackets or +, single-spaced, lowercase
+    tests:
+    - not_null
+  - name: keyword_match_type
+    description: str, Broad, Phrase or Exact
+    tests:
+    - accepted_values:
+        arguments:
+          values: [Broad, Phrase, Exact]
+  - name: clicks
+    description: bigint, clicks; 0 on rows with conversions but no clicks
+  - name: cost
+    description: decimal, cost in the account currency, to the cent
+  - name: all_conversions
+    description: double, all_conversions of the counted conversion actions (google_ads_conversion_actions),
+      to two decimals; 0 when there are none
+  - name: currency_code
+    description: str, account currency; null on rows with conversions but no clicks
+  - name: keyword_first_page_cpc
+    description: decimal, Google's first-page bid estimate; the highest when ad groups
+      combine
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - account_id
+        - report_date
+        - campaign_name
+        - keyword_text
+        - keyword_match_type
+
+- name: int__google_ads__campaign_daily
+  description: Each course's Search campaign impressions and impression shares per
+    day, as ad_opt_v2's campaign-day report (reports/campaign-day-report.csv). Keeps
+    campaigns not named EXCLUDE or Experiment, with impressions, from the account's
+    history_start_date.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
+  - name: report_date
+    description: date, the report day in the account's time zone
+    tests:
+    - not_null
+  - name: campaign_id
+    description: bigint, campaign id
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the campaign's latest name, from int__google_ads__campaign_names
+  - name: impressions
+    description: bigint, impressions
+  - name: search_impression_share
+    description: double, share of eligible impressions received; Google reports under
+      10% as 0.0999; null when not eligible
+  - name: search_budget_lost_impression_share
+    description: double, share of eligible impressions lost to budget
+  - name: search_rank_lost_impression_share
+    description: double, share of eligible impressions lost to ad rank
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - account_id
+        - report_date
+        - campaign_id
+
+- name: int__google_ads__campaign_changes
+  description: >
+    Each course's Search campaign changes, the input of ad_opt_v2's parse_change_history:
+    budget, campaign status, start and end, ad group status, and keyword and negative
+    keyword changes. The change history report comes first, then the JSONL after the
+    report's last change, then the API after the JSONL's last change. Campaign names
+    are the campaign's latest name: the API's from int__google_ads__campaign_names,
+    and
+    the report's and JSONL's through the rename events there. The user who made each
+    change is left out.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses;
+      null for a campaign no google_ads_campaign_courses row maps
+  - name: change_source
+    description: str, report, jsonl or api
+    tests:
+    - accepted_values:
+        arguments:
+          values: [report, jsonl, api]
+  - name: change_at
+    description: timestamp, when the change was made, in UTC
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the changed campaign's name; a shared budget's change has one
+      row per campaign using it
+    tests:
+    - not_null
+  - name: ad_group_name
+    description: str, the ad group for ad group and ad group keyword changes
+  - name: change_type
+    description: str, budget, campaign_status, campaign_start, campaign_end, ad_group_status,
+      keyword or negative_keyword
+    tests:
+    - accepted_values:
+        arguments:
+          values: [budget, campaign_status, campaign_start, campaign_end, ad_group_status,
+            keyword, negative_keyword]
+  - name: keyword_action
+    description: str, added, removed, paused or enabled, for keyword changes
+    tests:
+    - not_null:
+        config:
+          where: "change_type in ('keyword', 'negative_keyword')"
+  - name: keyword_text
+    description: str, keyword without quotes, brackets or +, lowercase, for keyword
+      changes
+  - name: keyword_match_type
+    description: str, Broad, Phrase or Exact, for keyword changes; an API keyword
+      with none given is Broad
+    tests:
+    - not_null:
+        config:
+          where: "change_type in ('keyword', 'negative_keyword')"
+  - name: previous_value
+    description: str, the value before the change, for budget, status, start and end
+      changes; a budget as a number, a status in lowercase, a date as YYYY-MM-DD;
+      null when the source gives only the new value
+  - name: new_value
+    description: str, the value after the change, in the same form; null for an end
+      date that was removed
+  - name: change_order
+    description: bigint, the change's place in the course's replay order; same-second
+      changes keep their source's order
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - change_order
+
+- name: int__google_ads__campaign_state
+  description: Each account's Search campaigns that are not removed, from its latest
+    daily snapshot, with budget, status, schedule and keyword, negative and location
+    counts, as ad_opt_v2's account-state snapshot. int__google_ads__campaign_courses
+    gives a campaign's course.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
+  - name: snapshot_date
+    description: date, the snapshot the state comes from
+    tests:
+    - not_null
+  - name: campaign_id
+    description: bigint, campaign id
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, campaign name
+  - name: campaign_region
+    description: str, USA, A, B or C from the campaign name; null when the name has
+      none
+  - name: campaign_is_excluded
+    description: boolean, true when the name has Remarketing, which ad_opt_v2 leaves
+      out of training and planning
+    tests:
+    - not_null
+  - name: campaign_status
+    description: str, enabled or paused
+  - name: campaign_start_at
+    description: timestamp, when the campaign starts, in UTC
+  - name: campaign_end_at
+    description: timestamp, when the campaign ends, in UTC; null when it has no end
+  - name: campaign_bidding_strategy_type
+    description: str, bidding strategy
+  - name: campaign_budget_amount
+    description: decimal, daily budget
+  - name: campaign_budget_is_shared
+    description: boolean, true when other campaigns use the same budget
+  - name: broad_keyword_count
+    description: bigint, enabled broad keywords in enabled ad groups
+  - name: phrase_keyword_count
+    description: bigint, enabled phrase keywords in enabled ad groups
+  - name: exact_keyword_count
+    description: bigint, enabled exact keywords in enabled ad groups
+  - name: unique_keyword_count
+    description: bigint, distinct enabled keyword texts in enabled ad groups
+  - name: ad_group_negative_keyword_count
+    description: bigint, enabled negative keywords in enabled ad groups
+  - name: campaign_negative_keyword_count
+    description: bigint, campaign-level negative keywords
+  - name: shared_negative_list_count
+    description: bigint, enabled shared negative keyword lists on the campaign
+  - name: shared_negative_keyword_count
+    description: bigint, keywords in those lists
+  - name: targeted_location_count
+    description: bigint, targeted locations
+  - name: excluded_location_count
+    description: bigint, excluded locations
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - account_id
+        - campaign_id
+
+- name: int__google_ads__campaign_names
+  description: Each Google Ads campaign's latest name, from the newest campaign snapshot
+    or daily report fetch, plus each earlier name it had in an API rename event. ad_opt_v2
+    pulls its panels with current names and maps older names to them (current_names
+    in parse_change_history); the other models here do the same with this table.
+  columns:
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
+  - name: campaign_id
+    description: bigint, campaign id
+    tests:
+    - not_null
+  - name: name
+    description: str, a name the campaign had; equals latest_name on its current-name
+      row
+    tests:
+    - not_null
+  - name: latest_name
+    description: str, the campaign's latest name
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - account_id
+        - campaign_id
+        - name
+
+- name: int__google_ads__campaign_courses
+  description: Each Google Ads campaign's course, the key the other models group by.
+    google_ads_campaign_courses maps a campaign by its campaign_id, or else by a pattern
+    its latest name matches (Program - UAI - %). A campaign that matches no row is
+    not here, and the other models keep its rows with no course.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: account_id
+    description: str, Google Ads client account id
+    tests:
+    - not_null
+  - name: campaign_id
+    description: bigint, campaign id
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the campaign's latest name
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think
+    tests:
+    - not_null
+  - name: product_readable_id
+    description: str, the course_readable_id or program_readable_id the campaign advertises,
+      when the seed gives one; the course, not a course run. DEDP's two tracks are
+      two programs in one course.
+  - name: product_name
+    description: str, the product's catalog title from dim_course or dim_program,
+      e.g. System Thinking
+  tests:
+  # A campaign two rules match would be counted in two courses.
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - account_id
+        - campaign_id
+      config:
+        error_if: '>0'
+
+- name: int__google_ads__campaign_versions
+  description: Each course's Search campaign versions, as ad_opt_v2's parse_change_history
+    writes them (campaign-summary.csv; the CampaignSummary schema in ads-optimizer).
+    The campaign's settings are replayed from int__google_ads__campaign_changes for
+    every day from its first keyword row, and consecutive days with the same budget,
+    serving status, keywords and negative keywords form one version. Non-serving versions
+    without keyword rows, and versions with no known budget, are left out. Keyword
+    lists are the configured keywords for campaigns created inside the history, and
+    otherwise the keywords with rows in the keyword-day panel.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
+    tests:
+    - not_null
+  - name: campaign_version
+    description: bigint, the version's number within the course, ordered by campaign
+      name and start date
+    tests:
+    - not_null
+  - name: keyword_set_id
+    description: str, ks_ and a number; versions with the same keyword lists share
+      it. See int__google_ads__campaign_keyword_sets.
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the campaign's latest name
+    tests:
+    - not_null
+  - name: campaign_region
+    description: str, USA, A, B or C, from the campaign name; null when it has none
+  - name: start_date
+    description: date, the version's first day
+    tests:
+    - not_null
+  - name: end_date
+    description: date, the day after the version's last day; null for the latest version
+  - name: campaign_serving_status
+    description: str, active, paused, removed, not_started (before the start date)
+      or ended (after the end date)
+    tests:
+    - not_null
+  - name: change_type
+    description: str, what changed from the previous version, separated by ";" (daily_budget,
+      campaign_<status>, keywords, negative_keywords), or first_seen
+  - name: daily_budget
+    description: decimal, the daily budget in the account currency
+    tests:
+    - not_null
+  - name: match_types
+    description: str, the match types with keywords, in the order Broad; Phrase; Exact
+  - name: keyword_source
+    description: str, configured (from the change history) or clicked (from the keyword-day
+      panel)
+    tests:
+    - accepted_values:
+        arguments:
+          values: [configured, clicked]
+  - name: unique_keyword_count
+    description: bigint, distinct positive keywords across match types
+  - name: broad_keyword_count
+    description: bigint, broad match keywords
+  - name: phrase_keyword_count
+    description: bigint, phrase match keywords
+  - name: exact_keyword_count
+    description: bigint, exact match keywords
+  - name: negative_keyword_count
+    description: bigint, distinct negative keywords across match types
+  - name: broad_keywords
+    description: str, broad match keywords, sorted and joined with "; "
+  - name: phrase_keywords
+    description: str, phrase match keywords, sorted and joined with "; "
+  - name: exact_keywords
+    description: str, exact match keywords, sorted and joined with "; "
+  - name: negative_broad_keywords
+    description: str, broad match negative keywords, sorted and joined with "; "
+  - name: negative_phrase_keywords
+    description: str, phrase match negative keywords, sorted and joined with "; "
+  - name: negative_exact_keywords
+    description: str, exact match negative keywords, sorted and joined with "; "
+  - name: unique_keywords
+    description: str, every positive keyword, sorted and joined with "; "
+  - name: negative_keywords
+    description: str, every negative keyword, sorted and joined with "; "
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - campaign_version
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - campaign_name
+        - start_date
+
+- name: int__google_ads__campaign_keyword_sets
+  description: Each course's distinct campaign keyword lists, as ad_opt_v2's campaign-keyword-sets.csv
+    (the CampaignKeywordSets schema in ads-optimizer). One row per keyword_set_id
+    in int__google_ads__campaign_versions.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
+    tests:
+    - not_null
+  - name: keyword_set_id
+    description: str, ks_ and a number, numbered by the first version that used the
+      set
+    tests:
+    - not_null
+  - name: broad_keywords
+    description: str, broad match keywords, sorted and joined with "; "
+  - name: phrase_keywords
+    description: str, phrase match keywords, sorted and joined with "; "
+  - name: exact_keywords
+    description: str, exact match keywords, sorted and joined with "; "
+  - name: unique_keywords
+    description: str, every positive keyword, sorted and joined with "; "
+  - name: negative_broad_keywords
+    description: str, broad match negative keywords
+  - name: negative_phrase_keywords
+    description: str, phrase match negative keywords
+  - name: negative_exact_keywords
+    description: str, exact match negative keywords
+  - name: negative_keywords
+    description: str, every negative keyword
+  - name: used_by_campaign_versions
+    description: str, the campaign versions that use the set, joined with "; "
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - keyword_set_id
+
+- name: int__google_ads__campaign_day_panel
+  description: Each course's Search campaign clicks, cost and conversions per day
+    under the campaign version that held that day, as ad_opt_v2's generate_campaign_day_panel
+    (campaign-day-panel.csv; the CampaignDayPanel schema in ads-optimizer). Leaves
+    out Remarketing campaigns and days without cost, adds zero rows for every day
+    of an active version that had none, and takes impressions and impression shares
+    from int__google_ads__campaign_daily.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
+    tests:
+    - not_null
+  - name: report_date
+    description: date, the day in the account's time zone
+    tests:
+    - not_null
+  - name: campaign_version
+    description: bigint, the version in int__google_ads__campaign_versions
+    tests:
+    - not_null
+  - name: campaign_name
+    description: str, the campaign's latest name
+  - name: campaign_region
+    description: str, USA, A, B or C; null when the name has none
+  - name: daily_budget
+    description: decimal, the version's daily budget
+  - name: match_types
+    description: str, the version's match types
+  - name: clicks
+    description: bigint, clicks; 0 on a filled day
+  - name: cost
+    description: decimal, cost to the cent; 0 on a filled day
+  - name: all_conversions
+    description: double, all_conversions of the counted conversion actions (google_ads_conversion_actions),
+      to four decimals
+  - name: impressions
+    description: bigint, impressions; 0 when the campaign-day report has no row
+  - name: search_impression_share
+    description: double, average search impression share; null when Google reports
+      none
+  - name: search_budget_lost_impression_share
+    description: double, average share lost to budget
+  - name: search_rank_lost_impression_share
+    description: double, average share lost to ad rank
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - report_date
+        - campaign_version
+
+- name: int__google_ads__segment_conversion_rates
+  description: Each course's conversions per click for each region and match-type
+    set over the whole campaign-day panel, as ad_opt_v2's compute_segment_conv_per_click_rates
+    (the SegmentConvPerClickRates schema in ads-optimizer). The library computes these
+    from the panel it is given when not supplied.
+  config:
+    meta:
+      # Both Google Ads units are omitted from QA.
+      qa_buildable: false
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think, from int__google_ads__campaign_courses
+    tests:
+    - not_null
+  - name: campaign_region
+    description: str, USA, A, B or C
+    tests:
+    - not_null
+  - name: match_types
+    description: str, the match-type set, for example Broad; Phrase
+  - name: segment_clicks
+    description: bigint, clicks in the segment
+  - name: segment_conversions
+    description: double, conversions in the segment
+  - name: conversions_per_click
+    description: double, segment_conversions / segment_clicks; null with no clicks
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course
+        - campaign_region
+        - match_types

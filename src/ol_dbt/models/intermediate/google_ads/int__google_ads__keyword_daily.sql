@@ -1,0 +1,130 @@
+-- ad_opt_v2's keyword-day panel: the pull (reports/kw-day-panel.csv) after clean_kw_day_panel.
+-- A campaign no google_ads_campaign_courses row maps keeps its rows, with no course.
+with courses as (
+    select account_id, campaign_id, course from {{ ref('int__google_ads__campaign_courses') }}
+)
+
+, history_starts as (
+    select account_id, history_start_date from {{ ref('google_ads_history_accounts') }}
+)
+
+-- Every row under its campaign's latest name, as ad_opt_v2's pulls see it.
+, current_names as (
+    select account_id, campaign_id, latest_name
+    from {{ ref('int__google_ads__campaign_names') }}
+    where name = latest_name
+)
+
+-- The pull's row: one ad group keyword per day, with clicks.
+, keyword_rows as (
+    select
+        keyword_daily.account_id
+        , courses.course
+        , keyword_daily.report_date
+        , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name)) as campaign_name
+        , keyword_daily.ad_group_id
+        , keyword_daily.keyword_criterion_id
+        , {{ google_ads_clean_keyword('keyword_daily.keyword_text') }} as keyword_text
+        , keyword_daily.keyword_match_type
+        , sum(keyword_daily.clicks) as clicks
+        , sum(keyword_daily.cost) as cost
+        , max(keyword_daily.currency_code) as currency_code
+        , max(keyword_daily.keyword_first_page_cpc) as keyword_first_page_cpc
+    from {{ ref('stg__google_ads__api__keyword_daily') }} as keyword_daily
+    left join courses
+        on keyword_daily.account_id = courses.account_id and keyword_daily.campaign_id = courses.campaign_id
+    left join history_starts on keyword_daily.account_id = history_starts.account_id
+    left join current_names
+        on keyword_daily.account_id = current_names.account_id and keyword_daily.campaign_id = current_names.campaign_id
+    where
+        {{ google_ads_is_search_campaign('keyword_daily.campaign_name', 'keyword_daily.campaign_channel_type') }}
+        and keyword_daily.keyword_match_type in ('EXACT', 'PHRASE', 'BROAD')
+        and {{ google_ads_search_network_only('courses.course', 'keyword_daily.ad_network_type') }}
+        and (history_starts.history_start_date is null or keyword_daily.report_date >= history_starts.history_start_date)
+    group by
+        keyword_daily.account_id
+        , courses.course
+        , keyword_daily.report_date
+        , coalesce(current_names.latest_name, trim(keyword_daily.campaign_name))
+        , keyword_daily.ad_group_id
+        , keyword_daily.keyword_criterion_id
+        , {{ google_ads_clean_keyword('keyword_daily.keyword_text') }}
+        , keyword_daily.keyword_match_type
+    having sum(keyword_daily.clicks) > 0
+)
+
+-- ad_opt_v2 keys the pull on date, keyword, campaign and match type, and keeps the last
+-- ad group's row; this adds the ad groups up, since that order is arbitrary.
+, keyword_totals as (
+    select
+        account_id
+        , course
+        , report_date
+        , campaign_name
+        , keyword_text
+        , keyword_match_type
+        , sum(clicks) as clicks
+        , sum(cost) as cost
+        , max(currency_code) as currency_code
+        , max(keyword_first_page_cpc) as keyword_first_page_cpc
+    from keyword_rows
+    group by account_id, course, report_date, campaign_name, keyword_text, keyword_match_type
+)
+
+, conversion_totals as (
+    select
+        conversions.account_id
+        , courses.course
+        , conversions.report_date
+        , coalesce(current_names.latest_name, trim(conversions.campaign_name)) as campaign_name
+        , {{ google_ads_clean_keyword('conversions.keyword_text') }} as keyword_text
+        , conversions.keyword_match_type
+        , sum(conversions.all_conversions) as all_conversions
+    from {{ ref('stg__google_ads__api__keyword_conversions_daily') }} as conversions
+    left join courses
+        on conversions.account_id = courses.account_id and conversions.campaign_id = courses.campaign_id
+    left join history_starts on conversions.account_id = history_starts.account_id
+    left join current_names
+        on conversions.account_id = current_names.account_id and conversions.campaign_id = current_names.campaign_id
+    where
+        {{ google_ads_is_search_campaign('conversions.campaign_name', 'conversions.campaign_channel_type') }}
+        and conversions.keyword_match_type in ('EXACT', 'PHRASE', 'BROAD')
+        and conversions.all_conversions > 0
+        and conversions.conversion_action_name in {{ google_ads_conversion_actions() }}
+        and {{ google_ads_search_network_only('courses.course', 'conversions.ad_network_type') }}
+        and (history_starts.history_start_date is null or conversions.report_date >= history_starts.history_start_date)
+    group by
+        conversions.account_id
+        , courses.course
+        , conversions.report_date
+        , coalesce(current_names.latest_name, trim(conversions.campaign_name))
+        , {{ google_ads_clean_keyword('conversions.keyword_text') }}
+        , conversions.keyword_match_type
+)
+
+select
+    coalesce(keyword_totals.account_id, conversion_totals.account_id) as account_id
+    , coalesce(keyword_totals.course, conversion_totals.course) as course
+    , coalesce(keyword_totals.report_date, conversion_totals.report_date) as report_date
+    , coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name) as campaign_name
+    , {{ google_ads_campaign_region('coalesce(keyword_totals.campaign_name, conversion_totals.campaign_name)') }}
+    as campaign_region
+    , coalesce(keyword_totals.keyword_text, conversion_totals.keyword_text) as keyword_text
+    -- The pull writes Google's enum in title case, e.g. EXACT as Exact.
+    , concat(
+        upper(substr(coalesce(keyword_totals.keyword_match_type, conversion_totals.keyword_match_type), 1, 1))
+        , lower(substr(coalesce(keyword_totals.keyword_match_type, conversion_totals.keyword_match_type), 2))
+    ) as keyword_match_type
+    , coalesce(keyword_totals.clicks, 0) as clicks
+    , round(coalesce(keyword_totals.cost, 0), 2) as cost
+    , round(coalesce(conversion_totals.all_conversions, 0), 2) as all_conversions
+    , keyword_totals.currency_code
+    , round(keyword_totals.keyword_first_page_cpc, 2) as keyword_first_page_cpc
+from keyword_totals
+full outer join conversion_totals
+    on
+        keyword_totals.account_id = conversion_totals.account_id
+        and keyword_totals.report_date = conversion_totals.report_date
+        and keyword_totals.campaign_name = conversion_totals.campaign_name
+        and keyword_totals.keyword_text = conversion_totals.keyword_text
+        and keyword_totals.keyword_match_type = conversion_totals.keyword_match_type

@@ -365,3 +365,59 @@ seeds:
     - not_null:
         config:
           error_if: ">0"
+
+- name: google_ads_campaign_courses
+  description: The ad_opt_v2 course each Google Ads campaign belongs to. A row maps
+    one campaign by campaign_id, or every campaign whose name matches campaign_name_pattern.
+    Marketing names campaigns "<Program | Course> - <code> - ...", in every account,
+    so one row per course maps new campaigns without a change here; older names that
+    break the convention get their own rows. A campaign that matches no row keeps
+    its rows with no course; add a row when a course launches.
+  config:
+    column_types:
+      course: varchar
+      campaign_name_pattern: varchar
+      campaign_id: bigint
+      product_readable_id: varchar
+  columns:
+  - name: course
+    description: str, ad_opt_v2's course name, e.g. sys_think; DEDP's two tracks are
+      both mm_dedp
+    tests:
+    - not_null
+  - name: campaign_name_pattern
+    description: str, a SQL like pattern for the campaign names, e.g. "Program - UAI
+      - %"; null on a campaign_id row
+  - name: campaign_id
+    description: bigint, one campaign this row maps, for a name that does not follow
+      the convention; it wins over every pattern
+  - name: product_readable_id
+    description: str, optional, the course_readable_id (dim_course) or program_readable_id
+      (dim_program) the campaigns advertise; the course, not a course run
+
+- name: google_ads_history_accounts
+  description: The Google Ads account of each ad_opt_v2 course folder its change history
+    files came from, and the day that history starts. Budgets cannot be replayed before
+    it, so the daily panels start there. API change events take over after the files'
+    last change.
+  config:
+    column_types:
+      history_folder: varchar
+      account_id: varchar
+      history_start_date: date
+  columns:
+  - name: history_folder
+    description: str, ad_opt_v2's course folder name, e.g. systems_engineering
+    tests:
+    - not_null
+    - unique
+  - name: account_id
+    description: str, the folder's Google Ads account id
+    tests:
+    - not_null
+    - unique
+  - name: history_start_date
+    description: date, the first day of the folder's change history (each course.yaml's
+      min_date)
+    tests:
+    - not_null
