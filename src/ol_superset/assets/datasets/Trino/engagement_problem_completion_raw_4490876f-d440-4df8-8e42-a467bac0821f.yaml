@@ -133,7 +133,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: problems_attempted
+  column_name: problems_with_attempt
   datetime_format: null
   description: null
   expression: ''

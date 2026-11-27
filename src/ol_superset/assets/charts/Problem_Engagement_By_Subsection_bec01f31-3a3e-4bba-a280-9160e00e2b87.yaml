@@ -26,7 +26,7 @@ params:
     hasCustomLabel: true
     label: Avg_%_problems_attempted
     optionName: metric_2okl1r6oqnv_4z1d7j5lcqg
-    sqlExpression: AVG( percetage_problems_attempted)
+    sqlExpression: AVG( percent_problems_attempted)
   order_by_cols: []
   order_desc: false
   percent_metrics: []

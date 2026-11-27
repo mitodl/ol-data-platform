@@ -3,7 +3,7 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
-  column_name: percetage_problems_attempted
+  column_name: percent_problems_attempted
   datetime_format: null
   description: null
   expression: ''
@@ -159,7 +159,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: problems_attempted
+  column_name: problems_with_attempt
   datetime_format: null
   description: null
   expression: ''

@@ -51,9 +51,6 @@ select
         then f_problem_engagement.problem_block_fk else null end)) as problems_correct
     , count(distinct (case when cast(f_problem_engagement.num_of_attempts as int)> 0
         then f_problem_engagement.problem_block_fk else null end)) as problems_with_attempt
-    -- Old name, removed once the Superset charts read problems_with_attempt.
-    , count(distinct (case when cast(f_problem_engagement.num_of_attempts as int)> 0
-        then f_problem_engagement.problem_block_fk else null end)) as problems_attempted
     , max(problems_in_block.problem_numb) as number_of_problems
     , sum(f_problem_engagement.num_of_attempts) as number_of_total_attempts
     , cast(count(distinct (case when cast(f_problem_engagement.num_of_correct_attempts as int)> 0
