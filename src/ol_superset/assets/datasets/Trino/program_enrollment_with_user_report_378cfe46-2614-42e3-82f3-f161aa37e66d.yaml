@@ -459,7 +459,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: program_complete_days
+  column_name: program_completion_days
   datetime_format: null
   description: null
   expression: ''
