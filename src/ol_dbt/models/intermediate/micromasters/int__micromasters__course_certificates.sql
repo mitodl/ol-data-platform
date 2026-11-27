@@ -32,7 +32,8 @@ with course_certificates_dedp_from_micromasters as (
         , course_certificates_dedp_from_micromasters.courserun_readable_id
         , course_certificates_dedp_from_micromasters.courserun_platform
         , course_certificates_dedp_from_micromasters.course_number
-        , mitx_users.user_edxorg_username
+        , coalesce(mitx_users.user_micromasters_edxorg_username, mitx_users.user_edxorg_username)
+            as user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitx_users.user_full_name
         , mitx_users.user_address_country as user_country
