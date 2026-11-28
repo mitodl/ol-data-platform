@@ -49,7 +49,7 @@ RUN prewarm-uv-cache
 # github.com remotes. These come after the cache seed so a gh bump doesn't
 # rebuild it.
 # renovate: datasource=conda depName=conda-forge/gh
-ARG GH_VERSION=2.104.0
+ARG GH_VERSION=2.105.0
 RUN mamba install --yes --quiet "gh=${GH_VERSION}" && \
     mamba clean --all -f -y
 COPY gitconfig /etc/gitconfig
