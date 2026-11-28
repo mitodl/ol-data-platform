@@ -3,7 +3,7 @@ name = "notebook-publisher"
 version = "0.1.0"
 description = "JupyterHub service that publishes marimo notebooks as marimo-operator apps"
 authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.15,<3.16"
 license = "BSD-3-Clause"
 dependencies = [
     "fastapi>=0.115",
