@@ -1,0 +1,486 @@
+"""Publish, update, inspect and unpublish notebooks for a hub user."""
+
+import copy
+import logging
+import re
+import secrets
+import time
+from datetime import UTC, datetime
+from typing import Any
+
+from kubernetes import client
+from pydantic import BaseModel
+
+from notebook_publisher import render
+from notebook_publisher.cluster import Cluster
+from notebook_publisher.settings import Settings
+from notebook_publisher.validation import (
+    NotebookPublish,
+    NotebookRejectedError,
+    NotebookUpdate,
+    check_notebook,
+)
+
+log = logging.getLogger(__name__)
+
+HTTP_CONFLICT = 409
+RESTORE_ATTEMPTS = 3
+LOG_TAIL_LINES = 100
+# Container states that won't recover by waiting.
+FAILED_WAITING_REASONS = frozenset(
+    {
+        "CrashLoopBackOff",
+        "CreateContainerConfigError",
+        "CreateContainerError",
+        "ErrImagePull",
+        "ImagePullBackOff",
+        "InvalidImageName",
+        "RunContainerError",
+    }
+)
+# marimo prints its startup URL with the token password in the query string.
+ACCESS_TOKEN_IN_URL = re.compile(r"(access_token=)[^&\s]+")
+
+
+class NotebookNotFoundError(Exception):
+    """No published notebook has that name."""
+
+
+class NotOwnerError(Exception):
+    """The caller didn't publish this notebook."""
+
+
+class NameTakenError(Exception):
+    """Another notebook already has that name."""
+
+
+class ConcurrentChangeError(Exception):
+    """The notebook changed while this request was updating it."""
+
+
+class RolloutFailedError(Exception):
+    """The new revision didn't start serving."""
+
+    def __init__(self, message: str, logs: str) -> None:
+        super().__init__(message)
+        self.logs = logs
+
+
+class PodMismatchError(Exception):
+    """The operator's pod differs from what the publisher rendered."""
+
+
+class NotebookSummary(BaseModel):
+    """A published notebook, as listed for its owner."""
+
+    name: str
+    url: str
+    access: str
+    revision: str
+    published_at: str
+    phase: str | None
+    git_remote: str | None
+    git_commit: str | None
+
+
+class NotebookStatus(NotebookSummary):
+    """A published notebook with its pod's state, for its owner."""
+
+    pod_phase: str | None
+    ready: bool
+    restarts: int
+    events: list[str]
+    logs: str
+
+
+def redact(logs: str) -> str:
+    """Remove the app's marimo token from its log output."""
+    return ACCESS_TOKEN_IN_URL.sub(r"\1<redacted>", logs)
+
+
+def _auth_secret(pod: dict[str, Any]) -> str | None:
+    for volume in pod["spec"].get("volumes", []):
+        if volume["name"] == render.AUTH_VOLUME:
+            return str(volume["secret"]["secretName"])
+    return None
+
+
+def _container_statuses(pod: dict[str, Any]) -> list[dict[str, Any]]:
+    status = pod.get("status", {})
+    return [
+        *status.get("initContainerStatuses", []),
+        *status.get("containerStatuses", []),
+    ]
+
+
+def _failed_reason(pod: dict[str, Any]) -> str | None:
+    if pod.get("status", {}).get("phase") == "Failed":
+        return "pod failed"
+    for container in _container_statuses(pod):
+        waiting = container.get("state", {}).get("waiting") or {}
+        if waiting.get("reason") in FAILED_WAITING_REASONS:
+            message = waiting.get("message", "")
+            return f"{container['name']}: {waiting['reason']} {message}".strip()
+    return None
+
+
+def _ready(pod: dict[str, Any]) -> bool:
+    return any(
+        condition["type"] == "Ready" and condition["status"] == "True"
+        for condition in pod.get("status", {}).get("conditions", [])
+    )
+
+
+def pod_problems(
+    pod: dict[str, Any], name: str, revision: str, settings: Settings
+) -> list[str]:
+    """Compare the operator's pod with what the publisher asked for.
+
+    The operator applies podOverrides with a strategic merge and silently falls
+    back to its unpatched pod if the merge fails, so the result has to be read
+    back rather than assumed.
+
+    :returns: One message per difference; empty when the pod is as rendered.
+    :rtype: list[str]
+    """
+    spec = pod["spec"]
+    problems = []
+    if spec.get("serviceAccountName") != settings.service_account:
+        problems.append(f"serviceAccountName is {spec.get('serviceAccountName')}")
+    if spec.get("automountServiceAccountToken") is not False:
+        problems.append("the ServiceAccount token is mounted")
+    containers = spec["containers"]
+    if [container["name"] for container in containers] != [render.MARIMO_CONTAINER]:
+        problems.append(f"containers are {[c['name'] for c in containers]}")
+    marimo = containers[0]
+    if marimo.get("args") != render.marimo_args(name, settings):
+        problems.append(f"marimo args are {marimo.get('args')}")
+    if marimo.get("image") != settings.runtime_image:
+        problems.append(f"marimo image is {marimo.get('image')}")
+    volumes = {volume["name"] for volume in spec.get("volumes", [])}
+    if volumes != render.EXPECTED_VOLUMES:
+        problems.append(f"volumes are {sorted(volumes)}")
+    if _auth_secret(pod) != render.token_secret_name(name, revision):
+        problems.append("the token volume is from another revision")
+    for container in [*spec.get("initContainers", []), *containers]:
+        context = container.get("securityContext") or {}
+        if context.get("allowPrivilegeEscalation") is not False or "ALL" not in (
+            context.get("capabilities", {}).get("drop", [])
+        ):
+            problems.append(f"{container['name']} isn't restricted")
+    return problems
+
+
+def _summary(notebook: dict[str, Any], settings: Settings) -> NotebookSummary:
+    metadata = notebook["metadata"]
+    annotations = metadata["annotations"]
+    return NotebookSummary(
+        name=metadata["name"],
+        url=render.app_url(metadata["name"], settings),
+        access=metadata["labels"][render.ACCESS_LABEL],
+        revision=annotations[render.REVISION_ANNOTATION],
+        published_at=annotations[render.PUBLISHED_AT_ANNOTATION],
+        phase=notebook.get("status", {}).get("phase"),
+        git_remote=annotations.get(render.GIT_REMOTE_ANNOTATION),
+        git_commit=annotations.get(render.GIT_COMMIT_ANNOTATION),
+    )
+
+
+class Publisher:
+    """Carries out each request against the cluster."""
+
+    def __init__(self, cluster: Cluster, settings: Settings) -> None:
+        self.cluster = cluster
+        self.settings = settings
+
+    def _owned(self, name: str, user: str) -> dict[str, Any]:
+        notebook = self.cluster.get_notebook(name)
+        if notebook is None:
+            raise NotebookNotFoundError(name)
+        if notebook["metadata"]["annotations"][render.OWNER_ANNOTATION] != user:
+            raise NotOwnerError(name)
+        return notebook
+
+    def _create_secrets(self, name: str, revision: str, owner: dict[str, Any]) -> None:
+        token = secrets.token_urlsafe(32)
+        for secret in render.render_secrets(
+            name, revision, token, owner, self.settings
+        ):
+            self.cluster.create_secret(secret)
+
+    def _delete_secrets(self, name: str, revision: str) -> None:
+        self.cluster.delete_secret(render.token_secret_name(name, revision))
+        self.cluster.delete_secret(render.route_auth_secret_name(name, revision))
+
+    def _is_current(self, name: str, uid: str, revision: str) -> bool:
+        """Return whether the app is still the object and revision this request made."""
+        notebook = self.cluster.get_notebook(name)
+        return (
+            notebook is not None
+            and notebook["metadata"]["uid"] == uid
+            and notebook["metadata"]["annotations"][render.REVISION_ANNOTATION]
+            == revision
+        )
+
+    def _wait_for_rollout(self, name: str, uid: str, revision: str) -> None:
+        """Wait until the revision's pod is as rendered and marimo answers.
+
+        :raises RolloutFailedError: If it fails or doesn't serve in time.
+        :raises PodMismatchError: If the pod isn't what was rendered.
+        :raises ConcurrentChangeError: If another request replaced the revision.
+        """
+        token_secret = render.token_secret_name(name, revision)
+        deadline = time.monotonic() + self.settings.rollout_timeout_seconds
+        while True:
+            # A later update or an unpublish took over; its pod will never
+            # carry this revision's token.
+            if not self._is_current(name, uid, revision):
+                raise ConcurrentChangeError(name)
+            pod = self.cluster.get_pod(name)
+            if pod is not None and _auth_secret(pod) == token_secret:
+                if problems := pod_problems(pod, name, revision, self.settings):
+                    raise PodMismatchError("; ".join(problems))
+                if reason := _failed_reason(pod):
+                    raise RolloutFailedError(reason, self._logs(name))
+                if _ready(pod) and self.cluster.app_healthy(
+                    name, self.settings.marimo_port
+                ):
+                    return
+            if time.monotonic() > deadline:
+                message = (
+                    "The notebook didn't start serving within "
+                    f"{self.settings.rollout_timeout_seconds}s."
+                )
+                raise RolloutFailedError(message, self._logs(name))
+            time.sleep(self.settings.rollout_poll_seconds)
+
+    def _logs(self, name: str) -> str:
+        return redact(self.cluster.pod_logs(name, LOG_TAIL_LINES))
+
+    def _apply_route(self, name: str, revision: str, owner: dict[str, Any]) -> None:
+        route = render.render_route(name, revision, owner, self.settings)
+        existing = self.cluster.get_route(name)
+        if existing is None:
+            self.cluster.create_route(route)
+        else:
+            route["metadata"]["resourceVersion"] = existing["metadata"][
+                "resourceVersion"
+            ]
+            self.cluster.replace_route(route)
+
+    def publish(self, user: str, request: NotebookPublish) -> NotebookStatus:
+        """Publish a notebook under a new name.
+
+        The route is created only once the app serves, and a failed publish
+        leaves nothing behind.
+        """
+        check_notebook(request.content, self.settings)
+        published = len(self.list_owned(user))
+        if published >= self.settings.max_notebooks_per_user:
+            msg = (
+                f"You have {published} published notebooks, the most allowed; "
+                "unpublish one first."
+            )
+            raise NotebookRejectedError(msg)
+        revision = secrets.token_hex(4)
+        body = render.render_notebook(
+            request.name,
+            user,
+            request,
+            revision,
+            datetime.now(tz=UTC).isoformat(),
+            self.settings,
+        )
+        try:
+            notebook = self.cluster.create_notebook(body)
+        except client.ApiException as error:
+            if error.status == HTTP_CONFLICT:
+                raise NameTakenError(request.name) from error
+            raise
+        owner = render.owner_reference(notebook)
+        uid = notebook["metadata"]["uid"]
+        try:
+            self._create_secrets(request.name, revision, owner)
+            self._wait_for_rollout(request.name, uid, revision)
+            self._apply_route(request.name, revision, owner)
+        except Exception:
+            self._discard(request.name, uid, revision)
+            raise
+        return self.status(user, request.name)
+
+    def _discard(self, name: str, uid: str, revision: str) -> None:
+        """Delete a failed new app, unless another request has taken it over.
+
+        ownerReferences take its Secrets and route with it. A cleanup failure
+        is logged, so the caller still sees why the publish failed.
+        """
+        try:
+            if self._is_current(name, uid, revision):
+                self.cluster.delete_notebook(name, uid)
+        except Exception:
+            log.exception(
+                "Couldn't remove failed publish %s (revision %s)", name, revision
+            )
+
+    def update(self, user: str, name: str, request: NotebookUpdate) -> NotebookStatus:
+        """Publish a new version of the caller's notebook.
+
+        The route moves to the new token only once the new pod serves. If it
+        doesn't, the previous MarimoNotebook is put back and its token, which
+        the route still uses, is left in place.
+        """
+        check_notebook(request.content, self.settings)
+        current = self._owned(name, user)
+        previous_revision = current["metadata"]["annotations"][
+            render.REVISION_ANNOTATION
+        ]
+        # Only build on a revision the route serves. One that is still rolling
+        # out may yet fail and have its Secrets deleted, and restoring to it
+        # would leave the app on a token that no longer exists.
+        if self._served_revision(name) != previous_revision:
+            raise ConcurrentChangeError(name)
+        revision = secrets.token_hex(4)
+        owner = render.owner_reference(current)
+        rendered = render.render_notebook(
+            name,
+            user,
+            request,
+            revision,
+            datetime.now(tz=UTC).isoformat(),
+            self.settings,
+        )
+        updated = copy.deepcopy(current)
+        updated["spec"] = rendered["spec"]
+        updated["metadata"]["labels"].update(rendered["metadata"]["labels"])
+        updated["metadata"]["annotations"] = {
+            **{
+                key: value
+                for key, value in current["metadata"]["annotations"].items()
+                if key not in render.PUBLISHER_ANNOTATIONS
+            },
+            **rendered["metadata"]["annotations"],
+        }
+
+        self._create_secrets(name, revision, owner)
+        try:
+            self.cluster.replace_notebook(updated)
+        except client.ApiException as error:
+            self._delete_secrets(name, revision)
+            if error.status == HTTP_CONFLICT:
+                raise ConcurrentChangeError(name) from error
+            raise
+        uid = current["metadata"]["uid"]
+        try:
+            self._wait_for_rollout(name, uid, revision)
+            self._apply_route(name, revision, owner)
+        except Exception:
+            self._restore(current, revision)
+            raise
+        self._delete_secrets(name, previous_revision)
+        return self.status(user, name)
+
+    def _served_revision(self, name: str) -> str | None:
+        """Return the revision whose token the app's route injects."""
+        route = self.cluster.get_route(name)
+        if route is None:
+            return None
+        prefix = render.route_auth_secret_name(name, "")
+        for plugin in route["spec"]["http"][0]["plugins"]:
+            if plugin["name"] == "proxy-rewrite":
+                return str(plugin["secretRef"]).removeprefix(prefix)
+        return None
+
+    def _restore(self, previous: dict[str, Any], failed_revision: str) -> None:
+        """Put the previous MarimoNotebook back after a failed update.
+
+        Only while the app is still on the failed revision: if a later update
+        or an unpublish has taken over, restoring would undo it. A cleanup
+        failure is logged, so the caller still sees why the update failed.
+        """
+        name = previous["metadata"]["name"]
+        try:
+            # The operator's status writes also bump the resourceVersion, so
+            # one conflict is expected now and then.
+            for attempt in range(RESTORE_ATTEMPTS):
+                latest = self.cluster.get_notebook(name)
+                if (
+                    latest is None
+                    or latest["metadata"]["uid"] != previous["metadata"]["uid"]
+                    or latest["metadata"]["annotations"][render.REVISION_ANNOTATION]
+                    != failed_revision
+                ):
+                    break
+                restored = copy.deepcopy(previous)
+                restored["metadata"]["resourceVersion"] = latest["metadata"][
+                    "resourceVersion"
+                ]
+                try:
+                    self.cluster.replace_notebook(restored)
+                    break
+                except client.ApiException as error:
+                    if error.status != HTTP_CONFLICT or attempt == RESTORE_ATTEMPTS - 1:
+                        raise
+            self._delete_secrets(name, failed_revision)
+        except Exception:
+            log.exception(
+                "Couldn't restore %s after revision %s failed", name, failed_revision
+            )
+
+    def list_owned(self, user: str) -> list[NotebookSummary]:
+        """Return the caller's published notebooks."""
+        selector = f"{render.OWNER_HASH_LABEL}={render.owner_hash(user)}"
+        return [
+            _summary(notebook, self.settings)
+            for notebook in self.cluster.list_notebooks(selector)
+            if notebook["metadata"]["annotations"][render.OWNER_ANNOTATION] == user
+        ]
+
+    def _pod_of(self, notebook: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the notebook's pod, or None if the pod by its name is another's.
+
+        After an unpublish the old pod can outlive its MarimoNotebook while
+        someone else publishes the same name.
+        """
+        pod = self.cluster.get_pod(notebook["metadata"]["name"])
+        if pod is None or not any(
+            owner["uid"] == notebook["metadata"]["uid"]
+            for owner in pod["metadata"].get("ownerReferences", [])
+        ):
+            return None
+        return pod
+
+    def _pod_logs(self, pod: dict[str, Any]) -> str:
+        """Return a pod's redacted log, or "" if the pod changed while reading."""
+        name = pod["metadata"]["name"]
+        logs = self._logs(name)
+        after = self.cluster.get_pod(name)
+        if after is None or after["metadata"]["uid"] != pod["metadata"]["uid"]:
+            return ""
+        return logs
+
+    def status(self, user: str, name: str) -> NotebookStatus:
+        """Return the caller's notebook with its pod's state, events and log."""
+        notebook = self._owned(name, user)
+        pod = self._pod_of(notebook)
+        pod_status = (pod or {}).get("status", {})
+        return NotebookStatus(
+            **_summary(notebook, self.settings).model_dump(),
+            pod_phase=pod_status.get("phase"),
+            ready=pod is not None and _ready(pod),
+            restarts=sum(
+                container.get("restartCount", 0)
+                for container in pod_status.get("containerStatuses", [])
+            ),
+            events=self.cluster.pod_events(pod["metadata"]["uid"]) if pod else [],
+            logs=self._pod_logs(pod) if pod else "",
+        )
+
+    def unpublish(self, user: str, name: str) -> None:
+        """Delete the caller's notebook and everything rendered for it."""
+        notebook = self._owned(name, user)
+        try:
+            self.cluster.delete_notebook(name, notebook["metadata"]["uid"])
+        except client.ApiException as error:
+            if error.status == HTTP_CONFLICT:
+                raise ConcurrentChangeError(name) from error
+            raise
